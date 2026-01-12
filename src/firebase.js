@@ -1,0 +1,31 @@
+import { initializeApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+
+const envConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
+};
+
+// Fallback on your config (remove after setting .env)
+const fallbackConfig = {
+  apiKey: "AIzaSyAQlLh2Abk92sZVCSsYSCxvps4Uld3C1Lk",
+  authDomain: "bibonrat.firebaseapp.com",
+  projectId: "bibonrat",
+  storageBucket: "bibonrat.firebasestorage.app",
+  messagingSenderId: "78759159251",
+  appId: "1:78759159251:web:3e40d7d5a2aa762f01bb26"
+};
+
+const firebaseConfig =
+  envConfig.apiKey && envConfig.projectId ? envConfig : fallbackConfig;
+
+export const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const storage = getStorage(app);

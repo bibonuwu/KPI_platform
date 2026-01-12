@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // A single doc that is used only to bootstrap the FIRST admin safely
+    match /config/app {
+      allow read: if signedIn();
+
+      // First user can create this doc ONCE to claim bootstrap.
+      // After it exists, nobody except admin can change it.
+      allow create: if signedIn()
+        && !exists(/databases/$(database)/documents/config/app)
+        && request.resource.data.bootstrapClaimed == true
+        && request.resource.data.claimedBy == request.auth.uid;
+
+      allow update, delete: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+
+      // create profile on first login
+      allow create: if signedIn() && request.auth.uid == uid;
+
+      // teacher can update profile fields, but NOT role/totalPoints
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.totalPoints == resource.data.totalPoints;
+
+      // SPECIAL: allow first-time bootstrap to admin (only for the user who claimed config/app)
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && resource.data.role == 'teacher'
+        && request.resource.data.role == 'admin'
+        && request.resource.data.totalPoints == resource.data.totalPoints
+        && exists(/databases/$(database)/documents/config/app)
+        && get(/databases/$(database)/documents/config/app).data.claimedBy == uid
+        && get(/databases/$(database)/documents/config/app).data.bootstrapClaimed == true;
+
+      // admin can manage
+      allow update, delete: if isAdmin();
+    }
+
+    match /types/{typeId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /submissions/{sid} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+
+      // teacher creates pending and points must match types table
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.points ==
+           get(/databases/$(database)/documents/types/$(request.resource.data.typeId)).data.defaultPoints;
+
+      // only admin can approve/reject
+      allow update, delete: if isAdmin();
+    }
+  }
+}
