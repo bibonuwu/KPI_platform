@@ -1,4 +1,30 @@
-const STORAGE_KEY = "kpi_plain_data";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytes,
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
+import { auth, db, storage } from "./firebase-config.js";
 
 const DEFAULT_TYPES = [
   { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарға қатысу (мектепішілік)", defaultPoints: 5 },
@@ -13,161 +39,24 @@ const DEFAULT_TYPES = [
   { section: "Қосымша даму", subsection: "Қоғамдық жұмыс", name: "Іс-шара ұйымдастыру", defaultPoints: 10 },
   { section: "Инновациялар", subsection: "Жаңа әдіс", name: "Жаңа сабақ әдісін енгізу", defaultPoints: 20 },
   { section: "Инновациялар", subsection: "Творчество", name: "Шығармашылық жоба жасау", defaultPoints: 25 },
-].map((item, index) => ({
-  id: `k${index + 1}`,
+].map((item) => ({
   ...item,
   active: true,
 }));
-
-const defaultData = {
-  userId: null,
-  ui: { selectedTeacherId: null },
-  users: [
-    {
-      id: "u1",
-      email: "admin@demo.kz",
-      password: "admin123",
-      displayName: "Админ Демо",
-      role: "admin",
-      school: "КПИ демо-лицей",
-      subject: "Менеджмент",
-      experienceYears: 8,
-      phone: "+7 777 111 22 33",
-      city: "Алматы",
-      position: "Методист",
-      totalPoints: 44,
-      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 40,
-    },
-    {
-      id: "u2",
-      email: "teacher@demo.kz",
-      password: "teacher123",
-      displayName: "Анна Петрова",
-      role: "teacher",
-      school: "КПИ демо-лицей",
-      subject: "Экономика",
-      experienceYears: 5,
-      phone: "+7 777 888 00 11",
-      city: "Астана",
-      position: "Преподаватель",
-      totalPoints: 20,
-      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 15,
-    },
-    {
-      id: "u3",
-      email: "teacher2@demo.kz",
-      password: "teacher123",
-      displayName: "Иван Смирнов",
-      role: "teacher",
-      school: "КПИ демо-лицей",
-      subject: "Маркетинг",
-      experienceYears: 4,
-      phone: "+7 701 333 44 55",
-      city: "Шымкент",
-      position: "Преподаватель",
-      totalPoints: 24,
-      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 12,
-    },
-  ],
-  types: [...DEFAULT_TYPES],
-  submissions: [
-    {
-      id: "s1",
-      uid: "u2",
-      typeId: "k1",
-      typeName: "Семинарға қатысу (мектепішілік)",
-      typeSection: "Кәсіби даму",
-      typeSubsection: "Семинарлар",
-      points: 5,
-      title: "Участие в школьном семинаре",
-      description: "Отчет о проделанной работе",
-      eventDate: "2024-09-12",
-      evidenceLink: "https://example.com/report",
-      evidenceFileUrl: "",
-      status: "approved",
-      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 7,
-      decidedAt: Date.now() - 1000 * 60 * 60 * 24 * 6,
-    },
-    {
-      id: "s2",
-      uid: "u2",
-      typeId: "k2",
-      typeName: "Семинарға қатысу (аудандық)",
-      typeSection: "Кәсіби даму",
-      typeSubsection: "Семинарлар",
-      points: 10,
-      title: "Сбор отзывов студентов",
-      description: "Обратная связь по курсу",
-      eventDate: "2024-09-20",
-      evidenceLink: "",
-      evidenceFileUrl: "",
-      status: "pending",
-      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 3,
-    },
-    {
-      id: "s3",
-      uid: "u3",
-      typeId: "k6",
-      typeName: "Кәсіби кітап оқу (1 кітап)",
-      typeSection: "Жеке даму",
-      typeSubsection: "Кітап оқу",
-      points: 5,
-      title: "Книга по стратегии",
-      description: "Применил выводы на практике",
-      eventDate: "2024-09-10",
-      evidenceLink: "",
-      evidenceFileUrl: "",
-      status: "approved",
-      createdAt: Date.now() - 1000 * 60 * 60 * 24 * 9,
-      decidedAt: Date.now() - 1000 * 60 * 60 * 24 * 8,
-    },
-  ],
-};
 
 const app = document.getElementById("app");
 const navRight = document.getElementById("navRight");
 const navLinks = document.getElementById("navLinks");
 
-const state = loadData();
-
-function loadData() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return structuredClone(defaultData);
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      ...structuredClone(defaultData),
-      ...parsed,
-      ui: { ...structuredClone(defaultData.ui), ...(parsed.ui || {}) },
-      users: parsed.users || structuredClone(defaultData.users),
-      types: parsed.types || structuredClone(defaultData.types),
-      submissions: parsed.submissions || structuredClone(defaultData.submissions),
-    };
-  } catch (error) {
-    return structuredClone(defaultData);
-  }
-}
-
-function saveData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-function getCurrentUser() {
-  return state.users.find((user) => user.id === state.userId) || null;
-}
-
-function setUserId(userId) {
-  state.userId = userId;
-  saveData();
-  render();
-}
-
-function logout() {
-  state.userId = null;
-  saveData();
-  render();
-  navigate("login");
-}
+const state = {
+  user: null,
+  profile: null,
+  role: null,
+  types: [],
+  submissions: [],
+  users: [],
+  ui: { selectedTeacherId: null },
+};
 
 function navigate(route) {
   window.location.hash = `#/${route}`;
@@ -184,26 +73,14 @@ function getRoute() {
   return parseRoute().path;
 }
 
-function findUser(id) {
-  return state.users.find((user) => user.id === id);
-}
-
-function findType(id) {
-  return state.types.find((type) => type.id === id);
-}
-
 function formatDate(value) {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString("ru-RU");
-}
-
-function formatDateTime(value) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString("ru-RU");
+  const date = value.toDate ? value.toDate() : new Date(value);
+  return date.toLocaleDateString("ru-RU");
 }
 
 function sumResults(results) {
-  return results.reduce((total, item) => total + item.points, 0);
+  return results.reduce((total, item) => total + (item.points || 0), 0);
 }
 
 function resultsByUser(userId) {
@@ -219,11 +96,11 @@ function pendingResults(items) {
 }
 
 function isImage(url) {
-  return /\.(png|jpg|jpeg|webp)$/i.test(url || "") || (url || "").startsWith("data:image/");
+  return /\.(png|jpg|jpeg|webp)$/i.test(url || "");
 }
 
 function isPdf(url) {
-  return /\.pdf$/i.test(url || "") || (url || "").startsWith("data:application/pdf");
+  return /\.pdf$/i.test(url || "");
 }
 
 function pickEvidence(item) {
@@ -235,31 +112,97 @@ function pickEvidence(item) {
   };
 }
 
+function escapeValue(value) {
+  return String(value ?? "").replace(/"/g, "&quot;");
+}
+
+async function ensureUserProfile(user) {
+  const refDoc = doc(db, "users", user.uid);
+  const snap = await getDoc(refDoc);
+  if (snap.exists()) {
+    return snap.data();
+  }
+  const newProfile = {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName || "",
+    role: "teacher",
+    school: "",
+    subject: "",
+    experienceYears: 0,
+    phone: "",
+    city: "",
+    position: "",
+    totalPoints: 0,
+    createdAt: serverTimestamp(),
+  };
+  await setDoc(refDoc, newProfile);
+  return newProfile;
+}
+
+async function loadTypes() {
+  const snap = await getDocs(collection(db, "types"));
+  state.types = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+}
+
+async function loadSubmissions() {
+  if (!state.user) return;
+  if (state.role === "admin") {
+    const q = query(collection(db, "submissions"), orderBy("createdAt", "desc"), limit(500));
+    const snap = await getDocs(q);
+    state.submissions = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  } else {
+    const q = query(collection(db, "submissions"), where("uid", "==", state.user.uid), limit(200));
+    const snap = await getDocs(q);
+    state.submissions = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  }
+}
+
+async function loadUsers() {
+  if (state.role !== "admin") {
+    state.users = [];
+    return;
+  }
+  const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+  const snap = await getDocs(q);
+  state.users = snap.docs.map((docSnap) => docSnap.data());
+}
+
+async function refreshAll() {
+  await loadTypes();
+  await loadSubmissions();
+  await loadUsers();
+  render();
+}
+
 function renderNav() {
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     navRight.innerHTML = "<small class=\"muted\">Вы не авторизованы</small>";
   } else {
     navRight.innerHTML = `
-      <span class="badge">${user.role === "admin" ? "Админ" : "Преподаватель"}</span>
-      <strong>${user.displayName || user.email}</strong>
+      <span class="badge">${state.role === "admin" ? "Админ" : "Преподаватель"}</span>
+      <strong>${state.profile?.displayName || state.user.email}</strong>
       <button class="btn secondary" id="logoutBtn">Выйти</button>
     `;
-    document.getElementById("logoutBtn").addEventListener("click", logout);
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      await signOut(auth);
+      render();
+      navigate("login");
+    });
   }
 
   const route = getRoute();
   [...navLinks.querySelectorAll(".navLink")].forEach((link) => {
     const target = link.getAttribute("href").replace(/^#\//, "").split("?")[0];
     link.classList.toggle("active", target === route);
-    if (!user) {
+    if (!state.user) {
       link.classList.add("disabled");
     } else {
       link.classList.remove("disabled");
     }
   });
 
-  if (user?.role !== "admin") {
+  if (state.role !== "admin") {
     [...navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
       link.classList.add("hidden");
     });
@@ -272,13 +215,12 @@ function renderNav() {
 
 function renderProfile() {
   const section = app.querySelector("[data-route='profile']");
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     section.innerHTML = renderLocked("Профиль");
     return;
   }
 
-  const items = resultsByUser(user.id);
+  const items = resultsByUser(state.user.uid);
   const approved = approvedResults(items);
   const pending = pendingResults(items);
   const hasAdmin = state.users.some((item) => item.role === "admin");
@@ -286,12 +228,12 @@ function renderProfile() {
   section.innerHTML = `
     <div class="sectionTitle">
       <h1>Профиль</h1>
-      <span class="badge">${user.role === "admin" ? "Администратор" : "Преподаватель"}</span>
+      <span class="badge">${state.role === "admin" ? "Администратор" : "Преподаватель"}</span>
     </div>
     <p class="sectionLead">Редактируйте данные и отслеживайте статус достижений.</p>
     <div class="grid2">
       <div class="card mini">
-        <h3>${user.displayName || "Без имени"}</h3>
+        <h3>${state.profile?.displayName || "Без имени"}</h3>
         <small class="muted">Подтверждённые баллы</small>
         <h2>${sumResults(approved)}</h2>
       </div>
@@ -302,7 +244,7 @@ function renderProfile() {
       </div>
     </div>
 
-    ${!hasAdmin && user.role !== "admin" ? `
+    ${!hasAdmin && state.role !== "admin" ? `
       <div class="card notice">
         <h3>Первый запуск</h3>
         <p class="sectionLead">Администратор ещё не назначен. Нажмите, чтобы назначить себя админом.</p>
@@ -315,35 +257,35 @@ function renderProfile() {
       <form id="profileForm" class="grid2">
         <div class="stack">
           <label>ФИО</label>
-          <input class="input" name="displayName" value="${escapeValue(user.displayName)}" />
+          <input class="input" name="displayName" value="${escapeValue(state.profile?.displayName)}" />
         </div>
         <div class="stack">
           <label>Школа</label>
-          <input class="input" name="school" value="${escapeValue(user.school)}" />
+          <input class="input" name="school" value="${escapeValue(state.profile?.school)}" />
         </div>
         <div class="stack">
           <label>Предмет</label>
-          <input class="input" name="subject" value="${escapeValue(user.subject)}" />
+          <input class="input" name="subject" value="${escapeValue(state.profile?.subject)}" />
         </div>
         <div class="stack">
           <label>Стаж (лет)</label>
-          <input class="input" type="number" min="0" name="experienceYears" value="${user.experienceYears ?? 0}" />
+          <input class="input" type="number" min="0" name="experienceYears" value="${state.profile?.experienceYears ?? 0}" />
         </div>
         <div class="stack">
           <label>Телефон</label>
-          <input class="input" name="phone" value="${escapeValue(user.phone)}" />
+          <input class="input" name="phone" value="${escapeValue(state.profile?.phone)}" />
         </div>
         <div class="stack">
           <label>Город</label>
-          <input class="input" name="city" value="${escapeValue(user.city)}" />
+          <input class="input" name="city" value="${escapeValue(state.profile?.city)}" />
         </div>
         <div class="stack">
           <label>Должность</label>
-          <input class="input" name="position" value="${escapeValue(user.position)}" />
+          <input class="input" name="position" value="${escapeValue(state.profile?.position)}" />
         </div>
         <div class="stack">
           <label>Email</label>
-          <div class="input">${user.email}</div>
+          <div class="input">${state.profile?.email || "—"}</div>
         </div>
         <button class="btn" type="submit">Сохранить профиль</button>
       </form>
@@ -355,10 +297,10 @@ function renderProfile() {
   `;
 
   const profileForm = section.querySelector("#profileForm");
-  profileForm.addEventListener("submit", (event) => {
+  profileForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
-    Object.assign(user, {
+    const update = {
       displayName: data.get("displayName")?.trim() || "",
       school: data.get("school")?.trim() || "",
       subject: data.get("subject")?.trim() || "",
@@ -366,25 +308,25 @@ function renderProfile() {
       phone: data.get("phone")?.trim() || "",
       city: data.get("city")?.trim() || "",
       position: data.get("position")?.trim() || "",
-    });
-    saveData();
-    render();
+    };
+    await updateDoc(doc(db, "users", state.user.uid), update);
+    state.profile = { ...state.profile, ...update };
+    await refreshAll();
   });
 
   const bootstrapButton = section.querySelector("#bootstrapAdmin");
   if (bootstrapButton) {
-    bootstrapButton.addEventListener("click", () => {
-      user.role = "admin";
-      saveData();
-      render();
+    bootstrapButton.addEventListener("click", async () => {
+      await updateDoc(doc(db, "users", state.user.uid), { role: "admin" });
+      state.role = "admin";
+      await refreshAll();
     });
   }
 }
 
 function renderRating() {
   const section = app.querySelector("[data-route='rating']");
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     section.innerHTML = renderLocked("Рейтинг");
     return;
   }
@@ -392,7 +334,7 @@ function renderRating() {
   const rows = state.users
     .filter((item) => item.role !== "admin")
     .map((teacher) => {
-      const approved = approvedResults(resultsByUser(teacher.id));
+      const approved = approvedResults(resultsByUser(teacher.uid));
       return { ...teacher, total: sumResults(approved) };
     })
     .sort((a, b) => b.total - a.total);
@@ -432,21 +374,20 @@ function renderRating() {
 
 function renderStats() {
   const section = app.querySelector("[data-route='stats']");
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     section.innerHTML = renderLocked("Статистика");
     return;
   }
 
-  if (user.role === "admin") {
+  if (state.role === "admin") {
     section.innerHTML = renderAdminStats();
   } else {
-    section.innerHTML = renderTeacherStats(user);
+    section.innerHTML = renderTeacherStats();
   }
 }
 
-function renderTeacherStats(user) {
-  const approved = approvedResults(resultsByUser(user.id));
+function renderTeacherStats() {
+  const approved = approvedResults(resultsByUser(state.user.uid));
   const daily = buildDailySeries(approved, 14);
   const byType = buildByType(approved);
 
@@ -475,7 +416,7 @@ function renderAdminStats() {
     .filter((item) => item.role !== "admin")
     .map((teacher) => ({
       name: teacher.displayName || teacher.email,
-      points: sumResults(approvedResults(resultsByUser(teacher.id))),
+      points: sumResults(approvedResults(resultsByUser(teacher.uid))),
     }))
     .sort((a, b) => b.points - a.points)
     .slice(0, 10);
@@ -513,13 +454,12 @@ function renderAdminStats() {
 
 function renderAddResult() {
   const section = app.querySelector("[data-route='add']");
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     section.innerHTML = renderLocked("Добавить результат");
     return;
   }
 
-  if (user.role !== "teacher") {
+  if (state.role !== "teacher") {
     section.innerHTML = renderOnlyTeacher();
     return;
   }
@@ -572,7 +512,7 @@ function renderAddResult() {
     </form>
     <div class="sectionInner">
       <h3>Ваши последние заявки</h3>
-      ${renderResultsTable(resultsByUser(user.id).slice(0, 5))}
+      ${renderResultsTable(resultsByUser(state.user.uid).slice(0, 5))}
     </div>
   `;
 
@@ -621,7 +561,7 @@ function renderAddResult() {
 
     subsectionSelect.addEventListener("change", updateTypes);
     typeSelect.addEventListener("change", () => {
-      const selectedType = findType(typeSelect.value);
+      const selectedType = state.types.find((type) => type.id === typeSelect.value);
       pointsInput.value = selectedType ? selectedType.defaultPoints : "";
     });
   }
@@ -632,7 +572,7 @@ function renderAddResult() {
     event.preventDefault();
     const data = new FormData(form);
     const typeId = data.get("typeId");
-    const type = findType(typeId);
+    const type = state.types.find((item) => item.id === typeId);
     if (!type) {
       alert("Выберите тип достижения.");
       return;
@@ -641,12 +581,14 @@ function renderAddResult() {
     const file = form.querySelector("input[name='file']").files[0];
     let fileUrl = "";
     if (file) {
-      fileUrl = await readFileAsDataUrl(file);
+      const path = `evidence/${state.user.uid}/${Date.now()}_${file.name}`;
+      const fileRef = ref(storage, path);
+      await uploadBytes(fileRef, file);
+      fileUrl = await getDownloadURL(fileRef);
     }
 
-    const submission = {
-      id: `s${Date.now()}`,
-      uid: user.id,
+    await addDoc(collection(db, "submissions"), {
+      uid: state.user.uid,
       typeId: type.id,
       typeName: type.name,
       typeSection: type.section,
@@ -658,22 +600,19 @@ function renderAddResult() {
       evidenceLink: data.get("link")?.trim() || "",
       evidenceFileUrl: fileUrl,
       status: "pending",
-      createdAt: Date.now(),
-    };
-    state.submissions.unshift(submission);
-    saveData();
-    render();
+      createdAt: serverTimestamp(),
+    });
+    await refreshAll();
   });
 }
 
 function renderApprovals() {
   const section = app.querySelector("[data-route='admin/approvals']");
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     section.innerHTML = renderLocked("Админ: одобрения");
     return;
   }
-  if (user.role !== "admin") {
+  if (state.role !== "admin") {
     section.innerHTML = renderOnlyAdmin();
     return;
   }
@@ -689,27 +628,35 @@ function renderApprovals() {
     ${renderApprovalTable(pending)}
   `;
 
-  section.querySelector("#refreshApprovals").addEventListener("click", render);
+  section.querySelector("#refreshApprovals").addEventListener("click", refreshAll);
 
   section.querySelectorAll("button[data-action]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const id = button.dataset.id;
       const action = button.dataset.action;
       const target = state.submissions.find((item) => item.id === id);
       if (target) {
+        const subRef = doc(db, "submissions", target.id);
         if (action === "approve") {
-          target.status = "approved";
-          target.decidedAt = Date.now();
-          const owner = findUser(target.uid);
-          if (owner) {
-            owner.totalPoints = (owner.totalPoints || 0) + (target.points || 0);
+          await updateDoc(subRef, {
+            status: "approved",
+            decidedAt: serverTimestamp(),
+            decidedBy: state.user.uid,
+          });
+          const ownerRef = doc(db, "users", target.uid);
+          const ownerSnap = await getDoc(ownerRef);
+          if (ownerSnap.exists()) {
+            const current = ownerSnap.data().totalPoints ?? 0;
+            await updateDoc(ownerRef, { totalPoints: current + (target.points || 0) });
           }
         } else {
-          target.status = "rejected";
-          target.decidedAt = Date.now();
+          await updateDoc(subRef, {
+            status: "rejected",
+            decidedAt: serverTimestamp(),
+            decidedBy: state.user.uid,
+          });
         }
-        saveData();
-        render();
+        await refreshAll();
       }
     });
   });
@@ -717,12 +664,11 @@ function renderApprovals() {
 
 function renderTypes() {
   const section = app.querySelector("[data-route='admin/types']");
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     section.innerHTML = renderLocked("Админ: типы KPI");
     return;
   }
-  if (user.role !== "admin") {
+  if (state.role !== "admin") {
     section.innerHTML = renderOnlyAdmin();
     return;
   }
@@ -785,52 +731,46 @@ function renderTypes() {
   `;
 
   section.querySelectorAll("input[type='checkbox'][data-id]").forEach((input) => {
-    input.addEventListener("change", () => {
-      const type = findType(input.dataset.id);
+    input.addEventListener("change", async () => {
+      const type = state.types.find((item) => item.id === input.dataset.id);
       if (type) {
-        type.active = input.checked;
-        saveData();
-        render();
+        await updateDoc(doc(db, "types", type.id), { active: input.checked });
+        await refreshAll();
       }
     });
   });
 
-  section.querySelector("#seedTypes").addEventListener("click", () => {
+  section.querySelector("#seedTypes").addEventListener("click", async () => {
     const existing = new Set(state.types.map((type) => type.name.toLowerCase()));
-    DEFAULT_TYPES.forEach((type) => {
+    for (const type of DEFAULT_TYPES) {
       if (!existing.has(type.name.toLowerCase())) {
-        state.types.push({ ...type, id: `k${Date.now()}${Math.random().toString(16).slice(2, 6)}` });
+        await addDoc(collection(db, "types"), type);
       }
-    });
-    saveData();
-    render();
+    }
+    await refreshAll();
   });
 
-  section.querySelector("#typeForm").addEventListener("submit", (event) => {
+  section.querySelector("#typeForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(event.target);
-    const newType = {
-      id: `k${Date.now()}`,
+    await addDoc(collection(db, "types"), {
       section: formData.get("section"),
       subsection: formData.get("subsection"),
       name: formData.get("name"),
       defaultPoints: Number(formData.get("points")),
       active: true,
-    };
-    state.types.push(newType);
-    saveData();
-    render();
+    });
+    await refreshAll();
   });
 }
 
 function renderUsers() {
   const section = app.querySelector("[data-route='admin/users']");
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     section.innerHTML = renderLocked("Админ: пользователи");
     return;
   }
-  if (user.role !== "admin") {
+  if (state.role !== "admin") {
     section.innerHTML = renderOnlyAdmin();
     return;
   }
@@ -841,7 +781,6 @@ function renderUsers() {
       <input class="input" id="userSearch" placeholder="Поиск: ФИО / email / школа / предмет" style="max-width: 320px" />
       <button class="btn secondary" id="refreshUsers">Обновить</button>
     </div>
-    <div id="userStatus"></div>
     <div style="overflow-x:auto; margin-top: 12px">
       <table class="table" style="min-width: 1100px">
         <thead>
@@ -864,10 +803,10 @@ function renderUsers() {
   const search = section.querySelector("#userSearch");
 
   function renderRows() {
-    const query = search.value.trim().toLowerCase();
+    const queryValue = search.value.trim().toLowerCase();
     const filtered = state.users.filter((item) => {
       const haystack = [item.displayName, item.email, item.school, item.subject].join(" ").toLowerCase();
-      return haystack.includes(query);
+      return haystack.includes(queryValue);
     });
 
     tbody.innerHTML = filtered
@@ -881,9 +820,9 @@ function renderUsers() {
             <td><b>${item.totalPoints ?? 0}</b></td>
             <td><span class="badge">${item.role}</span></td>
             <td style="white-space:nowrap">
-              <button class="btn secondary" data-action="teacher" data-id="${item.id}">teacher</button>
-              <button class="btn" data-action="admin" data-id="${item.id}">admin</button>
-              <button class="btn secondary" data-action="details" data-id="${item.id}">Профиль</button>
+              <button class="btn secondary" data-action="teacher" data-id="${item.uid}">teacher</button>
+              <button class="btn" data-action="admin" data-id="${item.uid}">admin</button>
+              <button class="btn secondary" data-action="details" data-id="${item.uid}">Профиль</button>
             </td>
           </tr>
         `
@@ -891,50 +830,46 @@ function renderUsers() {
       .join("");
 
     tbody.querySelectorAll("button[data-action]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const target = findUser(button.dataset.id);
+      button.addEventListener("click", async () => {
+        const target = state.users.find((item) => item.uid === button.dataset.id);
         if (!target) return;
         if (button.dataset.action === "details") {
-          state.ui.selectedTeacherId = target.id;
-          saveData();
-          navigate("admin/teacher");
+          state.ui.selectedTeacherId = target.uid;
+          navigate(`admin/teacher?uid=${target.uid}`);
           return;
         }
-        target.role = button.dataset.action;
-        saveData();
-        render();
+        await updateDoc(doc(db, "users", target.uid), { role: button.dataset.action });
+        await refreshAll();
       });
     });
   }
 
   search.addEventListener("input", renderRows);
-  section.querySelector("#refreshUsers").addEventListener("click", renderRows);
+  section.querySelector("#refreshUsers").addEventListener("click", refreshAll);
   renderRows();
 }
 
 function renderTeacherDetail() {
   const section = app.querySelector("[data-route='admin/teacher']");
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     section.innerHTML = renderLocked("Админ: преподаватель");
     return;
   }
-  if (user.role !== "admin") {
+  if (state.role !== "admin") {
     section.innerHTML = renderOnlyAdmin();
     return;
   }
 
   const { params } = parseRoute();
-  const paramId = params.get("uid");
-  const selectedId = paramId || state.ui.selectedTeacherId || state.users.find((item) => item.role !== "admin")?.id;
-  const teacher = findUser(selectedId);
+  const paramId = params.get("uid") || state.ui.selectedTeacherId;
+  const teacher = state.users.find((item) => item.uid === paramId) || state.users[0];
 
   if (!teacher) {
     section.innerHTML = "<div class='error'>Преподаватель не найден.</div>";
     return;
   }
 
-  const items = resultsByUser(teacher.id);
+  const items = state.submissions.filter((item) => item.uid === teacher.uid);
   const stats = {
     total: sumResults(approvedResults(items)),
     approved: approvedResults(items).length,
@@ -1044,7 +979,7 @@ function renderApprovalTable(items) {
       <tbody>
         ${items
           .map((item) => {
-            const owner = findUser(item.uid);
+            const owner = state.users.find((user) => user.uid === item.uid);
             const evidence = pickEvidence(item);
             const evidenceUrl = evidence.fileUrl || evidence.link;
             return `
@@ -1115,8 +1050,7 @@ function renderLogin() {
   const loginSection = app.querySelector("[data-route='login']");
   if (!loginSection) return;
 
-  const user = getCurrentUser();
-  if (!user) {
+  if (!state.user) {
     loginSection.innerHTML = `
       <h1>Вход в систему</h1>
       <p class="sectionLead">Введите email и пароль или перейдите к регистрации.</p>
@@ -1124,7 +1058,7 @@ function renderLogin() {
         <div class="grid2">
           <div class="stack">
             <label>Email</label>
-            <input class="input" name="email" type="email" placeholder="teacher@demo.kz" required />
+            <input class="input" name="email" type="email" placeholder="you@example.com" required />
           </div>
           <div class="stack">
             <label>Пароль</label>
@@ -1137,27 +1071,14 @@ function renderLogin() {
         <span class="muted">Нет аккаунта?</span>
         <a class="badge" href="#/register">Регистрация</a>
       </div>
-      <div class="sectionInner">
-        <h3>Демо-доступы</h3>
-        <div class="row">
-          <span class="badge">admin@demo.kz / admin123</span>
-          <span class="badge">teacher@demo.kz / teacher123</span>
-        </div>
-      </div>
     `;
     const form = loginSection.querySelector("#loginForm");
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = new FormData(form);
-      const email = data.get("email").trim().toLowerCase();
+      const email = data.get("email").trim();
       const password = data.get("password");
-      const match = state.users.find((item) => item.email.toLowerCase() === email && item.password === password);
-      if (!match) {
-        alert("Неверный email или пароль.");
-        return;
-      }
-      setUserId(match.id);
-      navigate("profile");
+      await signInWithEmailAndPassword(auth, email, password);
     });
     return;
   }
@@ -1172,8 +1093,8 @@ function renderLogin() {
 
 function renderRegister() {
   const section = app.querySelector("[data-route='register']");
-  const user = getCurrentUser();
-  if (user) {
+  if (!section) return;
+  if (state.user) {
     section.innerHTML = `
       <h1>Регистрация</h1>
       <div class="success">Вы уже вошли в систему.</div>
@@ -1221,33 +1142,32 @@ function renderRegister() {
     </form>
   `;
 
-  section.querySelector("#registerForm").addEventListener("submit", (event) => {
+  section.querySelector("#registerForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(event.target);
-    const email = formData.get("email").trim().toLowerCase();
-    if (state.users.some((item) => item.email.toLowerCase() === email)) {
-      alert("Пользователь с таким email уже существует.");
-      return;
-    }
-    const newUser = {
-      id: `u${Date.now()}`,
+    const email = formData.get("email").trim();
+    const password = formData.get("password");
+    const displayName = formData.get("displayName");
+    const school = formData.get("school") || "";
+    const subject = formData.get("subject") || "";
+    const experienceYears = Number(formData.get("experienceYears")) || 0;
+
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(cred.user, { displayName });
+    await setDoc(doc(db, "users", cred.user.uid), {
+      uid: cred.user.uid,
       email,
-      password: formData.get("password"),
-      displayName: formData.get("displayName"),
+      displayName,
       role: "teacher",
-      school: formData.get("school") || "",
-      subject: formData.get("subject") || "",
-      experienceYears: Number(formData.get("experienceYears")) || 0,
+      school,
+      subject,
+      experienceYears,
       phone: "",
       city: "",
       position: "",
       totalPoints: 0,
-      createdAt: Date.now(),
-    };
-    state.users.push(newUser);
-    saveData();
-    setUserId(newUser.id);
-    navigate("profile");
+      createdAt: serverTimestamp(),
+    });
   });
 }
 
@@ -1277,10 +1197,6 @@ function render() {
   updateRouteVisibility();
 }
 
-function escapeValue(value) {
-  return String(value ?? "").replace(/"/g, "&quot;");
-}
-
 function buildDailySeries(items, days) {
   const list = [];
   const now = new Date();
@@ -1292,7 +1208,7 @@ function buildDailySeries(items, days) {
   }
   const map = new Map(list.map((item) => [item.day, item]));
   items.forEach((item) => {
-    const key = item.eventDate || new Date(item.createdAt).toISOString().slice(0, 10);
+    const key = item.eventDate || (item.createdAt?.toDate ? item.createdAt.toDate().toISOString().slice(0, 10) : "");
     if (map.has(key)) {
       map.get(key).points += item.points || 0;
     }
@@ -1322,16 +1238,16 @@ function buildHeatmap(items, days) {
   teachers.forEach((teacher) => {
     const map = new Map(dayKeys.map((day) => [day, 0]));
     items
-      .filter((item) => item.uid === teacher.id)
+      .filter((item) => item.uid === teacher.uid)
       .forEach((item) => {
-        const day = item.eventDate || new Date(item.createdAt).toISOString().slice(0, 10);
+        const day = item.eventDate || (item.createdAt?.toDate ? item.createdAt.toDate().toISOString().slice(0, 10) : "");
         if (!map.has(day)) return;
         map.set(day, (map.get(day) || 0) + (item.points || 0));
       });
     map.forEach((value) => {
       if (value > max) max = value;
     });
-    matrix.set(teacher.id, map);
+    matrix.set(teacher.uid, map);
   });
 
   return { dayKeys, teachers, matrix, max };
@@ -1374,7 +1290,7 @@ function renderHeatmap(heat) {
         ${dayKeys.map((day) => `<div class="heatHead">${day.slice(5)}</div>`).join("")}
         ${teachers
           .map((teacher) => {
-            const values = matrix.get(teacher.id);
+            const values = matrix.get(teacher.uid);
             const cells = dayKeys
               .map((day) => {
                 const value = values.get(day) || 0;
@@ -1398,16 +1314,23 @@ function heatColor(score, max) {
   return "#f3f4f6";
 }
 
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
-    reader.readAsDataURL(file);
-  });
-}
-
 window.addEventListener("hashchange", updateRouteVisibility);
+
+onAuthStateChanged(auth, async (user) => {
+  state.user = user;
+  if (user) {
+    state.profile = await ensureUserProfile(user);
+    state.role = state.profile.role || "teacher";
+    await refreshAll();
+  } else {
+    state.profile = null;
+    state.role = null;
+    state.types = [];
+    state.submissions = [];
+    state.users = [];
+    render();
+  }
+});
 
 if (!window.location.hash) {
   navigate("login");
