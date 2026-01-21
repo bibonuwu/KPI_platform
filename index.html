@@ -3,10 +3,44 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Teacher Rating</title>
+    <title>KPI Platform — Plain HTML</title>
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <nav class="nav">
+      <div class="navInner">
+        <div class="brand">
+          <div class="badge">KPI</div>
+          <strong>KPI Platform</strong>
+        </div>
+        <div class="navLinks" id="navLinks">
+          <a class="navLink" href="#/profile">Профиль</a>
+          <a class="navLink" href="#/rating">Рейтинг</a>
+          <a class="navLink" href="#/stats">Статистика</a>
+          <a class="navLink" href="#/add">Добавить результат</a>
+          <a class="navLink" href="#/admin/approvals">Админ: одобрения</a>
+          <a class="navLink" href="#/admin/types">Админ: типы KPI</a>
+          <a class="navLink" href="#/admin/users">Админ: пользователи</a>
+          <a class="navLink" href="#/admin/teacher">Админ: преподаватель</a>
+        </div>
+        <div class="navRight" id="navRight"></div>
+      </div>
+    </nav>
+
+    <main class="container" id="app">
+      <section class="card section" data-route="login"></section>
+      <section class="card section" data-route="register"></section>
+
+      <section class="card section" data-route="profile"></section>
+      <section class="card section" data-route="rating"></section>
+      <section class="card section" data-route="stats"></section>
+      <section class="card section" data-route="add"></section>
+      <section class="card section" data-route="admin/approvals"></section>
+      <section class="card section" data-route="admin/types"></section>
+      <section class="card section" data-route="admin/users"></section>
+      <section class="card section" data-route="admin/teacher"></section>
+    </main>
+
+    <script src="./app.js"></script>
   </body>
 </html>
