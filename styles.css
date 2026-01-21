@@ -395,3 +395,127 @@ hr { border:0; border-top:1px solid #eef0f5; margin: 12px 0; }
     flex-basis: 90px;
   }
 }
+
+/* --- Enhanced rating + stats --- */
+.ratingBoard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.ratingRow {
+  display: grid;
+  grid-template-columns: 64px 1fr 160px;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(120deg, rgba(255,255,255,.95), rgba(248,250,255,.9));
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 20px rgba(15,23,42,.06);
+}
+.ratingRank {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  font-size: 18px;
+  color: #111;
+  background: radial-gradient(circle at 30% 30%, #fde68a, #f97316);
+}
+.ratingName {
+  font-size: 18px;
+  font-weight: 800;
+}
+.ratingMeta {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ratingScore {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 800;
+}
+.ratingScore span {
+  font-size: 22px;
+}
+.trend {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.trend.up { background: #dcfce7; color: #166534; }
+.trend.down { background: #fee2e2; color: #991b1b; }
+.trend.same { background: #e2e8f0; color: #475569; }
+.trend.new { background: #e0f2fe; color: #0369a1; }
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.statCard {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 8px 18px rgba(15,23,42,.05);
+}
+.statCard h2 {
+  margin: 6px 0 0;
+}
+
+.card {
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(15,23,42,.08);
+}
+
+@media (max-width: 920px) {
+  .ratingRow {
+    grid-template-columns: 52px 1fr;
+  }
+  .ratingScore {
+    grid-column: 1 / -1;
+    text-align: left;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .ratingRank {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+  }
+  .ratingName {
+    font-size: 16px;
+  }
+  .ratingScore span {
+    font-size: 18px;
+  }
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+  .table {
+    display: block;
+    overflow-x: auto;
+  }
+}

@@ -47,6 +47,7 @@ const DEFAULT_TYPES = [
 const app = document.getElementById("app");
 const navRight = document.getElementById("navRight");
 const navLinks = document.getElementById("navLinks");
+const RATING_SNAPSHOT_KEY = "rating_snapshot";
 
 const state = {
   user: null,
@@ -116,6 +117,20 @@ function escapeValue(value) {
   return String(value ?? "").replace(/"/g, "&quot;");
 }
 
+function loadRatingSnapshot() {
+  try {
+    const raw = localStorage.getItem(RATING_SNAPSHOT_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveRatingSnapshot(snapshot) {
+  localStorage.setItem(RATING_SNAPSHOT_KEY, JSON.stringify(snapshot));
+}
+
 async function ensureUserProfile(user) {
   const refDoc = doc(db, "users", user.uid);
   const snap = await getDoc(refDoc);
@@ -159,11 +174,11 @@ async function loadSubmissions() {
 }
 
 async function loadUsers() {
-  if (state.role !== "admin") {
+  if (!state.user) {
     state.users = [];
     return;
   }
-  const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+  const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(500));
   const snap = await getDocs(q);
   state.users = snap.docs.map((docSnap) => docSnap.data());
 }
@@ -334,42 +349,54 @@ function renderRating() {
   const rows = state.users
     .filter((item) => item.role !== "admin")
     .map((teacher) => {
-      const approved = approvedResults(resultsByUser(teacher.uid));
-      return { ...teacher, total: sumResults(approved) };
+      const total = teacher.totalPoints ?? 0;
+      return { ...teacher, total };
     })
     .sort((a, b) => b.total - a.total);
+
+  const previousSnapshot = loadRatingSnapshot();
+  const previousRanks = new Map(previousSnapshot.map((item, index) => [item.uid, index + 1]));
+  const nextSnapshot = rows.map((row) => ({ uid: row.uid, total: row.total }));
 
   section.innerHTML = `
     <div class="sectionTitle">
       <h1>Рейтинг преподавателей</h1>
-      <span class="badge">Обновляется автоматически</span>
+      <span class="badge">UFC-стиль</span>
     </div>
-    <p class="sectionLead">Сводка по утверждённым результатам KPI.</p>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Преподаватель</th>
-          <th>Школа</th>
-          <th>Баллы</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${rows
-          .map(
-            (row, index) => `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${row.displayName || row.email}</td>
-                <td>${row.school || "—"}</td>
-                <td><strong>${row.total}</strong></td>
-              </tr>
-            `
-          )
-          .join("")}
-      </tbody>
-    </table>
+    <p class="sectionLead">Сводка по утверждённым результатам KPI с динамикой мест.</p>
+    <div class="ratingBoard">
+      ${rows
+        .map((row, index) => {
+          const currentRank = index + 1;
+          const prevRank = previousRanks.get(row.uid);
+          const delta = prevRank ? prevRank - currentRank : 0;
+          const trend =
+            prevRank === undefined
+              ? "<span class='trend new'>NEW</span>"
+              : delta > 0
+                ? `<span class='trend up'>▲ +${delta}</span>`
+                : delta < 0
+                  ? `<span class='trend down'>▼ ${delta}</span>`
+                  : "<span class='trend same'>• 0</span>";
+          return `
+            <div class="ratingRow">
+              <div class="ratingRank">${currentRank}</div>
+              <div class="ratingMain">
+                <div class="ratingName">${row.displayName || row.email}</div>
+                <div class="ratingMeta">${row.school || "—"} · ${row.subject || "—"}</div>
+              </div>
+              <div class="ratingScore">
+                <span>${row.total}</span>
+                ${trend}
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
   `;
+
+  saveRatingSnapshot(nextSnapshot);
 }
 
 function renderStats() {
@@ -390,6 +417,7 @@ function renderTeacherStats() {
   const approved = approvedResults(resultsByUser(state.user.uid));
   const daily = buildDailySeries(approved, 14);
   const byType = buildByType(approved);
+  const pending = pendingResults(resultsByUser(state.user.uid));
 
   return `
     <div class="sectionTitle">
@@ -397,6 +425,24 @@ function renderTeacherStats() {
       <span class="badge">Ваши KPI</span>
     </div>
     <p class="sectionLead">Сводка по достижениям за последние 14 дней и по типам KPI.</p>
+    <div class="statsGrid">
+      <div class="statCard">
+        <small class="muted">Всего заявок</small>
+        <h2>${resultsByUser(state.user.uid).length}</h2>
+      </div>
+      <div class="statCard">
+        <small class="muted">Одобрено</small>
+        <h2>${approved.length}</h2>
+      </div>
+      <div class="statCard">
+        <small class="muted">В ожидании</small>
+        <h2>${pending.length}</h2>
+      </div>
+      <div class="statCard">
+        <small class="muted">Баллы</small>
+        <h2>${sumResults(approved)}</h2>
+      </div>
+    </div>
     <div class="chartGrid">
       <div class="chartCard">
         <div class="chartHead"><h3>Баллы по дням</h3></div>
@@ -406,12 +452,21 @@ function renderTeacherStats() {
         <div class="chartHead"><h3>Баллы по типам</h3></div>
         ${renderBarChart(byType.map((item) => ({ label: item.name, value: item.points })))}
       </div>
+      <div class="chartCard">
+        <div class="chartHead"><h3>Статус заявок</h3></div>
+        ${renderBarChart([
+          { label: "Одобрено", value: approved.length },
+          { label: "В ожидании", value: pending.length },
+        ])}
+      </div>
     </div>
   `;
 }
 
 function renderAdminStats() {
   const approved = approvedResults(state.submissions);
+  const pending = pendingResults(state.submissions);
+  const rejected = state.submissions.filter((item) => item.status === "rejected");
   const topTeachers = state.users
     .filter((item) => item.role !== "admin")
     .map((teacher) => ({
@@ -431,6 +486,24 @@ function renderAdminStats() {
       <span class="badge">Админ-обзор</span>
     </div>
     <p class="sectionLead">Сводные KPI по преподавателям и типам достижений.</p>
+    <div class="statsGrid">
+      <div class="statCard">
+        <small class="muted">Преподаватели</small>
+        <h2>${state.users.filter((item) => item.role !== "admin").length}</h2>
+      </div>
+      <div class="statCard">
+        <small class="muted">Заявки</small>
+        <h2>${state.submissions.length}</h2>
+      </div>
+      <div class="statCard">
+        <small class="muted">На проверке</small>
+        <h2>${pending.length}</h2>
+      </div>
+      <div class="statCard">
+        <small class="muted">Баллы (всего)</small>
+        <h2>${sumResults(approved)}</h2>
+      </div>
+    </div>
     <div class="chartGrid">
       <div class="chartCard">
         <div class="chartHead"><h3>Топ преподавателей</h3></div>
@@ -443,6 +516,14 @@ function renderAdminStats() {
       <div class="chartCard">
         <div class="chartHead"><h3>Динамика за 14 дней</h3></div>
         ${renderBarChart(daily.map((item) => ({ label: item.day, value: item.points })))}
+      </div>
+      <div class="chartCard">
+        <div class="chartHead"><h3>Статусы заявок</h3></div>
+        ${renderBarChart([
+          { label: "Одобрено", value: approved.length },
+          { label: "В ожидании", value: pending.length },
+          { label: "Отклонено", value: rejected.length },
+        ])}
       </div>
     </div>
     <div class="sectionInner">
