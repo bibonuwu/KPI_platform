@@ -95,6 +95,5 @@ firebase deploy --only storage
 
 Папку `node_modules/` обычно **не коммитят** в Git — лучше добавить её в `.gitignore`, чтобы репозиторий был легче и чище.
 
-```
-::contentReference[oaicite:0]{index=0}
-```
+Лицензия: [MIT](./LICENSE)
+
