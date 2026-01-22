@@ -51,6 +51,8 @@ const DEFAULT_TYPES = [
 }));
 
 export function renderNav() {
+  renderSidebar();
+
   if (!state.user) {
     elements.navRight.innerHTML = "<small class=\"muted\">Вы не авторизованы</small>";
   } else {
@@ -66,26 +68,53 @@ export function renderNav() {
     });
   }
 
-  const route = getRoute();
-  [...elements.navLinks.querySelectorAll(".navLink")].forEach((link) => {
-    const target = link.getAttribute("href").replace(/^#\//, "").split("?")[0];
-    link.classList.toggle("active", target === route);
-    if (!state.user) {
-      link.classList.add("disabled");
-    } else {
-      link.classList.remove("disabled");
-    }
-  });
+}
 
-  if (state.role !== "admin") {
-    [...elements.navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
-      link.classList.add("hidden");
-    });
-  } else {
-    [...elements.navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
-      link.classList.remove("hidden");
-    });
-  }
+function renderSidebar() {
+  const route = getRoute();
+  const isAdmin = state.role === "admin";
+  const links = [
+    { href: "#/profile", label: "Профиль", icon: "👤" },
+    { href: "#/rating", label: "Рейтинг", icon: "🏆" },
+    { href: "#/stats", label: "Статистика", icon: "📊" },
+    { href: "#/add", label: "Добавить результат", icon: "➕", teacherOnly: true },
+    { href: "#/admin/approvals", label: "Админ: одобрения", icon: "✅", adminOnly: true },
+    { href: "#/admin/types", label: "Админ: типы KPI", icon: "🧩", adminOnly: true },
+    { href: "#/admin/users", label: "Админ: пользователи", icon: "🧑‍💼", adminOnly: true },
+    { href: "#/admin/teacher", label: "Админ: преподаватель", icon: "🎓", adminOnly: true },
+  ];
+
+  elements.sidebar.innerHTML = `
+    <div class="sidebarInner">
+      <div class="sidebarHeader">
+        <div class="avatarCircle">${getInitials(state.profile?.displayName || state.user?.email || "")}</div>
+        <div>
+          <div class="sidebarName">${state.profile?.displayName || state.user?.email || "Гость"}</div>
+          <small class="muted">${state.role === "admin" ? "Администратор" : "Преподаватель"}</small>
+        </div>
+      </div>
+      <nav class="sidebarNav">
+        ${links
+          .filter((link) => {
+            if (link.adminOnly && !isAdmin) return false;
+            if (link.teacherOnly && isAdmin) return false;
+            return true;
+          })
+          .map((link) => {
+            const target = link.href.replace(/^#\//, "").split("?")[0];
+            const isActive = target === route;
+            const isDisabled = !state.user;
+            return `
+              <a class="sidebarLink ${isActive ? "active" : ""} ${isDisabled ? "disabled" : ""}" href="${link.href}">
+                <span class="icon">${link.icon}</span>
+                <span>${link.label}</span>
+              </a>
+            `;
+          })
+          .join("")}
+      </nav>
+    </div>
+  `;
 }
 
 function renderProfile() {
@@ -100,17 +129,32 @@ function renderProfile() {
   const pending = pendingResults(items);
   const hasAdmin = state.users.some((item) => item.role === "admin");
 
+  const totalPoints = sumResults(approved);
+  const level = getPointsLevel(totalPoints);
+
   section.innerHTML = `
-    <div class="sectionTitle">
-      <h1>Профиль</h1>
-      <span class="badge">${state.role === "admin" ? "Администратор" : "Преподаватель"}</span>
+    <div class="profileHeader">
+      <div class="profileAvatar">${getInitials(state.profile?.displayName || state.user?.email || "")}</div>
+      <div class="profileInfo">
+        <h1>${state.profile?.displayName || "Без имени"}</h1>
+        <div class="profileMeta">
+          <span class="badge">${state.role === "admin" ? "Администратор" : "Преподаватель"}</span>
+          <span class="muted">${state.profile?.email || "—"}</span>
+        </div>
+      </div>
+      <button class="iconButton" type="button" aria-label="Настройки">⚙️</button>
     </div>
     <p class="sectionLead">Редактируйте данные и отслеживайте статус достижений.</p>
     <div class="grid2">
       <div class="card mini">
-        <h3>${state.profile?.displayName || "Без имени"}</h3>
-        <small class="muted">Подтверждённые баллы</small>
-        <h2>${sumResults(approved)}</h2>
+        <h3>Уровень баллов</h3>
+        <small class="muted">${level.label}</small>
+        <div class="levelRow">
+          <div class="levelBar">
+            <span style="width:${level.progress}%"></span>
+          </div>
+          <strong>${totalPoints}</strong>
+        </div>
       </div>
       <div class="card mini">
         <h3>Заявки в ожидании</h3>
@@ -201,6 +245,28 @@ function renderProfile() {
   }
 }
 
+function getPointsLevel(points) {
+  const levels = [
+    { label: "Новичок", min: 0, max: 49 },
+    { label: "Уверенный", min: 50, max: 99 },
+    { label: "Профи", min: 100, max: 199 },
+    { label: "Лидер", min: 200, max: 499 },
+    { label: "Легенда", min: 500, max: Infinity },
+  ];
+  const level = levels.find((item) => points >= item.min && points <= item.max) || levels[0];
+  const span = level.max === Infinity ? level.min + 100 : level.max - level.min + 1;
+  const progress = Math.min(100, Math.max(5, ((points - level.min) / span) * 100));
+  return { ...level, progress: Math.round(progress) };
+}
+
+function getInitials(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return "KP";
+  const parts = trimmed.split(" ").filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
 function renderRating() {
   const section = elements.app.querySelector("[data-route='rating']");
   if (!state.user) {
@@ -238,7 +304,7 @@ function renderRating() {
                   ? `<span class='trend down'>▼ ${delta}</span>`
                   : "<span class='trend same'>• 0</span>";
           return `
-            <div class="ratingRow">
+            <div class="ratingRow ${currentRank === 1 ? "rankGold" : currentRank === 2 ? "rankSilver" : currentRank === 3 ? "rankBronze" : ""}">
               <div class="ratingRank">${currentRank}</div>
               <div class="ratingMain">
                 <div class="ratingName">${row.displayName || row.email}</div>

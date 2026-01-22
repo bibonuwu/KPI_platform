@@ -3,7 +3,7 @@ export const RATING_SNAPSHOT_KEY = "rating_snapshot";
 export const elements = {
   app: document.getElementById("app"),
   navRight: document.getElementById("navRight"),
-  navLinks: document.getElementById("navLinks"),
+  sidebar: document.getElementById("sidebar"),
 };
 
 export const state = {
