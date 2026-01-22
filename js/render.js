@@ -1,30 +1,36 @@
+﻿import { signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { auth } from "./firebase-config.js";
+import { elements, getRoute, navigate, parseRoute, state } from "./state.js";
 import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
+  approvedResults,
+  buildByType,
+  buildDailySeries,
+  buildHeatmap,
+  escapeValue,
+  formatDate,
+  isImage,
+  isPdf,
+  loadRatingSnapshot,
+  pendingResults,
+  pickEvidence,
+  renderBarChart,
+  renderHeatmap,
+  resultsByUser,
+  saveRatingSnapshot,
+  sumResults,
+} from "./utils.js";
+import {
+  addSubmission,
+  addType,
+  approveSubmission,
+  refreshAll,
+  rejectSubmission,
+  seedDefaultTypes,
+  setRole,
+  toggleType,
   updateProfile,
-  signOut,
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  where,
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import {
-  getDownloadURL,
-  ref,
-  uploadBytes,
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
-import { auth, db, storage } from "./firebase-config.js";
+  uploadEvidence,
+} from "./api.js";
 
 const DEFAULT_TYPES = [
   { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарға қатысу (мектепішілік)", defaultPoints: 5 },
@@ -44,157 +50,11 @@ const DEFAULT_TYPES = [
   active: true,
 }));
 
-const app = document.getElementById("app");
-const navRight = document.getElementById("navRight");
-const navLinks = document.getElementById("navLinks");
-const RATING_SNAPSHOT_KEY = "rating_snapshot";
-
-const state = {
-  user: null,
-  profile: null,
-  role: null,
-  types: [],
-  submissions: [],
-  users: [],
-  ui: { selectedTeacherId: null },
-};
-
-function navigate(route) {
-  window.location.hash = `#/${route}`;
-}
-
-function parseRoute() {
-  const hash = window.location.hash.replace(/^#\//, "");
-  const [path, queryString] = hash.split("?");
-  const params = new URLSearchParams(queryString || "");
-  return { path: path || "profile", params };
-}
-
-function getRoute() {
-  return parseRoute().path;
-}
-
-function formatDate(value) {
-  if (!value) return "—";
-  const date = value.toDate ? value.toDate() : new Date(value);
-  return date.toLocaleDateString("ru-RU");
-}
-
-function sumResults(results) {
-  return results.reduce((total, item) => total + (item.points || 0), 0);
-}
-
-function resultsByUser(userId) {
-  return state.submissions.filter((item) => item.uid === userId);
-}
-
-function approvedResults(items) {
-  return items.filter((item) => item.status === "approved");
-}
-
-function pendingResults(items) {
-  return items.filter((item) => item.status === "pending");
-}
-
-function isImage(url) {
-  return /\.(png|jpg|jpeg|webp)$/i.test(url || "");
-}
-
-function isPdf(url) {
-  return /\.pdf$/i.test(url || "");
-}
-
-function pickEvidence(item) {
-  const link = (item.evidenceLink || "").trim();
-  const fileUrl = (item.evidenceFileUrl || "").trim();
-  return {
-    link,
-    fileUrl,
-  };
-}
-
-function escapeValue(value) {
-  return String(value ?? "").replace(/"/g, "&quot;");
-}
-
-function loadRatingSnapshot() {
-  try {
-    const raw = localStorage.getItem(RATING_SNAPSHOT_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch (error) {
-    return [];
-  }
-}
-
-function saveRatingSnapshot(snapshot) {
-  localStorage.setItem(RATING_SNAPSHOT_KEY, JSON.stringify(snapshot));
-}
-
-async function ensureUserProfile(user) {
-  const refDoc = doc(db, "users", user.uid);
-  const snap = await getDoc(refDoc);
-  if (snap.exists()) {
-    return snap.data();
-  }
-  const newProfile = {
-    uid: user.uid,
-    email: user.email,
-    displayName: user.displayName || "",
-    role: "teacher",
-    school: "",
-    subject: "",
-    experienceYears: 0,
-    phone: "",
-    city: "",
-    position: "",
-    totalPoints: 0,
-    createdAt: serverTimestamp(),
-  };
-  await setDoc(refDoc, newProfile);
-  return newProfile;
-}
-
-async function loadTypes() {
-  const snap = await getDocs(collection(db, "types"));
-  state.types = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-}
-
-async function loadSubmissions() {
-  if (!state.user) return;
-  if (state.role === "admin") {
-    const q = query(collection(db, "submissions"), orderBy("createdAt", "desc"), limit(500));
-    const snap = await getDocs(q);
-    state.submissions = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-  } else {
-    const q = query(collection(db, "submissions"), where("uid", "==", state.user.uid), limit(200));
-    const snap = await getDocs(q);
-    state.submissions = snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-  }
-}
-
-async function loadUsers() {
+export function renderNav() {
   if (!state.user) {
-    state.users = [];
-    return;
-  }
-  const q = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(500));
-  const snap = await getDocs(q);
-  state.users = snap.docs.map((docSnap) => docSnap.data());
-}
-
-async function refreshAll() {
-  await loadTypes();
-  await loadSubmissions();
-  await loadUsers();
-  render();
-}
-
-function renderNav() {
-  if (!state.user) {
-    navRight.innerHTML = "<small class=\"muted\">Вы не авторизованы</small>";
+    elements.navRight.innerHTML = "<small class=\"muted\">Вы не авторизованы</small>";
   } else {
-    navRight.innerHTML = `
+    elements.navRight.innerHTML = `
       <span class="badge">${state.role === "admin" ? "Админ" : "Преподаватель"}</span>
       <strong>${state.profile?.displayName || state.user.email}</strong>
       <button class="btn secondary" id="logoutBtn">Выйти</button>
@@ -207,7 +67,7 @@ function renderNav() {
   }
 
   const route = getRoute();
-  [...navLinks.querySelectorAll(".navLink")].forEach((link) => {
+  [...elements.navLinks.querySelectorAll(".navLink")].forEach((link) => {
     const target = link.getAttribute("href").replace(/^#\//, "").split("?")[0];
     link.classList.toggle("active", target === route);
     if (!state.user) {
@@ -218,18 +78,18 @@ function renderNav() {
   });
 
   if (state.role !== "admin") {
-    [...navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
+    [...elements.navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
       link.classList.add("hidden");
     });
   } else {
-    [...navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
+    [...elements.navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
       link.classList.remove("hidden");
     });
   }
 }
 
 function renderProfile() {
-  const section = app.querySelector("[data-route='profile']");
+  const section = elements.app.querySelector("[data-route='profile']");
   if (!state.user) {
     section.innerHTML = renderLocked("Профиль");
     return;
@@ -324,23 +184,25 @@ function renderProfile() {
       city: data.get("city")?.trim() || "",
       position: data.get("position")?.trim() || "",
     };
-    await updateDoc(doc(db, "users", state.user.uid), update);
+    await updateProfile(state.user.uid, update);
     state.profile = { ...state.profile, ...update };
     await refreshAll();
+    render();
   });
 
   const bootstrapButton = section.querySelector("#bootstrapAdmin");
   if (bootstrapButton) {
     bootstrapButton.addEventListener("click", async () => {
-      await updateDoc(doc(db, "users", state.user.uid), { role: "admin" });
+      await setRole(state.user.uid, "admin");
       state.role = "admin";
       await refreshAll();
+      render();
     });
   }
 }
 
 function renderRating() {
-  const section = app.querySelector("[data-route='rating']");
+  const section = elements.app.querySelector("[data-route='rating']");
   if (!state.user) {
     section.innerHTML = renderLocked("Рейтинг");
     return;
@@ -348,10 +210,7 @@ function renderRating() {
 
   const rows = state.users
     .filter((item) => item.role !== "admin")
-    .map((teacher) => {
-      const total = teacher.totalPoints ?? 0;
-      return { ...teacher, total };
-    })
+    .map((teacher) => ({ ...teacher, total: teacher.totalPoints ?? 0 }))
     .sort((a, b) => b.total - a.total);
 
   const previousSnapshot = loadRatingSnapshot();
@@ -400,7 +259,7 @@ function renderRating() {
 }
 
 function renderStats() {
-  const section = app.querySelector("[data-route='stats']");
+  const section = elements.app.querySelector("[data-route='stats']");
   if (!state.user) {
     section.innerHTML = renderLocked("Статистика");
     return;
@@ -478,7 +337,7 @@ function renderAdminStats() {
 
   const byType = buildByType(approved);
   const daily = buildDailySeries(approved, 14);
-  const heat = buildHeatmap(approved, 14);
+  const heat = buildHeatmap(approved, 14, state.users);
 
   return `
     <div class="sectionTitle">
@@ -534,7 +393,7 @@ function renderAdminStats() {
 }
 
 function renderAddResult() {
-  const section = app.querySelector("[data-route='add']");
+  const section = elements.app.querySelector("[data-route='add']");
   if (!state.user) {
     section.innerHTML = renderLocked("Добавить результат");
     return;
@@ -660,15 +519,9 @@ function renderAddResult() {
     }
 
     const file = form.querySelector("input[name='file']").files[0];
-    let fileUrl = "";
-    if (file) {
-      const path = `evidence/${state.user.uid}/${Date.now()}_${file.name}`;
-      const fileRef = ref(storage, path);
-      await uploadBytes(fileRef, file);
-      fileUrl = await getDownloadURL(fileRef);
-    }
+    const fileUrl = await uploadEvidence(state.user.uid, file);
 
-    await addDoc(collection(db, "submissions"), {
+    await addSubmission({
       uid: state.user.uid,
       typeId: type.id,
       typeName: type.name,
@@ -681,14 +534,14 @@ function renderAddResult() {
       evidenceLink: data.get("link")?.trim() || "",
       evidenceFileUrl: fileUrl,
       status: "pending",
-      createdAt: serverTimestamp(),
     });
     await refreshAll();
+    render();
   });
 }
 
 function renderApprovals() {
-  const section = app.querySelector("[data-route='admin/approvals']");
+  const section = elements.app.querySelector("[data-route='admin/approvals']");
   if (!state.user) {
     section.innerHTML = renderLocked("Админ: одобрения");
     return;
@@ -709,7 +562,10 @@ function renderApprovals() {
     ${renderApprovalTable(pending)}
   `;
 
-  section.querySelector("#refreshApprovals").addEventListener("click", refreshAll);
+  section.querySelector("#refreshApprovals").addEventListener("click", async () => {
+    await refreshAll();
+    render();
+  });
 
   section.querySelectorAll("button[data-action]").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -717,34 +573,20 @@ function renderApprovals() {
       const action = button.dataset.action;
       const target = state.submissions.find((item) => item.id === id);
       if (target) {
-        const subRef = doc(db, "submissions", target.id);
         if (action === "approve") {
-          await updateDoc(subRef, {
-            status: "approved",
-            decidedAt: serverTimestamp(),
-            decidedBy: state.user.uid,
-          });
-          const ownerRef = doc(db, "users", target.uid);
-          const ownerSnap = await getDoc(ownerRef);
-          if (ownerSnap.exists()) {
-            const current = ownerSnap.data().totalPoints ?? 0;
-            await updateDoc(ownerRef, { totalPoints: current + (target.points || 0) });
-          }
+          await approveSubmission(target, state.user.uid);
         } else {
-          await updateDoc(subRef, {
-            status: "rejected",
-            decidedAt: serverTimestamp(),
-            decidedBy: state.user.uid,
-          });
+          await rejectSubmission(target, state.user.uid);
         }
         await refreshAll();
+        render();
       }
     });
   });
 }
 
 function renderTypes() {
-  const section = app.querySelector("[data-route='admin/types']");
+  const section = elements.app.querySelector("[data-route='admin/types']");
   if (!state.user) {
     section.innerHTML = renderLocked("Админ: типы KPI");
     return;
@@ -815,26 +657,23 @@ function renderTypes() {
     input.addEventListener("change", async () => {
       const type = state.types.find((item) => item.id === input.dataset.id);
       if (type) {
-        await updateDoc(doc(db, "types", type.id), { active: input.checked });
+        await toggleType(type.id, input.checked);
         await refreshAll();
+        render();
       }
     });
   });
 
   section.querySelector("#seedTypes").addEventListener("click", async () => {
-    const existing = new Set(state.types.map((type) => type.name.toLowerCase()));
-    for (const type of DEFAULT_TYPES) {
-      if (!existing.has(type.name.toLowerCase())) {
-        await addDoc(collection(db, "types"), type);
-      }
-    }
+    await seedDefaultTypes(DEFAULT_TYPES);
     await refreshAll();
+    render();
   });
 
   section.querySelector("#typeForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(event.target);
-    await addDoc(collection(db, "types"), {
+    await addType({
       section: formData.get("section"),
       subsection: formData.get("subsection"),
       name: formData.get("name"),
@@ -842,11 +681,12 @@ function renderTypes() {
       active: true,
     });
     await refreshAll();
+    render();
   });
 }
 
 function renderUsers() {
-  const section = app.querySelector("[data-route='admin/users']");
+  const section = elements.app.querySelector("[data-route='admin/users']");
   if (!state.user) {
     section.innerHTML = renderLocked("Админ: пользователи");
     return;
@@ -919,19 +759,23 @@ function renderUsers() {
           navigate(`admin/teacher?uid=${target.uid}`);
           return;
         }
-        await updateDoc(doc(db, "users", target.uid), { role: button.dataset.action });
+        await setRole(target.uid, button.dataset.action);
         await refreshAll();
+        render();
       });
     });
   }
 
   search.addEventListener("input", renderRows);
-  section.querySelector("#refreshUsers").addEventListener("click", refreshAll);
+  section.querySelector("#refreshUsers").addEventListener("click", async () => {
+    await refreshAll();
+    render();
+  });
   renderRows();
 }
 
 function renderTeacherDetail() {
-  const section = app.querySelector("[data-route='admin/teacher']");
+  const section = elements.app.querySelector("[data-route='admin/teacher']");
   if (!state.user) {
     section.innerHTML = renderLocked("Админ: преподаватель");
     return;
@@ -1128,7 +972,7 @@ function renderOnlyTeacher() {
 }
 
 function renderLogin() {
-  const loginSection = app.querySelector("[data-route='login']");
+  const loginSection = elements.app.querySelector("[data-route='login']");
   if (!loginSection) return;
 
   if (!state.user) {
@@ -1153,14 +997,6 @@ function renderLogin() {
         <a class="badge" href="#/register">Регистрация</a>
       </div>
     `;
-    const form = loginSection.querySelector("#loginForm");
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const data = new FormData(form);
-      const email = data.get("email").trim();
-      const password = data.get("password");
-      await signInWithEmailAndPassword(auth, email, password);
-    });
     return;
   }
 
@@ -1173,7 +1009,7 @@ function renderLogin() {
 }
 
 function renderRegister() {
-  const section = app.querySelector("[data-route='register']");
+  const section = elements.app.querySelector("[data-route='register']");
   if (!section) return;
   if (state.user) {
     section.innerHTML = `
@@ -1222,34 +1058,6 @@ function renderRegister() {
       <button class="btn" type="submit">Создать аккаунт</button>
     </form>
   `;
-
-  section.querySelector("#registerForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    const email = formData.get("email").trim();
-    const password = formData.get("password");
-    const displayName = formData.get("displayName");
-    const school = formData.get("school") || "";
-    const subject = formData.get("subject") || "";
-    const experienceYears = Number(formData.get("experienceYears")) || 0;
-
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(cred.user, { displayName });
-    await setDoc(doc(db, "users", cred.user.uid), {
-      uid: cred.user.uid,
-      email,
-      displayName,
-      role: "teacher",
-      school,
-      subject,
-      experienceYears,
-      phone: "",
-      city: "",
-      position: "",
-      totalPoints: 0,
-      createdAt: serverTimestamp(),
-    });
-  });
 }
 
 function renderSections() {
@@ -1265,156 +1073,27 @@ function renderSections() {
   renderRegister();
 }
 
-function updateRouteVisibility() {
+export function updateRouteVisibility() {
   const route = getRoute();
-  app.querySelectorAll("[data-route]").forEach((section) => {
+  elements.app.querySelectorAll("[data-route]").forEach((section) => {
     section.classList.toggle("hidden", section.dataset.route !== route);
   });
 }
 
-function render() {
+export function render() {
   renderNav();
   renderSections();
   updateRouteVisibility();
 }
 
-function buildDailySeries(items, days) {
-  const list = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    list.push({ day: key, points: 0 });
+export function bindAuthForms(onLogin, onRegister) {
+  const loginForm = elements.app.querySelector("[data-route='login'] #loginForm");
+  if (loginForm) {
+    loginForm.addEventListener("submit", onLogin);
   }
-  const map = new Map(list.map((item) => [item.day, item]));
-  items.forEach((item) => {
-    const key = item.eventDate || (item.createdAt?.toDate ? item.createdAt.toDate().toISOString().slice(0, 10) : "");
-    if (map.has(key)) {
-      map.get(key).points += item.points || 0;
-    }
-  });
-  return list;
-}
 
-function buildByType(items) {
-  const map = new Map();
-  items.forEach((item) => {
-    const key = item.typeName || item.typeId;
-    map.set(key, (map.get(key) || 0) + (item.points || 0));
-  });
-  return [...map.entries()]
-    .map(([name, points]) => ({ name, points }))
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 12);
-}
-
-function buildHeatmap(items, days) {
-  const daily = buildDailySeries(items, days);
-  const dayKeys = daily.map((item) => item.day);
-  const teachers = state.users.filter((item) => item.role !== "admin");
-  const matrix = new Map();
-  let max = 0;
-
-  teachers.forEach((teacher) => {
-    const map = new Map(dayKeys.map((day) => [day, 0]));
-    items
-      .filter((item) => item.uid === teacher.uid)
-      .forEach((item) => {
-        const day = item.eventDate || (item.createdAt?.toDate ? item.createdAt.toDate().toISOString().slice(0, 10) : "");
-        if (!map.has(day)) return;
-        map.set(day, (map.get(day) || 0) + (item.points || 0));
-      });
-    map.forEach((value) => {
-      if (value > max) max = value;
-    });
-    matrix.set(teacher.uid, map);
-  });
-
-  return { dayKeys, teachers, matrix, max };
-}
-
-function renderBarChart(data) {
-  if (!data.length) {
-    return "<div class='muted'>Нет данных</div>";
+  const registerForm = elements.app.querySelector("[data-route='register'] #registerForm");
+  if (registerForm) {
+    registerForm.addEventListener("submit", onRegister);
   }
-  const max = Math.max(...data.map((item) => item.value), 1);
-  return `
-    <div class="barList">
-      ${data
-        .map(
-          (item) => `
-            <div class="barRow">
-              <span class="barLabel">${item.label}</span>
-              <span class="barValue" style="width:${(item.value / max) * 100}%">
-                <span>${item.value}</span>
-              </span>
-            </div>
-          `
-        )
-        .join("")}
-    </div>
-  `;
 }
-
-function renderHeatmap(heat) {
-  const { dayKeys, teachers, matrix, max } = heat;
-  if (!teachers.length) {
-    return "<div class='muted'>Нет данных для тепловой карты.</div>";
-  }
-  const gridTemplate = `200px repeat(${dayKeys.length}, 1fr)`;
-
-  return `
-    <div class="heatWrap">
-      <div class="heatGrid" style="grid-template-columns:${gridTemplate}">
-        <div class="heatHead">Преподаватель</div>
-        ${dayKeys.map((day) => `<div class="heatHead">${day.slice(5)}</div>`).join("")}
-        ${teachers
-          .map((teacher) => {
-            const values = matrix.get(teacher.uid);
-            const cells = dayKeys
-              .map((day) => {
-                const value = values.get(day) || 0;
-                return `<div class="heatCell" style="background:${heatColor(value, max)}">${value}</div>`;
-              })
-              .join("");
-            return `<div class="heatName">${teacher.displayName || teacher.email}</div>${cells}`;
-          })
-          .join("")}
-      </div>
-    </div>
-  `;
-}
-
-function heatColor(score, max) {
-  if (!max) return "#f3f4f6";
-  const ratio = score / max;
-  if (ratio > 0.7) return "#d1fae5";
-  if (ratio > 0.3) return "#fef3c7";
-  if (score > 0) return "#fee2e2";
-  return "#f3f4f6";
-}
-
-window.addEventListener("hashchange", updateRouteVisibility);
-
-onAuthStateChanged(auth, async (user) => {
-  state.user = user;
-  if (user) {
-    state.profile = await ensureUserProfile(user);
-    state.role = state.profile.role || "teacher";
-    await refreshAll();
-  } else {
-    state.profile = null;
-    state.role = null;
-    state.types = [];
-    state.submissions = [];
-    state.users = [];
-    render();
-  }
-});
-
-if (!window.location.hash) {
-  navigate("login");
-}
-
-render();
