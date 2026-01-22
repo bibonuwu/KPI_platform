@@ -1,13 +1,21 @@
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    function signedIn() { return request.auth != null; }
 
-    // Teachers can upload only to their own folder: evidence/{uid}/...
-    match /evidence/{uid}/{allPaths=**} {
-      allow read: if signedIn(); // you can restrict if you want
+ rules_version = '2';
+ service firebase.storage {
+   match /b/{bucket}/o {
+     function signedIn() { return request.auth != null; }
+ 
+     // Teachers can upload only to their own folder: evidence/{uid}/...
+     match /evidence/{uid}/{allPaths=**} {
+       allow read: if signedIn(); // you can restrict if you want
+       allow write: if signedIn() && request.auth.uid == uid
+         && request.resource.size < 10 * 1024 * 1024; // 10MB
+     }
+
+    // Avatars: each teacher can manage their own image files
+    match /avatars/{uid}/{allPaths=**} {
+      allow read: if signedIn();
       allow write: if signedIn() && request.auth.uid == uid
-        && request.resource.size < 10 * 1024 * 1024; // 10MB
+       && request.resource.size < 5 * 1024 * 1024; // 5MB
     }
-  }
-}
+   }
+ }

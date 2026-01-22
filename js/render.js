@@ -29,6 +29,7 @@ import {
   setRole,
   toggleType,
   updateProfile,
+  uploadAvatar,
   uploadEvidence,
 } from "./api.js";
 
@@ -51,6 +52,8 @@ const DEFAULT_TYPES = [
 }));
 
 export function renderNav() {
+  renderSidebar();
+
   if (!state.user) {
     elements.navRight.innerHTML = "<small class=\"muted\">Вы не авторизованы</small>";
   } else {
@@ -66,26 +69,59 @@ export function renderNav() {
     });
   }
 
-  const route = getRoute();
-  [...elements.navLinks.querySelectorAll(".navLink")].forEach((link) => {
-    const target = link.getAttribute("href").replace(/^#\//, "").split("?")[0];
-    link.classList.toggle("active", target === route);
-    if (!state.user) {
-      link.classList.add("disabled");
-    } else {
-      link.classList.remove("disabled");
-    }
-  });
+}
 
-  if (state.role !== "admin") {
-    [...elements.navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
-      link.classList.add("hidden");
-    });
-  } else {
-    [...elements.navLinks.querySelectorAll("a[href^='#/admin']")].forEach((link) => {
-      link.classList.remove("hidden");
-    });
-  }
+function renderSidebar() {
+  const route = getRoute();
+  const isAdmin = state.role === "admin";
+  const links = [
+    { href: "#/profile", label: "Профиль", icon: "👤" },
+    { href: "#/rating", label: "Рейтинг", icon: "🏆" },
+    { href: "#/stats", label: "Статистика", icon: "📊" },
+    { href: "#/add", label: "Добавить результат", icon: "➕", teacherOnly: true },
+    { href: "#/admin/approvals", label: "Админ: одобрения", icon: "✅", adminOnly: true },
+    { href: "#/admin/types", label: "Админ: типы KPI", icon: "🧩", adminOnly: true },
+    { href: "#/admin/users", label: "Админ: пользователи", icon: "🧑‍💼", adminOnly: true },
+    { href: "#/admin/teacher", label: "Админ: преподаватель", icon: "🎓", adminOnly: true },
+  ];
+
+  elements.sidebar.innerHTML = `
+    <div class="sidebarInner">
+      <div class="sidebarHeader">
+        <div class="avatarCircle">
+          ${
+            state.profile?.avatarUrl
+              ? `<img src="${state.profile.avatarUrl}" alt="avatar" />`
+              : getInitials(state.profile?.displayName || state.user?.email || "")
+          }
+        </div>
+        <div>
+          <div class="sidebarName">${state.profile?.displayName || state.user?.email || "Гость"}</div>
+          <small class="muted">${state.role === "admin" ? "Администратор" : "Преподаватель"}</small>
+        </div>
+      </div>
+      <nav class="sidebarNav">
+        ${links
+          .filter((link) => {
+            if (link.adminOnly && !isAdmin) return false;
+            if (link.teacherOnly && isAdmin) return false;
+            return true;
+          })
+          .map((link) => {
+            const target = link.href.replace(/^#\//, "").split("?")[0];
+            const isActive = target === route;
+            const isDisabled = !state.user;
+            return `
+              <a class="sidebarLink ${isActive ? "active" : ""} ${isDisabled ? "disabled" : ""}" href="${link.href}">
+                <span class="icon">${link.icon}</span>
+                <span>${link.label}</span>
+              </a>
+            `;
+          })
+          .join("")}
+      </nav>
+    </div>
+  `;
 }
 
 function renderProfile() {
@@ -100,22 +136,86 @@ function renderProfile() {
   const pending = pendingResults(items);
   const hasAdmin = state.users.some((item) => item.role === "admin");
 
+  const totalPoints = sumResults(approved);
+  const level = getPointsLevel(totalPoints);
+  const rejected = items.filter((item) => item.status === "rejected");
+  const approvalRate = approved.length
+    ? Math.round((approved.length / Math.max(1, approved.length + rejected.length)) * 100)
+    : 0;
+
+  const avatarUrl = state.profile?.avatarUrl || "";
+
   section.innerHTML = `
-    <div class="sectionTitle">
-      <h1>Профиль</h1>
-      <span class="badge">${state.role === "admin" ? "Администратор" : "Преподаватель"}</span>
-    </div>
-    <p class="sectionLead">Редактируйте данные и отслеживайте статус достижений.</p>
-    <div class="grid2">
-      <div class="card mini">
-        <h3>${state.profile?.displayName || "Без имени"}</h3>
-        <small class="muted">Подтверждённые баллы</small>
-        <h2>${sumResults(approved)}</h2>
+    <div class="profileHeader">
+      <div class="profileAvatar">
+        ${avatarUrl ? `<img src="${avatarUrl}" alt="avatar" />` : getInitials(state.profile?.displayName || state.user?.email || "")}
       </div>
-      <div class="card mini">
-        <h3>Заявки в ожидании</h3>
-        <small class="muted">Требуют проверки</small>
-        <h2>${pending.length}</h2>
+      <div class="profileInfo">
+        <h1>${state.profile?.displayName || "Без имени"}</h1>
+        <div class="profileMeta">
+          <span class="badge"><span class="icon">🏷️</span>${state.role === "admin" ? "Администратор" : "Преподаватель"}</span>
+          <span class="muted"><span class="icon">✉️</span>${state.profile?.email || "—"}</span>
+        </div>
+      </div>
+      <div class="profileHeaderActions">
+        <button class="btn ghost" type="button" id="profileSettingsBtn">
+          <span class="icon">⚙️</span>Настройки
+        </button>
+        <button class="btn secondary" type="button" id="avatarUploadBtn">
+          <span class="icon">📷</span>Фото
+        </button>
+      </div>
+    </div>
+    <p class="sectionLead">Личные показатели и быстрые действия по профилю.</p>
+    <div class="profileStats">
+      <div class="statCard">
+        <div class="statIcon">🏅</div>
+        <div>
+          <small class="muted">Баллы</small>
+          <h2>${totalPoints}</h2>
+        </div>
+      </div>
+      <div class="statCard">
+        <div class="statIcon">📌</div>
+        <div>
+          <small class="muted">Всего заявок</small>
+          <h2>${items.length}</h2>
+        </div>
+      </div>
+      <div class="statCard">
+        <div class="statIcon">✅</div>
+        <div>
+          <small class="muted">Одобрено</small>
+          <h2>${approved.length}</h2>
+        </div>
+      </div>
+      <div class="statCard">
+        <div class="statIcon">⏳</div>
+        <div>
+          <small class="muted">Ожидают</small>
+          <h2>${pending.length}</h2>
+        </div>
+      </div>
+      <div class="statCard">
+        <div class="statIcon">❌</div>
+        <div>
+          <small class="muted">Отклонено</small>
+          <h2>${rejected.length}</h2>
+        </div>
+      </div>
+      <div class="statCard">
+        <div class="statIcon">📈</div>
+        <div>
+          <small class="muted">Уровень</small>
+          <h2>${level.label}</h2>
+        </div>
+      </div>
+      <div class="statCard">
+        <div class="statIcon">🎯</div>
+        <div>
+          <small class="muted">Одобрение</small>
+          <h2>${approvalRate}%</h2>
+        </div>
       </div>
     </div>
 
@@ -127,8 +227,11 @@ function renderProfile() {
       </div>
     ` : ""}
 
-    <div class="sectionInner">
-      <h3>Данные профиля</h3>
+    <div class="sectionInner profileEdit is-hidden" id="profileEdit">
+      <div class="sectionTitle">
+        <h3>Редактирование профиля</h3>
+        <span class="badge"><span class="icon">📝</span>Настройки</span>
+      </div>
       <form id="profileForm" class="grid2">
         <div class="stack">
           <label>ФИО</label>
@@ -169,6 +272,33 @@ function renderProfile() {
       <h3>Последние заявки</h3>
       ${renderResultsTable(items.slice(0, 6))}
     </div>
+
+    <input class="hidden" type="file" id="avatarInput" accept=".png,.jpg,.jpeg,.webp" />
+    <div class="modal is-hidden" id="avatarModal" aria-hidden="true">
+      <div class="modalBackdrop" data-close="true"></div>
+      <div class="modalCard">
+        <div class="modalHeader">
+          <h3>Обрежьте фото</h3>
+          <button class="iconButton" type="button" data-close="true">✕</button>
+        </div>
+        <p class="sectionLead">Перетащите изображение и подберите масштаб. Фото сохранится в одинаковом размере.</p>
+        <div class="avatarCropper">
+          <div class="avatarCropPreview" id="avatarCropPreview">
+            <canvas id="avatarCanvas" width="280" height="280"></canvas>
+            <div class="cropCircle"></div>
+          </div>
+          <div class="avatarControls">
+            <label>Масштаб</label>
+            <input class="range" type="range" id="avatarZoom" min="1" max="3" step="0.01" value="1" />
+            <small class="muted">Сдвигайте изображение мышью внутри круга.</small>
+          </div>
+        </div>
+        <div class="modalActions">
+          <button class="btn secondary" type="button" data-close="true">Отмена</button>
+          <button class="btn" type="button" id="avatarSaveBtn">Сохранить</button>
+        </div>
+      </div>
+    </div>
   `;
 
   const profileForm = section.querySelector("#profileForm");
@@ -190,6 +320,147 @@ function renderProfile() {
     render();
   });
 
+  const profileEdit = section.querySelector("#profileEdit");
+  const settingsButton = section.querySelector("#profileSettingsBtn");
+  settingsButton.addEventListener("click", () => {
+    profileEdit.classList.toggle("is-hidden");
+    profileEdit.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  const avatarInput = section.querySelector("#avatarInput");
+  const avatarModal = section.querySelector("#avatarModal");
+  const avatarUploadBtn = section.querySelector("#avatarUploadBtn");
+  const avatarCanvas = section.querySelector("#avatarCanvas");
+  const avatarZoom = section.querySelector("#avatarZoom");
+  const avatarSaveBtn = section.querySelector("#avatarSaveBtn");
+  const avatarCropPreview = section.querySelector("#avatarCropPreview");
+  const ctx = avatarCanvas.getContext("2d");
+
+  let cropState = null;
+
+  function openAvatarModal() {
+    avatarModal.classList.remove("is-hidden");
+    avatarModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeAvatarModal() {
+    avatarModal.classList.add("is-hidden");
+    avatarModal.setAttribute("aria-hidden", "true");
+    avatarInput.value = "";
+    cropState = null;
+  }
+
+  function drawAvatar() {
+    if (!cropState) return;
+    const { img, scale, offsetX, offsetY } = cropState;
+    const width = avatarCanvas.width;
+    const height = avatarCanvas.height;
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+    const drawWidth = img.width * scale;
+    const drawHeight = img.height * scale;
+    const x = width / 2 - drawWidth / 2 + offsetX;
+    const y = height / 2 - drawHeight / 2 + offsetY;
+    ctx.drawImage(img, x, y, drawWidth, drawHeight);
+    ctx.restore();
+  }
+
+  function setupCropper(image) {
+    const baseScale = Math.max(avatarCanvas.width / image.width, avatarCanvas.height / image.height);
+    cropState = {
+      img: image,
+      scale: baseScale,
+      offsetX: 0,
+      offsetY: 0,
+      dragging: false,
+      startX: 0,
+      startY: 0,
+    };
+    avatarZoom.value = baseScale.toFixed(2);
+    avatarZoom.min = baseScale.toFixed(2);
+    avatarZoom.max = (baseScale * 3).toFixed(2);
+    drawAvatar();
+  }
+
+  avatarUploadBtn.addEventListener("click", () => {
+    avatarInput.click();
+  });
+
+  avatarInput.addEventListener("change", () => {
+    const file = avatarInput.files[0];
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      setupCropper(img);
+      openAvatarModal();
+    };
+    img.src = URL.createObjectURL(file);
+  });
+
+  avatarZoom.addEventListener("input", () => {
+    if (!cropState) return;
+    cropState.scale = Number(avatarZoom.value);
+    drawAvatar();
+  });
+
+  avatarCropPreview.addEventListener("pointerdown", (event) => {
+    if (!cropState) return;
+    cropState.dragging = true;
+    cropState.startX = event.clientX;
+    cropState.startY = event.clientY;
+  });
+
+  avatarCropPreview.addEventListener("pointermove", (event) => {
+    if (!cropState?.dragging) return;
+    const dx = event.clientX - cropState.startX;
+    const dy = event.clientY - cropState.startY;
+    cropState.offsetX += dx;
+    cropState.offsetY += dy;
+    cropState.startX = event.clientX;
+    cropState.startY = event.clientY;
+    drawAvatar();
+  });
+
+  avatarCropPreview.addEventListener("pointerup", () => {
+    if (!cropState) return;
+    cropState.dragging = false;
+  });
+
+  avatarCropPreview.addEventListener("pointerleave", () => {
+    if (!cropState) return;
+    cropState.dragging = false;
+  });
+
+  avatarModal.addEventListener("click", (event) => {
+    if (event.target?.dataset?.close === "true") {
+      closeAvatarModal();
+    }
+  });
+
+  avatarSaveBtn.addEventListener("click", async () => {
+    if (!cropState) return;
+    const outputSize = 256;
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = outputSize;
+    outputCanvas.height = outputSize;
+    const outputCtx = outputCanvas.getContext("2d");
+    const scaleRatio = outputSize / avatarCanvas.width;
+    const drawWidth = cropState.img.width * cropState.scale * scaleRatio;
+    const drawHeight = cropState.img.height * cropState.scale * scaleRatio;
+    const x = outputSize / 2 - drawWidth / 2 + cropState.offsetX * scaleRatio;
+    const y = outputSize / 2 - drawHeight / 2 + cropState.offsetY * scaleRatio;
+    outputCtx.drawImage(cropState.img, x, y, drawWidth, drawHeight);
+    outputCanvas.toBlob(async (blob) => {
+      if (!blob) return;
+      const avatar = await uploadAvatar(state.user.uid, blob);
+      await updateProfile(state.user.uid, { avatarUrl: avatar });
+      state.profile = { ...state.profile, avatarUrl: avatar };
+      await refreshAll();
+      closeAvatarModal();
+      render();
+    }, "image/png", 0.95);
+  });
+
   const bootstrapButton = section.querySelector("#bootstrapAdmin");
   if (bootstrapButton) {
     bootstrapButton.addEventListener("click", async () => {
@@ -199,6 +470,28 @@ function renderProfile() {
       render();
     });
   }
+}
+
+function getPointsLevel(points) {
+  const levels = [
+    { label: "Новичок", min: 0, max: 49 },
+    { label: "Уверенный", min: 50, max: 99 },
+    { label: "Профи", min: 100, max: 199 },
+    { label: "Лидер", min: 200, max: 499 },
+    { label: "Легенда", min: 500, max: Infinity },
+  ];
+  const level = levels.find((item) => points >= item.min && points <= item.max) || levels[0];
+  const span = level.max === Infinity ? level.min + 100 : level.max - level.min + 1;
+  const progress = Math.min(100, Math.max(5, ((points - level.min) / span) * 100));
+  return { ...level, progress: Math.round(progress) };
+}
+
+function getInitials(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return "KP";
+  const parts = trimmed.split(" ").filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
 }
 
 function renderRating() {
@@ -217,16 +510,38 @@ function renderRating() {
   const previousRanks = new Map(previousSnapshot.map((item, index) => [item.uid, index + 1]));
   const nextSnapshot = rows.map((row) => ({ uid: row.uid, total: row.total }));
 
+  const topThree = rows.slice(0, 3);
+  const rest = rows.slice(3);
+
   section.innerHTML = `
     <div class="sectionTitle">
       <h1>Рейтинг преподавателей</h1>
-      <span class="badge">UFC-стиль</span>
+      <span class="badge">Топ 100</span>
     </div>
     <p class="sectionLead">Сводка по утверждённым результатам KPI с динамикой мест.</p>
-    <div class="ratingBoard">
-      ${rows
+    <div class="ratingPodium">
+      ${topThree
         .map((row, index) => {
-          const currentRank = index + 1;
+          const position = index + 1;
+          return `
+            <div class="podiumCard podium${position}">
+              <div class="podiumBadge">${position}</div>
+              <div class="podiumAvatar">
+                ${row.avatarUrl ? `<img src="${row.avatarUrl}" alt="avatar" />` : getInitials(row.displayName || row.email)}
+              </div>
+              <div class="podiumName">${row.displayName || row.email}</div>
+              <div class="podiumMeta">${row.school || "—"}</div>
+              <div class="podiumScore">${row.total}</div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+    <div class="ratingBoard compact">
+      ${rest
+        .slice(0, 97)
+        .map((row, index) => {
+          const currentRank = index + 4;
           const prevRank = previousRanks.get(row.uid);
           const delta = prevRank ? prevRank - currentRank : 0;
           const trend =
