@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KPI Platform — Teacher Rating</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+    <link rel="icon" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+  <style>
+  .bootStatus{
+    position:absolute;
+    top:16px;
+    right:18px;
+    padding:8px 12px;
+    border-radius:999px;
+    font: 600 12px/1.1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    background: rgba(0,0,0,.25);
+    color: rgba(255,255,255,.9);
+    border:1px solid rgba(255,255,255,.18);
+    backdrop-filter: blur(12px);
+    z-index: 50;
+    user-select:none;
+    pointer-events:none;
+  }
+  .bootStatus[data-kind="error"]{ background: rgba(180,30,60,.35); border-color: rgba(255,120,150,.35); }
+  .bootStatus[data-kind="ok"]{ background: rgba(30,160,90,.30); border-color: rgba(120,255,190,.32); }
+</style>
+</head>
+
+  <body>
+    <div class="bg"></div>
+
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand__logo">KP</div>
+          <div class="brand__text">
+            <div class="brand__name">KPI Platform</div>
+            <div class="brand__sub">Teacher Rating</div>
+          </div>
+        </div>
+
+        <div id="mount-sidebar" class="mount"></div>
+
+        <div class="sidebar__foot glass">
+          <div class="tiny muted">© KPI Platform</div>
+          <div class="tiny muted">React + Vite + Firebase</div>
+        </div>
+      </aside>
+
+      <div class="main">
+        <header class="topbar glass">
+          <div class="topbar__left">
+            <button class="iconbtn mobile-only" id="btnMobileMenu" aria-label="Меню">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+
+            <div class="topbar__title">
+              <div class="topbar__titleBig">KPI Platform</div>
+              <div class="topbar__titleSmall muted">Учительский рейтинг и KPI-достижения</div>
+            </div>
+          </div>
+
+          <div id="mount-topbar" class="mount"></div>
+        </header>
+
+        <main class="content">
+          <section class="route-section" data-route="login">
+            <div class="route-inner" id="mount-login"></div>
+          </section>
+
+          <section class="route-section" data-route="register">
+            <div class="route-inner" id="mount-register"></div>
+          </section>
+
+          <section class="route-section" data-route="profile">
+            <div class="route-inner" id="mount-profile"></div>
+          </section>
+
+          <section class="route-section" data-route="rating">
+            <div class="route-inner" id="mount-rating"></div>
+          </section>
+
+          <section class="route-section" data-route="stats">
+            <div class="route-inner" id="mount-stats"></div>
+          </section>
+
+          <section class="route-section" data-route="add">
+            <div class="route-inner" id="mount-add"></div>
+          </section>
+
+          <section class="route-section" data-route="admin/approvals">
+            <div class="route-inner" id="mount-admin-approvals"></div>
+          </section>
+
+          <section class="route-section" data-route="admin/types">
+            <div class="route-inner" id="mount-admin-types"></div>
+          </section>
+
+          <section class="route-section" data-route="admin/users">
+            <div class="route-inner" id="mount-admin-users"></div>
+          </section>
+
+          <section class="route-section" data-route="admin/teacher">
+            <div class="route-inner" id="mount-admin-teacher"></div>
+          </section>
+        </main>
+
+        <nav class="bottomnav glass mobile-only" aria-label="Навигация">
+          <div id="mount-bottomnav" class="mount"></div>
+        </nav>
+      </div>
+    </div>
+
+    <div class="drawer-backdrop" id="mobileDrawerBackdrop" hidden></div>
+    <div class="drawer glass" id="mobileDrawer" hidden>
+      <div class="drawer__head">
+        <div class="drawer__title">Меню</div>
+        <button class="iconbtn" id="btnDrawerClose" aria-label="Закрыть">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div id="mount-drawer" class="mount"></div>
+    </div>
+
+    <div id="mount-overlays"></div>
+
+    <script type="module" src="/src/main.jsx"></script>
+  <script>
+  // v11 boot diagnostics (shows immediately even if React fails)
+  window.__kpiBoot = { loaded:false, errors:[] };
+  function __kpiSetBoot(text, kind){
+    var el = document.getElementById("boot-status");
+    if (!el) return;
+    el.textContent = text;
+    el.dataset.kind = kind || "info";
+  }
+  __kpiSetBoot("JS: starting…", "info");
+
+  window.addEventListener("error", function(e){
+    window.__kpiBoot.errors.push(String(e && (e.message || e.error || e)));
+    __kpiSetBoot("JS error: " + (e.message || "see console"), "error");
+  });
+  window.addEventListener("unhandledrejection", function(e){
+    window.__kpiBoot.errors.push("Promise: " + String(e && e.reason || e));
+    __kpiSetBoot("Promise error: see console", "error");
+  });
+</script>
+</body>
+</html>
