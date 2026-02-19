@@ -2,7 +2,6 @@
 
 ## Запуск
 ```bash
-npm i
 npm run dev
 ```
 Открой: http://localhost:5173/#/login
