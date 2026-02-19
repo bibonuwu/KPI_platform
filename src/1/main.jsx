@@ -1075,6 +1075,17 @@ async function save(){
           </div>
         )}
 
+        {u.role!=="admin" && (
+          <>
+            <div className="sep"></div>
+            <div className="glass card" style={{background:"rgba(0,0,0,.12)"}}>
+              <div className="h2">Первый запуск</div>
+              <p className="p">Если в системе нет админов — можно назначить себя админом.</p>
+              <Btn kind="danger" onClick={becomeAdmin} disabled={st.loading}>Сделать меня администратором</Btn>
+              <div className="help">Сработает только если админов ещё нет.</div>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="glass card">
