@@ -10,7 +10,11 @@ import {
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
+  OAuthProvider,
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
@@ -55,6 +59,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+
+// Microsoft Entra ID (Azure AD) tenant limitation for Microsoft OAuth sign-in.
+// - "common" allows both personal Microsoft accounts and Azure AD accounts (default in Firebase).
+// - For ONLY your Azure AD tenant, set to tenant GUID or domain like: "contoso.onmicrosoft.com".
+const MICROSOFT_TENANT = "common";
 
 /** Default KPI Types (required) */
 const DEFAULT_TYPES = [
@@ -814,6 +823,30 @@ function PageLogin(){
     }finally{ setState({ loading:false }); }
   }
 
+  async function signInMicrosoft(){
+    try{
+      setState({ loading:true });
+      const provider = new OAuthProvider("microsoft.com");
+      provider.setCustomParameters({
+        prompt: "select_account",
+        tenant: MICROSOFT_TENANT
+      });
+
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+      if (isMobile){
+        await signInWithRedirect(auth, provider);
+        return; // дальше будет редирект
+      }
+
+      await signInWithPopup(auth, provider);
+      toast("Добро пожаловать!","ok");
+      navigate("profile");
+    }catch(err){
+      console.error(err);
+      toast(err?.message || "Ошибка входа через Microsoft","error");
+    }finally{ setState({ loading:false }); }
+  }
+
   return (
     <div className="grid2">
       <div className="glass card">
@@ -827,6 +860,7 @@ function PageLogin(){
           <Input value={pass} onChange={(e)=>setPass(e.target.value)} type="password" required />
           <div style={{display:"flex", gap:10, flexWrap:"wrap", marginTop:12}}>
             <Btn kind="primary" type="submit" disabled={st.loading}>Войти</Btn>
+            <Btn type="button" onClick={signInMicrosoft} disabled={st.loading}>Войти через Microsoft</Btn>
           </div>
         </form>
       </div>
@@ -960,20 +994,7 @@ async function save(){
     setState({ modal:{kind:"crop", file} });
   }
 
-  async function becomeAdmin(){
-    try{
-      setState({ loading:true });
-      if (await hasAnyAdmin()){ toast("Админ уже существует","error"); return; }
-      await setRole(u.uid, "admin");
-      const fresh = await ensureUserDoc(u.uid, u.email);
-      setState({ userDoc: { ...fresh, role:"admin" } });
-      toast("Вы стали администратором","ok");
-      navigate("admin/approvals");
-    }catch(e){
-      console.error(e);
-      toast(e?.message || "Ошибка роли","error");
-    }finally{ setState({ loading:false }); }
-  }
+  // Блок "Первый запуск / сделать меня админом" удалён по запросу.
 
   return (
     <div className="grid2">
@@ -1075,17 +1096,7 @@ async function save(){
           </div>
         )}
 
-        {u.role!=="admin" && (
-          <>
-            <div className="sep"></div>
-            <div className="glass card" style={{background:"rgba(0,0,0,.12)"}}>
-              <div className="h2">Первый запуск</div>
-              <p className="p">Если в системе нет админов — можно назначить себя админом.</p>
-              <Btn kind="danger" onClick={becomeAdmin} disabled={st.loading}>Сделать меня администратором</Btn>
-              <div className="help">Сработает только если админов ещё нет.</div>
-            </div>
-          </>
-        )}
+        {/* блок "Первый запуск" удалён */}
       </div>
 
       <div className="glass card">
@@ -2184,6 +2195,14 @@ async function hydrateForUser(userDoc){
 async function bootstrap(){
   setupMobileDrawer();
   window.addEventListener("hashchange", () => render().catch(console.error));
+
+  // Needed for signInWithRedirect flows (including Microsoft on mobile)
+  try{
+    await getRedirectResult(auth);
+  }catch(e){
+    console.error(e);
+    toast(e?.message || "Ошибка входа через Microsoft","error");
+  }
 
   onAuthStateChanged(auth, async (user) => {
     try{
