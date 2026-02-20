@@ -99,8 +99,14 @@ const store = {
     pendingSubmissions: [],
     adminRecentSubs: [],
 
+    // teacher statements / requests
+    myRequests: [],
+    pendingRequests: [],
+    adminRecentRequests: [],
+
     // ui
-    statsRangeMode: "14d"
+    statsRangeMode: "14d",
+    statsView: "mine"
   },
   subs: new Set()
 };
@@ -122,7 +128,8 @@ function useStore(){
 /** ---------- router ---------- */
 const ROUTES = [
   "login","profile","rating","stats","add",
-  "admin/approvals","admin/types","admin/users","admin/teacher"
+  "requests",
+  "admin/approvals","admin/requests","admin/types","admin/users","admin/teacher"
 ];
 
 function parseRoute(){
@@ -150,7 +157,7 @@ function canAccess(path, userDoc){
   const role = userDoc.role || "teacher";
   if (role === "teacher"){
     if (path.startsWith("admin/")) return false;
-    return ["profile","rating","stats","add"].includes(path);
+    return ["profile","rating","stats","add","requests"].includes(path);
   }
   if (role === "admin"){
     if (path === "add") return false;
@@ -210,8 +217,10 @@ async function render(){
   mount("mount-rating", show("rating") ? <ErrorBoundary name="rating"><PageRating/></ErrorBoundary> : null);
   mount("mount-stats", show("stats") ? <ErrorBoundary name="stats"><PageStats/></ErrorBoundary> : null);
   mount("mount-add", show("add") ? <ErrorBoundary name="add"><PageAdd/></ErrorBoundary> : null);
+  mount("mount-requests", show("requests") ? <ErrorBoundary name="requests"><PageRequests/></ErrorBoundary> : null);
 
   mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals"><PageAdminApprovals/></ErrorBoundary> : null);
+  mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests"><PageAdminRequests/></ErrorBoundary> : null);
   mount("mount-admin-types", show("admin/types") ? <ErrorBoundary name="admin/types"><PageAdminTypes/></ErrorBoundary> : null);
   mount("mount-admin-users", show("admin/users") ? <ErrorBoundary name="admin/users"><PageAdminUsers/></ErrorBoundary> : null);
   mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher"><PageAdminTeacher/></ErrorBoundary> : null);
@@ -311,7 +320,16 @@ function toast(msg, kind="info"){
 async function ensureUserDoc(uid, email){
   const refU = doc(db, "users", uid);
   const snap = await getDoc(refU);
-  if (snap.exists()) { const data = snap.data() || {}; if (!data.uid) { try{ await setDoc(refU, { uid }, { merge:true }); }catch(e){} } return { id:snap.id, ...data, uid: data.uid || snap.id }; }
+  if (snap.exists()) {
+    const data = snap.data() || {};
+    const patch = {};
+    if (!data.uid) patch.uid = uid;
+    if (typeof data.compDays !== "number") patch.compDays = 0;
+    if (Object.keys(patch).length){
+      try{ await setDoc(refU, patch, { merge:true }); }catch(e){}
+    }
+    return { id:snap.id, ...data, ...patch, uid: (data.uid || patch.uid || snap.id) };
+  }
   const base = {
     uid, email: email || "",
     displayName:"",
@@ -324,6 +342,7 @@ async function ensureUserDoc(uid, email){
     position:"",
     avatarUrl:"",
     totalPoints:0,
+    compDays:0,
     createdAt: serverTimestamp()
   };
   await setDoc(refU, base, { merge:true });
@@ -436,6 +455,108 @@ async function rejectSubmission(subId, adminUid){
   await updateDoc(doc(db,"submissions", subId), { status:"rejected", decidedAt: serverTimestamp(), decidedBy: adminUid });
 }
 
+/** ---------- teacher statements / requests ---------- */
+const REQUEST_KINDS = [
+  { key:"leave", label:"Отпрашивание с работы", compMode:"none" },
+  { key:"weekday_off", label:"Отдых / отгул в будний день", compMode:"use" },
+  { key:"weekend_work", label:"Приход в не будний день (выходной/праздник)", compMode:"earn" }
+];
+function requestKindLabel(key){
+  return (REQUEST_KINDS.find(x=>x.key===key)?.label) || String(key || "");
+}
+function dateRangeDays(fromYmd, toYmd){
+  const a = safeText(fromYmd);
+  const b = safeText(toYmd) || a;
+  const da = new Date(`${a}T00:00:00`);
+  const db = new Date(`${b}T00:00:00`);
+  if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return 1;
+  const ms = db.getTime() - da.getTime();
+  const diff = Math.floor(ms / 86400000);
+  return Math.max(1, diff + 1);
+}
+
+async function fetchMyRequests(uid){
+  const qy = query(collection(db,"requests"), where("uid","==",uid));
+  const res = await getDocs(qy);
+  const arr = res.docs.map(d=>({id:d.id, ...d.data()}));
+  arr.sort((a,b)=>tsKey(b)-tsKey(a));
+  return arr;
+}
+async function fetchPendingRequests(){
+  const qy = query(collection(db,"requests"), where("status","==","pending"));
+  const res = await getDocs(qy);
+  const arr = res.docs.map(d=>({id:d.id, ...d.data()}));
+  arr.sort((a,b)=>tsKey(b)-tsKey(a));
+  return arr;
+}
+async function fetchAdminRecentRequests(){
+  const qy = query(collection(db,"requests"), orderBy("createdAt","desc"), limit(5000));
+  const res = await getDocs(qy);
+  return res.docs.map(d=>({id:d.id, ...d.data()}));
+}
+
+async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note }){
+  const k = REQUEST_KINDS.find(x=>x.key===kind) || REQUEST_KINDS[0];
+  const from = safeText(dateFrom);
+  const to = safeText(dateTo) || from;
+  const days = dateRangeDays(from, to);
+  await addDoc(collection(db,"requests"), {
+    uid,
+    kind: k.key,
+    kindLabel: k.label,
+    compMode: k.compMode,
+    dateFrom: from,
+    dateTo: to,
+    days,
+    note: safeText(note),
+    status: "pending",
+    pointsDelta: 0,
+    compDaysDelta: 0,
+    createdAt: serverTimestamp()
+  });
+}
+
+async function decideTeacherRequest(reqId, adminUid, action, pointsDelta){
+  const rRef = doc(db,"requests", reqId);
+  await runTransaction(db, async (tx) => {
+    const rSnap = await tx.get(rRef);
+    if (!rSnap.exists()) throw new Error("Заявление не найдено");
+    const r = rSnap.data() || {};
+    if (r.status !== "pending") return;
+
+    const uRef = doc(db,"users", r.uid);
+    const uSnap = await tx.get(uRef);
+    if (!uSnap.exists()) throw new Error("Пользователь не найден");
+    const u = uSnap.data() || {};
+
+    if (action === "reject"){
+      tx.update(rRef, { status:"rejected", decidedAt: serverTimestamp(), decidedBy: adminUid, pointsDelta:0, compDaysDelta:0 });
+      return;
+    }
+
+    const deltaPts = Number(pointsDelta) || 0;
+    const days = Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo);
+    const mode = r.compMode || "none";
+    const compDelta = mode === "earn" ? days : mode === "use" ? -days : 0;
+    const curComp = Number(u.compDays) || 0;
+    if (curComp + compDelta < 0){
+      throw new Error(`Недостаточно отгулов: нужно ${Math.abs(compDelta)}, есть ${curComp}`);
+    }
+
+    tx.update(rRef, {
+      status:"approved",
+      decidedAt: serverTimestamp(),
+      decidedBy: adminUid,
+      pointsDelta: deltaPts,
+      compDaysDelta: compDelta
+    });
+    const patch = {};
+    if (deltaPts) patch.totalPoints = increment(deltaPts);
+    if (compDelta) patch.compDays = increment(compDelta);
+    if (Object.keys(patch).length) tx.update(uRef, patch);
+  });
+}
+
 async function setRole(uid, role){
   await updateDoc(doc(db,"users",uid), { role });
 }
@@ -538,6 +659,7 @@ function SidebarNav(){
     {p:"profile", t:"Профиль", i:"user"},
     {p:"rating", t:"Рейтинг", i:"rank"},
     {p:"stats", t:"Статистика", i:"chart"},
+    {p:"requests", t:"Заявления", i:"file"},
     {p:"add", t:"Добавить KPI", i:"plus"},
   ];
   const adminMain = [
@@ -547,6 +669,7 @@ function SidebarNav(){
   ];
   const admin = [
     {p:"admin/approvals", t:"Approvals", i:"check"},
+    {p:"admin/requests", t:"Заявления", i:"file"},
     {p:"admin/types", t:"Types", i:"file"},
     {p:"admin/users", t:"Users", i:"shield"},
   ];
@@ -1034,6 +1157,10 @@ async function save(){
             <div><div className="muted tiny">Одобрено баллов</div><div style={{fontWeight:900,fontSize:22}}>{fmtPoints(sum(approved,s=>s.points))}</div></div>
             <span className="tiny muted">{approved.length} шт</span>
           </div>
+          <div className="kpi">
+            <div><div className="muted tiny">Отгулы</div><div style={{fontWeight:900,fontSize:22}}>{fmtPoints(u.compDays||0)}</div></div>
+            <Btn kind="ghost" onClick={()=>navigate("requests")}>Заявления</Btn>
+          </div>
         </div>
 
         <div style={{marginTop:12, display:"flex", gap:10, flexWrap:"wrap"}}>
@@ -1244,6 +1371,161 @@ function PageAdd(){
   );
 }
 
+function PageRequests(){
+  const st = useStore();
+  const u = st.userDoc;
+  const reqs = st.myRequests || [];
+
+  if (!u) return <Guard/>;
+  if (!canAccess("requests", u)) return <Guard/>;
+
+  const [kind, setKind] = useState(REQUEST_KINDS[0]?.key || "leave");
+  const [dateFrom, setDateFrom] = useState(ymd());
+  const [dateTo, setDateTo] = useState(ymd());
+  const [note, setNote] = useState("");
+
+  const k = REQUEST_KINDS.find(x=>x.key===kind) || REQUEST_KINDS[0];
+  const days = useMemo(()=>dateRangeDays(dateFrom, dateTo), [dateFrom, dateTo]);
+  const compPreview = k.compMode === "earn" ? days : k.compMode === "use" ? -days : 0;
+
+  const pending = reqs.filter(r=>r.status==="pending");
+  const approved = reqs.filter(r=>r.status==="approved");
+  const rejected = reqs.filter(r=>r.status==="rejected");
+
+  async function refresh(){
+    try{
+      setState({ loading:true });
+      const [myReq, fresh] = await Promise.all([
+        fetchMyRequests(u.uid),
+        ensureUserDoc(u.uid, u.email)
+      ]);
+      setState({ myRequests: myReq, userDoc: fresh });
+      toast("Обновлено","ok");
+    }catch(e){
+      console.error(e);
+      toast(e?.message || "Ошибка обновления","error");
+    }finally{ setState({ loading:false }); }
+  }
+
+  async function submit(e){
+    e.preventDefault();
+    try{
+      const f = safeText(dateFrom);
+      const t = safeText(dateTo) || f;
+      const df = new Date(`${f}T00:00:00`);
+      const dt = new Date(`${t}T00:00:00`);
+      if (Number.isNaN(df.getTime()) || Number.isNaN(dt.getTime())){ toast("Проверьте даты","error"); return; }
+      if (dt.getTime() < df.getTime()) { toast("Дата 'до' не может быть раньше даты 'с'","error"); return; }
+
+      setState({ loading:true });
+      await createTeacherRequest({ uid:u.uid, kind, dateFrom:f, dateTo:t, note });
+      toast("Заявление отправлено админам","ok");
+      const myReq = await fetchMyRequests(u.uid);
+      setState({ myRequests: myReq });
+      setNote("");
+    }catch(err){
+      console.error(err);
+      toast(err?.message || "Ошибка отправки","error");
+    }finally{ setState({ loading:false }); }
+  }
+
+  const signNum = (n) => {
+    const x = Number(n) || 0;
+    return x>0 ? `+${x}` : String(x);
+  };
+
+  return (
+    <div className="grid2">
+      <div className="glass card">
+        <div className="h1">Заявления</div>
+        <p className="p">Создайте заявление (от какого числа до какого) — админ ответит OK или нет и может изменить баллы.</p>
+        <div className="sep"></div>
+
+        <form onSubmit={submit}>
+          <div className="label">Тип заявления</div>
+          <Select value={kind} onChange={(e)=>setKind(e.target.value)}>
+            {REQUEST_KINDS.map(x=> <option key={x.key} value={x.key}>{x.label}</option>)}
+          </Select>
+
+          <div className="grid2">
+            <div>
+              <div className="label">От какого числа</div>
+              <Input type="date" value={dateFrom} onChange={(e)=>setDateFrom(e.target.value)} required />
+            </div>
+            <div>
+              <div className="label">До какого числа</div>
+              <Input type="date" value={dateTo} onChange={(e)=>setDateTo(e.target.value)} required />
+            </div>
+          </div>
+
+          <div className="label">Комментарий (optional)</div>
+          <Textarea value={note} onChange={(e)=>setNote(e.target.value)} placeholder="Причина / детали..." />
+
+          <div className="help">
+            Дней в периоде: <b>{days}</b>. {k.compMode==="earn" && <>После одобрения добавится отгул: <b>+{days}</b>.</>}
+            {k.compMode==="use" && <>После одобрения спишется отгул: <b>-{days}</b>.</>}
+          </div>
+
+          <div style={{display:"flex", gap:10, flexWrap:"wrap", marginTop:12}}>
+            <Btn kind="primary" type="submit" disabled={st.loading}>Отправить</Btn>
+            <Btn type="button" onClick={refresh} disabled={st.loading}>Обновить</Btn>
+          </div>
+        </form>
+      </div>
+
+      <div className="glass card">
+        <div className="h2">Мои заявления</div>
+        <div className="sep"></div>
+
+        <div className="grid3">
+          <div className="kpi">
+            <div><div className="muted tiny">Отгулы (баланс)</div><div style={{fontWeight:900,fontSize:22}}>{fmtPoints(u.compDays||0)}</div></div>
+            <Pill kind="approved">отгул</Pill>
+          </div>
+          <div className="kpi">
+            <div><div className="muted tiny">Заявлений</div><div style={{fontWeight:900,fontSize:22}}>{fmtPoints(reqs.length)}</div></div>
+            <span className="tiny muted">pending {pending.length}</span>
+          </div>
+          <div className="kpi">
+            <div><div className="muted tiny">Прогноз отгулов</div><div style={{fontWeight:900,fontSize:22}}>{compPreview ? signNum(compPreview) : "0"}</div></div>
+            <span className="tiny muted">для нового</span>
+          </div>
+        </div>
+
+        <div style={{marginTop:12, display:"flex", gap:10, flexWrap:"wrap"}}>
+          <Pill kind="approved">approved: {approved.length}</Pill>
+          <Pill kind="pending">pending: {pending.length}</Pill>
+          <Pill kind="rejected">rejected: {rejected.length}</Pill>
+        </div>
+
+        <div className="sep"></div>
+
+        <div className="heatwrap">
+          <table className="table">
+            <thead><tr><th>Период</th><th>Тип</th><th>Статус</th><th>Δ баллы</th><th>Δ отгулы</th></tr></thead>
+            <tbody>
+              {reqs.slice(0,20).map(r=>{
+                const pts = Number(r.pointsDelta)||0;
+                const cd = Number(r.compDaysDelta)||0;
+                return (
+                  <tr key={r.id}>
+                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}</td>
+                    <td className="tiny"><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny" style={{marginTop:4}}>{r.note}</div> : null}</td>
+                    <td className="tiny"><Pill kind={r.status}>{r.status}</Pill></td>
+                    <td className="tiny">{r.status==="approved" ? <b>{signNum(pts)}</b> : <span className="muted">—</span>}</td>
+                    <td className="tiny">{r.status==="approved" ? <b>{signNum(cd)}</b> : <span className="muted">—</span>}</td>
+                  </tr>
+                );
+              })}
+              {!reqs.length && <tr><td colSpan="5" className="tiny muted">Пока нет заявлений</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ratingTrend(usersSorted){
   const prev = JSON.parse(localStorage.getItem("rating_snapshot") || "[]");
   const prevPos = new Map(prev.map((x,i)=>[x.uid, i+1]));
@@ -1388,7 +1670,50 @@ function PageStats(){
     return sum(approved.filter(s => s.eventDate===bin.ymd), s=>s.points);
   };
 
-  if (u.role === "teacher"){
+  const view = u.role === "teacher" ? (st.statsView || "mine") : "platform";
+
+  async function refresh(){
+    try{
+      setState({ loading:true });
+      await hydrateForUser(u);
+      toast("Данные обновлены","ok");
+    }catch(e){
+      console.error(e);
+      toast(e?.message || "Не удалось обновить","error");
+    }finally{
+      setState({ loading:false });
+    }
+  }
+
+  const Controls = () => (
+    <div style={{display:"flex", gap:10, flexWrap:"wrap", marginTop:10}}>
+      {u.role === "teacher" ? (
+        <>
+          <Btn kind={view==="mine"?"primary":""} onClick={()=>setState({statsView:"mine"})}><Icon name="user"/> Моя</Btn>
+          <Btn kind={view==="platform"?"primary":""} onClick={()=>setState({statsView:"platform"})}><Icon name="chart"/> Общая</Btn>
+        </>
+      ) : null}
+
+      <Btn kind={mode==="14d"?"primary":""} onClick={()=>setState({statsRangeMode:"14d"})}>14 дней</Btn>
+      <Btn kind={mode==="365d"?"primary":""} onClick={()=>setState({statsRangeMode:"365d"})}>Год</Btn>
+
+      {u.role === "teacher" && view === "mine" ? (
+        <Btn onClick={()=>navigate("add")}>Добавить KPI</Btn>
+      ) : null}
+
+      {view === "platform" ? (
+        <Btn onClick={()=>navigate("rating")}>Рейтинг</Btn>
+      ) : null}
+
+      {u.role === "admin" ? (
+        <Btn onClick={()=>navigate("admin/approvals")}>Approvals</Btn>
+      ) : null}
+
+      <Btn onClick={refresh} disabled={st.loading}>Обновить</Btn>
+    </div>
+  );
+
+  function renderMine(){
     const subs = st.mySubmissions.filter(inRange);
     const approved = subs.filter(s=>s.status==="approved");
     const pending = subs.filter(s=>s.status==="pending");
@@ -1408,12 +1733,7 @@ function PageStats(){
       <div className="glass card">
         <div className="h1">Моя статистика</div>
         <p className="p">Диапазон: <b>{mode==="365d"?"год":"14 дней"}</b>.</p>
-
-        <div style={{display:"flex", gap:10, flexWrap:"wrap", marginTop:10}}>
-          <Btn kind={mode==="14d"?"primary":""} onClick={()=>setState({statsRangeMode:"14d"})}>14 дней</Btn>
-          <Btn kind={mode==="365d"?"primary":""} onClick={()=>setState({statsRangeMode:"365d"})}>Год</Btn>
-          <Btn onClick={()=>navigate("add")}>Добавить KPI</Btn>
-        </div>
+        <Controls/>
 
         <div className="sep"></div>
 
@@ -1446,136 +1766,146 @@ function PageStats(){
     );
   }
 
-  // admin
-  const subs = st.adminRecentSubs.filter(inRange);
-  const approved = subs.filter(s=>s.status==="approved");
-  const pending = subs.filter(s=>s.status==="pending");
-  const rejected = subs.filter(s=>s.status==="rejected");
+  function renderPlatform(){
+    const subs = st.adminRecentSubs.filter(inRange);
+    const approved = subs.filter(s=>s.status==="approved");
+    const pending = subs.filter(s=>s.status==="pending");
+    const rejected = subs.filter(s=>s.status==="rejected");
 
-  const teachers = st.users.filter(x => (x.role||"teacher") !== "admin");
+    const teachers = st.users.filter(x => (x.role||"teacher") !== "admin");
 
-  const totalApprovedPts = sum(approved, s=>s.points);
-  const bySeries = bins.map(b => seriesPoints(approved, b));
+    const totalApprovedPts = sum(approved, s=>s.points);
+    const bySeries = bins.map(b => seriesPoints(approved, b));
 
-  const pointsByTeacher = new Map();
-  approved.forEach(s=>{
-    pointsByTeacher.set(s.uid, (pointsByTeacher.get(s.uid)||0) + (Number(s.points)||0));
-  });
-  const topTeachers = Array.from(pointsByTeacher.entries())
-    .map(([uid,pts])=>({uid,pts, user: teachers.find(t=>t.uid===uid)}))
-    .sort((a,b)=>b.pts-a.pts).slice(0,10);
+    const pointsByTeacher = new Map();
+    approved.forEach(s=>{
+      pointsByTeacher.set(s.uid, (pointsByTeacher.get(s.uid)||0) + (Number(s.points)||0));
+    });
+    const topTeachers = Array.from(pointsByTeacher.entries())
+      .map(([uid,pts])=>({uid,pts, user: teachers.find(t=>t.uid===uid)}))
+      .sort((a,b)=>b.pts-a.pts).slice(0,10);
 
-  const typeMap = new Map();
-  approved.forEach(s=>typeMap.set(s.typeName||"—", (typeMap.get(s.typeName||"—")||0) + (Number(s.points)||0)));
-  const topType = Array.from(typeMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    const typeMap = new Map();
+    approved.forEach(s=>typeMap.set(s.typeName||"—", (typeMap.get(s.typeName||"—")||0) + (Number(s.points)||0)));
+    const topType = Array.from(typeMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12);
 
-  // heatmap (top teachers x bins)
-  const hmTeachers = topTeachers.map(x=>x.user).filter(Boolean).slice(0,10);
-  const maxCell = Math.max(1, ...hmTeachers.map(t => Math.max(0, ...bins.map(b => {
-    const v = mode==="365d"
-      ? sum(approved.filter(s=>s.uid===t.uid && (s.eventDate||"").slice(0,7)===b.key), s=>s.points)
-      : sum(approved.filter(s=>s.uid===t.uid && s.eventDate===b.ymd), s=>s.points);
-    return v;
-  }))));
+    // heatmap (top teachers x bins)
+    const hmTeachers = topTeachers.map(x=>x.user).filter(Boolean).slice(0,10);
+    const maxCell = Math.max(1, ...hmTeachers.map(t => Math.max(0, ...bins.map(b => {
+      const v = mode==="365d"
+        ? sum(approved.filter(s=>s.uid===t.uid && (s.eventDate||"").slice(0,7)===b.key), s=>s.points)
+        : sum(approved.filter(s=>s.uid===t.uid && s.eventDate===b.ymd), s=>s.points);
+      return v;
+    }))));
 
-  const cellStyle = (v) => {
-    if (!v) return { background:"rgba(255,255,255,0.06)" };
-    const t = Math.min(1, v / maxCell);
-    if (t < 0.34) return { background:"rgba(255, 99, 132, 0.42)" };  // red-ish
-    if (t < 0.67) return { background:"rgba(255, 200, 87, 0.48)" };  // yellow-ish
-    return { background:"rgba(82, 214, 140, 0.50)" }; // green-ish
-  };
+    const cellStyle = (v) => {
+      if (!v) return { background:"rgba(255,255,255,0.06)" };
+      const t = Math.min(1, v / maxCell);
+      if (t < 0.34) return { background:"rgba(255, 99, 132, 0.42)" };  // red-ish
+      if (t < 0.67) return { background:"rgba(255, 200, 87, 0.48)" };  // yellow-ish
+      return { background:"rgba(82, 214, 140, 0.50)" }; // green-ish
+    };
 
-  return (
-    <div className="glass card">
-      <div className="h1">Статистика платформы</div>
-      <p className="p">Админ-обзор. Диапазон: <b>{mode==="365d"?"год":"14 дней"}</b>. (Для «Год» графики агрегируются по месяцам — адаптивность не ломается.)</p>
+    const hasAny = st.users.length || st.adminRecentSubs.length;
 
-      <div style={{display:"flex", gap:10, flexWrap:"wrap", marginTop:10}}>
-        <Btn kind={mode==="14d"?"primary":""} onClick={()=>setState({statsRangeMode:"14d"})}>14 дней</Btn>
-        <Btn kind={mode==="365d"?"primary":""} onClick={()=>setState({statsRangeMode:"365d"})}>Год</Btn>
-        <Btn onClick={()=>navigate("admin/approvals")}>Approvals</Btn>
-      </div>
-
-      <div className="sep"></div>
-
-      <div className="grid4">
-        <div className="kpi"><div><div className="muted tiny">Teachers</div><b>{teachers.length}</b></div><Pill kind="approved">users</Pill></div>
-        <div className="kpi"><div><div className="muted tiny">Submissions</div><b>{subs.length}</b></div><Pill kind="pending">range</Pill></div>
-        <div className="kpi"><div><div className="muted tiny">Pending</div><b>{pending.length}</b></div><Pill kind="pending">pending</Pill></div>
-        <div className="kpi"><div><div className="muted tiny">Approved pts</div><b>{fmtPoints(totalApprovedPts)}</b></div><Pill kind="approved">points</Pill></div>
-      </div>
-
-      <div className="sep"></div>
-
-      <div className="grid2">
-        <div className="glass card">
-          <div className="h2">Топ-10 учителей</div>
-          <div className="sep"></div>
-          {topTeachers.length ? (
-            <BarChart values={topTeachers.map(x=>x.pts)} labels={topTeachers.map(x=>(x.user?.displayName||x.user?.email||"—").slice(0,10)+"…")} />
-          ) : <p className="p">Нет данных</p>}
-        </div>
-
-        <div className="glass card">
-          <div className="h2">Баллы по типам</div>
-          <div className="sep"></div>
-          {topType.length ? (
-            <BarChart values={topType.map(x=>x[1])} labels={topType.map(x=>x[0].slice(0,10)+"…")} />
-          ) : <p className="p">Нет данных</p>}
-        </div>
-
-        <div className="glass card">
-          <div className="h2">Баллы по {mode==="365d"?"месяцам":"дням"}</div>
-          <div className="sep"></div>
-          <BarChart values={bySeries} labels={bins.map(x=>x.label)} />
-        </div>
-
-        <div className="glass card">
-          <div className="h2">Статусы</div>
-          <div className="sep"></div>
-          <BarChart values={[approved.length,pending.length,rejected.length]} labels={["approved","pending","rejected"]} />
-        </div>
-      </div>
-
-      <div className="sep"></div>
-
+    return (
       <div className="glass card">
-        <div className="h2">Тепловая карта: teacher × {mode==="365d"?"месяц":"день"}</div>
-        <p className="p">Показывает <b>одобренные</b> баллы. Для компактности — только топ-10 по баллам за выбранный диапазон.</p>
+        <div className="h1">Статистика платформы</div>
+        <p className="p">
+          Общий обзор. Диапазон: <b>{mode==="365d"?"год":"14 дней"}</b>. Для «Год» графики агрегируются по месяцам.
+        </p>
+        <Controls/>
+
         <div className="sep"></div>
 
-        <div className="heatwrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Teacher</th>
-                {bins.map(b => <th key={mode==="365d"?b.key:b.ymd}>{b.label}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {hmTeachers.map(t => (
-                <tr key={t.uid}>
-                  <td className="tiny"><b>{t.displayName || t.email || "—"}</b></td>
-                  {bins.map(b => {
-                    const v = mode==="365d"
-                      ? sum(approved.filter(s=>s.uid===t.uid && (s.eventDate||"").slice(0,7)===b.key), s=>s.points)
-                      : sum(approved.filter(s=>s.uid===t.uid && s.eventDate===b.ymd), s=>s.points);
-                    return (
-                      <td key={mode==="365d"?b.key:b.ymd} className="tiny" style={cellStyle(v)} title={`${b.label}: ${v}`}>
-                        {v ? fmtPoints(v) : ""}
-                      </td>
-                    );
-                  })}
+        {!hasAny ? (
+          <p className="p">Общие данные ещё не загружены. Нажми <b>Обновить</b>.</p>
+        ) : null}
+
+        <div className="grid4">
+          <div className="kpi"><div><div className="muted tiny">Teachers</div><b>{teachers.length}</b></div><Pill kind="approved">users</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Submissions</div><b>{subs.length}</b></div><Pill kind="pending">range</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Pending</div><b>{pending.length}</b></div><Pill kind="pending">pending</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Approved pts</div><b>{fmtPoints(totalApprovedPts)}</b></div><Pill kind="approved">points</Pill></div>
+        </div>
+
+        <div className="sep"></div>
+
+        <div className="grid2">
+          <div className="glass card">
+            <div className="h2">Топ-10 учителей</div>
+            <div className="sep"></div>
+            {topTeachers.length ? (
+              <BarChart values={topTeachers.map(x=>x.pts)} labels={topTeachers.map(x=>(x.user?.displayName||x.user?.email||"—").slice(0,10)+"…")} />
+            ) : <p className="p">Нет данных</p>}
+          </div>
+
+          <div className="glass card">
+            <div className="h2">Баллы по типам</div>
+            <div className="sep"></div>
+            {topType.length ? (
+              <BarChart values={topType.map(x=>x[1])} labels={topType.map(x=>x[0].slice(0,10)+"…")} />
+            ) : <p className="p">Нет данных</p>}
+          </div>
+
+          <div className="glass card">
+            <div className="h2">Баллы по {mode==="365d"?"месяцам":"дням"}</div>
+            <div className="sep"></div>
+            <BarChart values={bySeries} labels={bins.map(x=>x.label)} />
+          </div>
+
+          <div className="glass card">
+            <div className="h2">Статусы</div>
+            <div className="sep"></div>
+            <BarChart values={[approved.length,pending.length,rejected.length]} labels={["approved","pending","rejected"]} />
+          </div>
+        </div>
+
+        <div className="sep"></div>
+
+        <div className="glass card">
+          <div className="h2">Тепловая карта: teacher × {mode==="365d"?"месяц":"день"}</div>
+          <p className="p">Показывает <b>одобренные</b> баллы. Для компактности — только топ-10 по баллам за выбранный диапазон.</p>
+          <div className="sep"></div>
+
+          <div className="heatwrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Teacher</th>
+                  {bins.map(b => <th key={mode==="365d"?b.key:b.ymd}>{b.label}</th>)}
                 </tr>
-              ))}
-              {!hmTeachers.length && <tr><td colSpan={bins.length+1} className="tiny muted">Нет данных</td></tr>}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {hmTeachers.map(t => (
+                  <tr key={t.uid}>
+                    <td className="tiny"><b>{t.displayName || t.email || "—"}</b></td>
+                    {bins.map(b => {
+                      const v = mode==="365d"
+                        ? sum(approved.filter(s=>s.uid===t.uid && (s.eventDate||"").slice(0,7)===b.key), s=>s.points)
+                        : sum(approved.filter(s=>s.uid===t.uid && s.eventDate===b.ymd), s=>s.points);
+                      return (
+                        <td key={mode==="365d"?b.key:b.ymd} className="tiny" style={cellStyle(v)} title={`${b.label}: ${v}`}>
+                          {v ? fmtPoints(v) : ""}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {!hmTeachers.length && <tr><td colSpan={bins.length+1} className="tiny muted">Нет данных</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (u.role === "teacher"){
+    return view === "platform" ? renderPlatform() : renderMine();
+  }
+
+  return renderPlatform();
 }
 
 
@@ -1642,6 +1972,128 @@ function PageAdminApprovals(){
             {!pending.length && <tr><td colSpan="6" className="tiny muted">Нет заявок на проверке</td></tr>}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function PageAdminRequests(){
+  const st = useStore();
+  const u = st.userDoc;
+  if (!u) return <Guard/>;
+  if (u.role!=="admin") return <Guard/>;
+
+  const pending = st.pendingRequests || [];
+  const usersMap = new Map((st.users||[]).map(x=>[x.uid, x]));
+  const [deltas, setDeltas] = useState({});
+
+  const getDelta = (id) => {
+    const v = deltas[id];
+    return (v===0 || v) ? Number(v) : 0;
+  };
+  const setDelta = (id, v) => setDeltas(m => ({ ...m, [id]: v }));
+
+  const compPreview = (r) => {
+    const days = Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo);
+    const mode = r.compMode || (REQUEST_KINDS.find(x=>x.key===r.kind)?.compMode) || "none";
+    return mode === "earn" ? days : mode === "use" ? -days : 0;
+  };
+  const signNum = (n) => {
+    const x = Number(n) || 0;
+    return x>0 ? `+${x}` : String(x);
+  };
+
+  async function decide(id, action){
+    try{
+      setState({ loading:true });
+      const delta = getDelta(id);
+      await decideTeacherRequest(id, u.uid, action, delta);
+      toast(action==="approve"?"Одобрено":"Отклонено","ok");
+      const [pendReq, recentReq, users] = await Promise.all([
+        fetchPendingRequests(),
+        fetchAdminRecentRequests(),
+        fetchUsersAll()
+      ]);
+      setState({ pendingRequests: pendReq, adminRecentRequests: recentReq, users });
+    }catch(e){
+      console.error(e);
+      toast(e?.message || "Ошибка","error");
+    }finally{ setState({ loading:false }); }
+  }
+
+  const recent = (st.adminRecentRequests || []).filter(r => r.status !== "pending").slice(0, 30);
+
+  return (
+    <div className="grid2">
+      <div className="glass card">
+        <div className="h1">Заявления</div>
+        <p className="p">Проверьте заявления от учителей. На одобрении можно указать, сколько баллов добавить/снять (шаблоны: -2, +2).</p>
+        <div className="sep"></div>
+
+        <div className="heatwrap">
+          <table className="table">
+            <thead><tr><th>Учитель</th><th>Тип</th><th>Период</th><th>Баланс отгулов</th><th>Δ баллы</th><th>Δ отгулы</th><th>Действия</th></tr></thead>
+            <tbody>
+              {pending.map(r=>{
+                const tu = usersMap.get(r.uid);
+                const delta = getDelta(r.id);
+                const cd = compPreview(r);
+                return (
+                  <tr key={r.id}>
+                    <td className="tiny"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></td>
+                    <td className="tiny"><div><b>{r.kindLabel || requestKindLabel(r.kind)}</b></div>{r.note ? <div className="muted tiny" style={{marginTop:4}}>{r.note}</div> : null}</td>
+                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}<div className="muted tiny">дней: {Number(r.days)||dateRangeDays(r.dateFrom,r.dateTo)}</div></td>
+                    <td className="tiny"><b>{fmtPoints(tu?.compDays || 0)}</b></td>
+                    <td className="tiny">
+                      <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
+                        <Input type="number" value={delta} onChange={(e)=>setDelta(r.id, e.target.value)} style={{maxWidth:110}}/>
+                        <Btn type="button" onClick={()=>setDelta(r.id, -2)}>-2</Btn>
+                        <Btn type="button" onClick={()=>setDelta(r.id, +2)}>+2</Btn>
+                      </div>
+                    </td>
+                    <td className="tiny"><b>{signNum(cd)}</b></td>
+                    <td className="tiny">
+                      <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
+                        <Btn kind="ok" onClick={()=>decide(r.id,"approve")} disabled={st.loading}><Icon name="check"/> OK</Btn>
+                        <Btn kind="danger" onClick={()=>decide(r.id,"reject")} disabled={st.loading}><Icon name="x"/> Нет</Btn>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {!pending.length && <tr><td colSpan="7" className="tiny muted">Нет заявлений на проверке</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="glass card">
+        <div className="h2">Последние решения</div>
+        <div className="sep"></div>
+        <div className="heatwrap">
+          <table className="table">
+            <thead><tr><th>Учитель</th><th>Тип</th><th>Период</th><th>Статус</th><th>Δ баллы</th><th>Δ отгулы</th></tr></thead>
+            <tbody>
+              {recent.map(r=>{
+                const tu = usersMap.get(r.uid);
+                return (
+                  <tr key={r.id}>
+                    <td className="tiny"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></td>
+                    <td className="tiny">{r.kindLabel || requestKindLabel(r.kind)}</td>
+                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}</td>
+                    <td className="tiny"><Pill kind={r.status}>{r.status}</Pill></td>
+                    <td className="tiny"><b>{signNum(r.pointsDelta||0)}</b></td>
+                    <td className="tiny"><b>{signNum(r.compDaysDelta||0)}</b></td>
+                  </tr>
+                );
+              })}
+              {!recent.length && <tr><td colSpan="6" className="tiny muted">Пока нет истории</td></tr>}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="sep"></div>
+        <div className="help">Правило отгулов: «Приход в не будний день» добавляет +1 отгул за каждый день в периоде. «Отдых / отгул в будний день» списывает отгулы.</div>
       </div>
     </div>
   );
@@ -2175,16 +2627,43 @@ async function hydrateForUser(userDoc){
   if (!userDoc) return;
   try{
     if (userDoc.role==="admin"){
-      const [types, users, pend, recent] = await Promise.all([
+      const [types, users, pend, recent, pendReq, recentReq] = await Promise.all([
         fetchTypesAll(),
         fetchUsersAll(),
         fetchPendingSubmissions(),
-        fetchAdminRecentSubs()
+        fetchAdminRecentSubs(),
+        fetchPendingRequests(),
+        fetchAdminRecentRequests()
       ]);
-      setState({ types, users, pendingSubmissions: pend, adminRecentSubs: recent, mySubmissions: [] });
+      setState({
+        types,
+        users,
+        pendingSubmissions: pend,
+        adminRecentSubs: recent,
+        pendingRequests: pendReq,
+        adminRecentRequests: recentReq,
+        mySubmissions: [],
+        myRequests: []
+      });
     }else{
-      const [types, my] = await Promise.all([fetchTypesActive(), fetchMySubmissions(userDoc.uid)]);
-      setState({ types, mySubmissions: my, users: [], pendingSubmissions: [], adminRecentSubs: [] });
+      // teacher: нужны свои данные + общие данные (users + submissions) для рейтинга и общей статистики
+      const [types, users, recentSubs, my, myReq] = await Promise.all([
+        fetchTypesActive(),
+        fetchUsersAll(),
+        fetchAdminRecentSubs(),
+        fetchMySubmissions(userDoc.uid),
+        fetchMyRequests(userDoc.uid)
+      ]);
+      setState({
+        types,
+        users,
+        adminRecentSubs: recentSubs,
+        mySubmissions: my,
+        myRequests: myReq,
+        pendingSubmissions: [],
+        pendingRequests: [],
+        adminRecentRequests: []
+      });
     }
   }catch(e){
     console.error(e);
@@ -2215,7 +2694,10 @@ async function bootstrap(){
           users:[],
           mySubmissions:[],
           pendingSubmissions:[],
-          adminRecentSubs:[]
+          adminRecentSubs:[],
+          myRequests:[],
+          pendingRequests:[],
+          adminRecentRequests:[]
         });
         setState({ booting:false });
         render();

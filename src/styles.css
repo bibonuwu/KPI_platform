@@ -81,6 +81,19 @@ body{
 .barchart{display:flex;gap:8px;align-items:flex-end;height:160px;padding:12px;border-radius:18px;background:rgba(0,0,0,.16);border:1px solid rgba(255,255,255,.10)}
 .bar{flex:1;border-radius:10px;background:linear-gradient(180deg, rgba(123,97,255,.85), rgba(97,208,255,.75));min-width:6px}
 .barlabel{display:flex;justify-content:space-between;margin-top:10px;color:var(--muted);font-size:12px}
+.chartBox{padding:12px;border-radius:18px;background:rgba(0,0,0,.16);border:1px solid rgba(255,255,255,.10)}
+.chartSvg{width:100%;height:190px;display:block}
+.radarSvg{width:100%;height:280px;display:block}
+
+.histchart{display:flex;gap:8px;align-items:flex-end;height:160px;padding:12px;border-radius:18px;background:rgba(0,0,0,.16);border:1px solid rgba(255,255,255,.10)}
+.histbar{flex:1;border-radius:10px;background:linear-gradient(180deg, rgba(97,208,255,.78), rgba(255,255,255,.12));min-width:6px}
+
+.donutWrap{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.donutBox{padding:10px;border-radius:18px;background:rgba(0,0,0,.16);border:1px solid rgba(255,255,255,.10)}
+.donutSvg{display:block}
+.donutLegend{display:flex;flex-direction:column;gap:10px;min-width:180px}
+.legendItem{display:flex;gap:10px;align-items:flex-start}
+.legendDot{width:12px;height:12px;border-radius:999px;margin-top:3px;flex:0 0 auto;box-shadow:0 6px 18px rgba(0,0,0,.25)}
 .heatwrap{overflow:auto;border-radius:18px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.14)}
 .bottomnav{position:fixed;left:14px;right:14px;bottom:14px;padding:10px;border-radius:999px;z-index:20}
 .bottomnav__row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
