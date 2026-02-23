@@ -46,13 +46,12 @@ import {
 
 /** Firebase config (given) */
 const firebaseConfig = {
-  apiKey: "AIzaSyAQlLh2Abk92sZVCSsYSCxvps4Uld3C1Lk",
-  authDomain: "bibonrat.firebaseapp.com",
-  databaseURL: "https://bibonrat-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "bibonrat",
-  storageBucket: "bibonrat.firebasestorage.app",
-  messagingSenderId: "78759159251",
-  appId: "1:78759159251:web:3e40d7d5a2aa762f01bb26"
+  apiKey: "AIzaSyCekqSbjlZDcTw7DB3vr_FLBFXsv9ooCt4",
+  authDomain: "kpiplatform-85ef9.firebaseapp.com",
+  projectId: "kpiplatform-85ef9",
+  storageBucket: "kpiplatform-85ef9.firebasestorage.app",
+  messagingSenderId: "1020879305293",
+  appId: "1:1020879305293:web:07d435100d116ae998fa04"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -106,7 +105,8 @@ const store = {
 
     // ui
     statsRangeMode: "14d",
-    statsView: "mine"
+    statsView: "mine",
+    theme: (function(){ try{ return localStorage.getItem("kpi_theme")||"dark"; }catch(e){ return "dark"; } })()
   },
   subs: new Set()
 };
@@ -123,6 +123,15 @@ function useStore(){
     return () => store.subs.delete(fn);
   }, []);
   return store.state;
+}
+
+function applyTheme(t){
+  document.documentElement.setAttribute("data-theme", t);
+  try{ localStorage.setItem("kpi_theme", t); }catch(e){}
+  setState({ theme: t });
+}
+function toggleTheme(){
+  applyTheme(store.state.theme === "dark" ? "light" : "dark");
 }
 
 /** ---------- router ---------- */
@@ -211,19 +220,23 @@ async function render(){
   mount("mount-overlays", <ErrorBoundary name="overlays"><Overlays/></ErrorBoundary>);
 
   // Pages (only active route)
+  // If still booting (auth state not yet known), show loader instead of page
+  // This avoids the "Rendered more hooks" violation caused by early returns inside page components
   const show = (p) => p === path;
-  mount("mount-login", show("login") ? <ErrorBoundary name="login"><PageLogin/></ErrorBoundary> : null);
-  mount("mount-profile", show("profile") ? <ErrorBoundary name="profile"><PageProfile/></ErrorBoundary> : null);
-  mount("mount-rating", show("rating") ? <ErrorBoundary name="rating"><PageRating/></ErrorBoundary> : null);
-  mount("mount-stats", show("stats") ? <ErrorBoundary name="stats"><PageStats/></ErrorBoundary> : null);
-  mount("mount-add", show("add") ? <ErrorBoundary name="add"><PageAdd/></ErrorBoundary> : null);
-  mount("mount-requests", show("requests") ? <ErrorBoundary name="requests"><PageRequests/></ErrorBoundary> : null);
+  const booting = store.state.booting;
 
-  mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals"><PageAdminApprovals/></ErrorBoundary> : null);
-  mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests"><PageAdminRequests/></ErrorBoundary> : null);
-  mount("mount-admin-types", show("admin/types") ? <ErrorBoundary name="admin/types"><PageAdminTypes/></ErrorBoundary> : null);
-  mount("mount-admin-users", show("admin/users") ? <ErrorBoundary name="admin/users"><PageAdminUsers/></ErrorBoundary> : null);
-  mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher"><PageAdminTeacher/></ErrorBoundary> : null);
+  mount("mount-login",    show("login")    ? <ErrorBoundary name="login"><PageLogin/></ErrorBoundary>          : null);
+  mount("mount-profile",  show("profile")  ? <ErrorBoundary name="profile">{booting ? <LoadingScreen/> : <PageProfile/>}</ErrorBoundary>   : null);
+  mount("mount-rating",   show("rating")   ? <ErrorBoundary name="rating">{booting ? <LoadingScreen/> : <PageRating/>}</ErrorBoundary>    : null);
+  mount("mount-stats",    show("stats")    ? <ErrorBoundary name="stats">{booting ? <LoadingScreen/> : <PageStats/>}</ErrorBoundary>      : null);
+  mount("mount-add",      show("add")      ? <ErrorBoundary name="add">{booting ? <LoadingScreen/> : <PageAdd/>}</ErrorBoundary>        : null);
+  mount("mount-requests", show("requests") ? <ErrorBoundary name="requests">{booting ? <LoadingScreen/> : <PageRequests/>}</ErrorBoundary>  : null);
+
+  mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen/> : <PageAdminApprovals/>}</ErrorBoundary> : null);
+  mount("mount-admin-requests",  show("admin/requests")  ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen/> : <PageAdminRequests/>}</ErrorBoundary>  : null);
+  mount("mount-admin-types",     show("admin/types")     ? <ErrorBoundary name="admin/types">{booting ? <LoadingScreen/> : <PageAdminTypes/>}</ErrorBoundary>     : null);
+  mount("mount-admin-users",     show("admin/users")     ? <ErrorBoundary name="admin/users">{booting ? <LoadingScreen/> : <PageAdminUsers/>}</ErrorBoundary>     : null);
+  mount("mount-admin-teacher",   show("admin/teacher")   ? <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen/> : <PageAdminTeacher/>}</ErrorBoundary>   : null);
 }
 
 function setupMobileDrawer(){
@@ -596,6 +609,8 @@ function Icon({ name }){
     case "x": return <svg {...common}><path {...s} d="M6 6l12 12M18 6L6 18"/></svg>;
     case "file": return <svg {...common}><path {...s} d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path {...s} d="M14 2v6h6"/></svg>;
     case "shield": return <svg {...common}><path {...s} d="M12 22s8-4 8-10V6l-8-3-8 3v6c0 6 8 10 8 10z"/></svg>;
+    case "sun": return <svg {...common}><circle {...s} cx="12" cy="12" r="4"/><path {...s} d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>;
+    case "moon": return <svg {...common}><path {...s} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>;
     default: return null;
   }
 }
@@ -604,10 +619,63 @@ const Input = (p) => <input className="input" {...p} />;
 const Select = (p) => <select className="select" {...p} />;
 const Textarea = (p) => <textarea className="textarea" {...p} />;
 const Pill = ({ kind, children }) => <span className={`pill ${kind}`}>{children}</span>;
+// Mobile-friendly data display: cards on mobile, table on desktop
+function DataCards({ columns, rows, emptyText = "Нет данных" }){
+  if (!rows.length) return <p className="p muted" style={{padding:"12px 0"}}>{emptyText}</p>;
+  return (
+    <div className="datacards-wrap">
+      {/* Desktop: table */}
+      <div className="heatwrap desktop-table">
+        <table className="table">
+          <thead><tr>{columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((row,i)=>(
+              <tr key={row.__key ?? i}>
+                {columns.map(c=>(
+                  <td key={c.key} className="tiny">{c.render ? c.render(row) : row[c.key]}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Mobile: cards */}
+      <div className="mobile-cards">
+        {rows.map((row,i)=>(
+          <div key={row.__key ?? i} className="mobile-card glass">
+            {columns.map(c=>(
+              <div key={c.key} className="mobile-card__row">
+                <span className="mobile-card__label">{c.label}</span>
+                <span className="mobile-card__val">{c.render ? c.render(row) : row[c.key]}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+function LoadingScreen(){
+  return (
+    <div style={{display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"60px 20px", gap:16}}>
+      <div style={{
+        width:42, height:42, borderRadius:14,
+        background:"linear-gradient(135deg,#6c8fff,#a78bfa)",
+        display:"grid", placeItems:"center",
+        fontWeight:800, fontSize:14, color:"#fff",
+        animation:"kpiPulse 1.4s ease-in-out infinite"
+      }}>KP</div>
+      <style>{`@keyframes kpiPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.94)}}`}</style>
+      <p className="p" style={{margin:0}}>Загрузка…</p>
+    </div>
+  );
+}
 
 function Guard(){
   return (
-    <div className="glass card">
+    <div className="glass card" style={{maxWidth:360}}>
       <div className="h2">Нужна авторизация</div>
       <p className="p">Войдите, чтобы продолжить.</p>
       <div className="sep"></div>
@@ -716,12 +784,21 @@ function SidebarNav(){
 function TopbarRight(){
   const st = useStore();
   const u = st.userDoc;
+  const isDark = st.theme !== "light";
   return (
-    <div style={{display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", justifyContent:"flex-end"}}>
+    <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", justifyContent:"flex-end"}}>
+      <button
+        className="iconbtn theme-toggle"
+        onClick={toggleTheme}
+        aria-label={isDark ? "Светлая тема" : "Тёмная тема"}
+        title={isDark ? "Светлая тема" : "Тёмная тема"}
+      >
+        <Icon name={isDark ? "sun" : "moon"}/>
+      </button>
       {u ? (
         <>
           <Pill kind={u.role==="admin" ? "pending" : "approved"}>{u.role}</Pill>
-          <div className="tiny" style={{maxWidth:340, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+          <div className="tiny" style={{maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
             <b>{u.displayName || "Без имени"}</b> <span className="muted">· {u.email}</span>
           </div>
           <Btn kind="ghost" onClick={async()=>{ await signOut(auth); toast("Вы вышли"); navigate("login"); }}>
@@ -925,6 +1002,304 @@ function BarChart({ values, labels }){
   );
 }
 
+function LineChart({ values, labels }){
+  const n = (values || []).length;
+  const nums = (values || []).map(v=>Number(v)||0);
+  const max = Math.max(1, ...nums);
+  const min = Math.min(0, ...nums);
+  const W = 520, H = 190, pad = 26;
+  const span = Math.max(1e-9, max - min);
+  const xStep = (W - pad*2) / Math.max(1, n-1);
+
+  const pts = nums.map((v,i)=>{
+    const x = pad + i*xStep;
+    const y = H - pad - ((v - min) / span) * (H - pad*2);
+    return [x,y];
+  });
+
+  const points = pts.map(p=>p.join(",")).join(" ");
+  const gid = useMemo(()=>`lg_${Math.random().toString(16).slice(2)}`, []);
+
+  const first = labels?.[0] ?? "";
+  const mid = labels?.[Math.floor((labels?.length||1)/2)] ?? "";
+  const last = labels?.[Math.max(0,(labels?.length||1)-1)] ?? "";
+
+  return (
+    <div className="chartBox">
+      <svg className="chartSvg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Line chart">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="rgba(123,97,255,.95)" />
+            <stop offset="100%" stopColor="rgba(97,208,255,.95)" />
+          </linearGradient>
+        </defs>
+
+        <line x1={pad} y1={H-pad} x2={W-pad} y2={H-pad} stroke="rgba(255,255,255,.18)" strokeWidth="1" />
+
+        {n>1 ? (
+          <>
+            <polyline fill="none" stroke={`url(#${gid})`} strokeWidth="3" points={points} strokeLinecap="round" strokeLinejoin="round" />
+            {pts.map((p,i)=>(
+              <circle key={i} cx={p[0]} cy={p[1]} r="3.2" fill="rgba(255,255,255,.92)" opacity="0.75" />
+            ))}
+          </>
+        ) : (
+          <text x={pad} y={H/2} fill="rgba(255,255,255,.72)" fontSize="12">Нет данных</text>
+        )}
+
+        <text x={pad} y={H-8} fill="rgba(255,255,255,.62)" fontSize="12">{first}</text>
+        <text x={W/2} y={H-8} textAnchor="middle" fill="rgba(255,255,255,.62)" fontSize="12">{mid}</text>
+        <text x={W-pad} y={H-8} textAnchor="end" fill="rgba(255,255,255,.62)" fontSize="12">{last}</text>
+      </svg>
+    </div>
+  );
+}
+
+function AreaLineChart({ values, labels }){
+  const n = (values || []).length;
+  const nums = (values || []).map(v=>Number(v)||0);
+  const max = Math.max(1, ...nums);
+  const min = Math.min(0, ...nums);
+  const W = 520, H = 190, pad = 26;
+  const span = Math.max(1e-9, max - min);
+  const xStep = (W - pad*2) / Math.max(1, n-1);
+
+  const pts = nums.map((v,i)=>{
+    const x = pad + i*xStep;
+    const y = H - pad - ((v - min) / span) * (H - pad*2);
+    return [x,y];
+  });
+
+  const linePoints = pts.map(p=>p.join(",")).join(" ");
+  const areaPath = pts.length
+    ? `M ${pts[0][0]} ${H-pad} L ${pts.map(p=>p.join(" ")).join(" L ")} L ${pts[pts.length-1][0]} ${H-pad} Z`
+    : "";
+
+  const gid = useMemo(()=>`ag_${Math.random().toString(16).slice(2)}`, []);
+  const aid = useMemo(()=>`af_${Math.random().toString(16).slice(2)}`, []);
+
+  const first = labels?.[0] ?? "";
+  const mid = labels?.[Math.floor((labels?.length||1)/2)] ?? "";
+  const last = labels?.[Math.max(0,(labels?.length||1)-1)] ?? "";
+
+  return (
+    <div className="chartBox">
+      <svg className="chartSvg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Area line chart">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="rgba(123,97,255,.95)" />
+            <stop offset="100%" stopColor="rgba(97,208,255,.95)" />
+          </linearGradient>
+          <linearGradient id={aid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(97,208,255,.26)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+          </linearGradient>
+        </defs>
+
+        <line x1={pad} y1={H-pad} x2={W-pad} y2={H-pad} stroke="rgba(255,255,255,.18)" strokeWidth="1" />
+
+        {pts.length>1 ? (
+          <>
+            <path d={areaPath} fill={`url(#${aid})`} />
+            <polyline fill="none" stroke={`url(#${gid})`} strokeWidth="3" points={linePoints} strokeLinecap="round" strokeLinejoin="round" />
+          </>
+        ) : (
+          <text x={pad} y={H/2} fill="rgba(255,255,255,.72)" fontSize="12">Нет данных</text>
+        )}
+
+        <text x={pad} y={H-8} fill="rgba(255,255,255,.62)" fontSize="12">{first}</text>
+        <text x={W/2} y={H-8} textAnchor="middle" fill="rgba(255,255,255,.62)" fontSize="12">{mid}</text>
+        <text x={W-pad} y={H-8} textAnchor="end" fill="rgba(255,255,255,.62)" fontSize="12">{last}</text>
+      </svg>
+    </div>
+  );
+}
+
+function HistogramChart({ data, binCount=7 }){
+  const nums = (data || []).map(v=>Number(v)).filter(v=>Number.isFinite(v));
+  if (!nums.length) return <p className="p">Нет данных для гистограммы.</p>;
+
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const bins = Math.max(3, Math.min(12, Number(binCount)||7));
+  const span = Math.max(1e-9, max - min);
+  const w = span / bins;
+
+  const counts = Array.from({length: bins}, ()=>0);
+  for (const v of nums){
+    const idx = Math.min(bins-1, Math.max(0, Math.floor((v - min) / w)));
+    counts[idx] += 1;
+  }
+
+  const labels = counts.map((_,i)=>{
+    const a = min + i*w;
+    const b = min + (i+1)*w;
+    const ra = Math.round(a);
+    const rb = Math.round(b);
+    return `${ra}–${rb}`;
+  });
+
+  const maxC = Math.max(1, ...counts);
+
+  return (
+    <div>
+      <div className="histchart">
+        {counts.map((c,i)=>(
+          <div
+            key={i}
+            className="histbar"
+            style={{height:`${Math.max(6, Math.round((c/maxC)*100))}%`}}
+            title={`${labels[i]}: ${c}`}
+          />
+        ))}
+      </div>
+      <div className="barlabel">
+        <span>{labels[0]}</span>
+        <span>{labels[Math.floor(labels.length/2)]}</span>
+        <span>{labels[labels.length-1]}</span>
+      </div>
+      <div className="help">Показывает распределение баллов за KPI в выбранном диапазоне.</div>
+    </div>
+  );
+}
+
+function DonutChart({ segments, centerLabel }){
+  const segs = (segments || []).map(s=>({ label: String(s.label||""), value: Number(s.value)||0 })).filter(s=>s.value>0);
+  const total = Math.max(1, segs.reduce((a,s)=>a+s.value,0));
+
+  const size = 170;
+  const thickness = 18;
+  const r = (size - thickness)/2;
+  const c = 2 * Math.PI * r;
+
+  let offset = 0;
+  const palette = [
+    "rgba(123,97,255,.95)",
+    "rgba(97,208,255,.95)",
+    "rgba(53,208,127,.95)",
+    "rgba(255,200,87,.95)",
+    "rgba(255,90,122,.95)"
+  ];
+
+  return (
+    <div className="donutWrap">
+      <div className="donutBox">
+        <svg className="donutSvg" width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Donut chart">
+          <g transform={`rotate(-90 ${size/2} ${size/2})`}>
+            <circle
+              cx={size/2} cy={size/2} r={r}
+              fill="none"
+              stroke="rgba(255,255,255,.12)"
+              strokeWidth={thickness}
+            />
+            {segs.map((s,i)=>{
+              const len = (s.value/total) * c;
+              const dash = `${len} ${Math.max(0, c-len)}`;
+              const dashOffset = -offset;
+              offset += len;
+              return (
+                <circle
+                  key={i}
+                  cx={size/2} cy={size/2} r={r}
+                  fill="none"
+                  stroke={palette[i % palette.length]}
+                  strokeWidth={thickness}
+                  strokeDasharray={dash}
+                  strokeDashoffset={dashOffset}
+                  strokeLinecap="round"
+                />
+              );
+            })}
+          </g>
+
+          <text x="50%" y="47%" textAnchor="middle" fill="rgba(255,255,255,.92)" fontSize="18" fontWeight="900">
+            {centerLabel || total}
+          </text>
+          <text x="50%" y="60%" textAnchor="middle" fill="rgba(255,255,255,.62)" fontSize="12">
+            всего
+          </text>
+        </svg>
+      </div>
+
+      <div className="donutLegend">
+        {segs.map((s,i)=>{
+          const pct = Math.round((s.value/total)*100);
+          return (
+            <div key={i} className="legendItem">
+              <span className="legendDot" style={{background: palette[i % palette.length]}} />
+              <div className="tiny">
+                <b>{s.label}</b> — {s.value} <span className="muted">({pct}%)</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RadarChart({ labels, values }){
+  const labs = (labels || []).map(x=>String(x||""));
+  const nums = (values || []).map(v=>Math.max(0, Number(v)||0));
+  const n = Math.min(labs.length, nums.length);
+  if (!n) return <p className="p">Нет данных для лепестковой диаграммы.</p>;
+
+  const W = 280, H = 280;
+  const cx = W/2, cy = H/2;
+  const R = 92;
+  const max = Math.max(1, ...nums.slice(0,n));
+
+  const ringCount = 4;
+  const points = Array.from({length:n}, (_,i)=>{
+    const ang = (-90 + (360/n)*i) * (Math.PI/180);
+    const rr = (nums[i]/max) * R;
+    const x = cx + Math.cos(ang)*rr;
+    const y = cy + Math.sin(ang)*rr;
+    return [x,y];
+  });
+
+  const poly = points.map(p=>p.join(",")).join(" ");
+  const paletteFill = "rgba(97,208,255,.18)";
+  const paletteStroke = "rgba(97,208,255,.95)";
+
+  return (
+    <div className="chartBox">
+      <svg className="radarSvg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Radar chart">
+        {Array.from({length:ringCount}, (_,k)=>{
+          const rr = (R/ringCount) * (k+1);
+          return (
+            <circle key={k} cx={cx} cy={cy} r={rr} fill="none" stroke="rgba(255,255,255,.14)" strokeWidth="1" />
+          );
+        })}
+
+        {Array.from({length:n}, (_,i)=>{
+          const ang = (-90 + (360/n)*i) * (Math.PI/180);
+          const x = cx + Math.cos(ang)*R;
+          const y = cy + Math.sin(ang)*R;
+          return (
+            <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,.14)" strokeWidth="1" />
+          );
+        })}
+
+        <polygon points={poly} fill={paletteFill} stroke={paletteStroke} strokeWidth="2" />
+
+        {Array.from({length:n}, (_,i)=>{
+          const ang = (-90 + (360/n)*i) * (Math.PI/180);
+          const x = cx + Math.cos(ang)*(R+18);
+          const y = cy + Math.sin(ang)*(R+18);
+          const anchor = Math.cos(ang) > 0.25 ? "start" : Math.cos(ang) < -0.25 ? "end" : "middle";
+          return (
+            <text key={i} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" fill="rgba(255,255,255,.70)" fontSize="11">
+              {labs[i].slice(0,16)}{labs[i].length>16?"…":""}
+            </text>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+
 /** ---------- pages ---------- */
 function PageLogin(){
   const st = useStore();
@@ -939,7 +1314,6 @@ function PageLogin(){
       setState({ loading:true });
       await signInWithEmailAndPassword(auth, email, pass);
       toast("Добро пожаловать!","ok");
-      navigate("profile");
     }catch(err){
       console.error(err);
       toast(err?.message || "Ошибка входа","error");
@@ -963,7 +1337,6 @@ function PageLogin(){
 
       await signInWithPopup(auth, provider);
       toast("Добро пожаловать!","ok");
-      navigate("profile");
     }catch(err){
       console.error(err);
       toast(err?.message || "Ошибка входа через Microsoft","error");
@@ -1229,23 +1602,17 @@ async function save(){
       <div className="glass card">
         <div className="h2">Последние заявки</div>
         <div className="sep"></div>
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Дата</th><th>Тип</th><th>Название</th><th>Баллы</th><th>Статус</th></tr></thead>
-            <tbody>
-              {subs.slice(0,8).map(s=>(
-                <tr key={s.id}>
-                  <td className="tiny">{s.eventDate}</td>
-                  <td className="tiny">{s.typeName}</td>
-                  <td className="tiny">{s.title}</td>
-                  <td className="tiny"><b>{fmtPoints(s.points)}</b></td>
-                  <td className="tiny"><Pill kind={s.status}>{s.status}</Pill></td>
-                </tr>
-              ))}
-              {!subs.length && <tr><td colSpan="5" className="tiny muted">Пока нет заявок</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <DataCards
+          emptyText="Пока нет заявок"
+          columns={[
+            { key:"eventDate", label:"Дата" },
+            { key:"typeName", label:"Тип" },
+            { key:"title", label:"Название" },
+            { key:"points", label:"Баллы", render: s => <b>{fmtPoints(s.points)}</b> },
+            { key:"status", label:"Статус", render: s => <Pill kind={s.status}>{s.status}</Pill> }
+          ]}
+          rows={subs.slice(0,8).map(s=>({...s, __key:s.id}))}
+        />
       </div>
     </div>
   );
@@ -1500,27 +1867,17 @@ function PageRequests(){
 
         <div className="sep"></div>
 
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Период</th><th>Тип</th><th>Статус</th><th>Δ баллы</th><th>Δ отгулы</th></tr></thead>
-            <tbody>
-              {reqs.slice(0,20).map(r=>{
-                const pts = Number(r.pointsDelta)||0;
-                const cd = Number(r.compDaysDelta)||0;
-                return (
-                  <tr key={r.id}>
-                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}</td>
-                    <td className="tiny"><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny" style={{marginTop:4}}>{r.note}</div> : null}</td>
-                    <td className="tiny"><Pill kind={r.status}>{r.status}</Pill></td>
-                    <td className="tiny">{r.status==="approved" ? <b>{signNum(pts)}</b> : <span className="muted">—</span>}</td>
-                    <td className="tiny">{r.status==="approved" ? <b>{signNum(cd)}</b> : <span className="muted">—</span>}</td>
-                  </tr>
-                );
-              })}
-              {!reqs.length && <tr><td colSpan="5" className="tiny muted">Пока нет заявлений</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <DataCards
+          emptyText="Пока нет заявлений"
+          columns={[
+            { key:"period", label:"Период", render: r => `${r.dateFrom}${r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}` },
+            { key:"kind", label:"Тип", render: r => <><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny">{r.note}</div> : null}</> },
+            { key:"status", label:"Статус", render: r => <Pill kind={r.status}>{r.status}</Pill> },
+            { key:"pts", label:"Δ баллы", render: r => r.status==="approved" ? <b>{signNum(Number(r.pointsDelta)||0)}</b> : <span className="muted">—</span> },
+            { key:"cd", label:"Δ отгулы", render: r => r.status==="approved" ? <b>{signNum(Number(r.compDaysDelta)||0)}</b> : <span className="muted">—</span> }
+          ]}
+          rows={reqs.slice(0,20).map(r=>({...r, __key:r.id}))}
+        />
       </div>
     </div>
   );
@@ -1689,8 +2046,8 @@ function PageStats(){
     <div style={{display:"flex", gap:10, flexWrap:"wrap", marginTop:10}}>
       {u.role === "teacher" ? (
         <>
-          <Btn kind={view==="mine"?"primary":""} onClick={()=>setState({statsView:"mine"})}><Icon name="user"/> Моя</Btn>
-          <Btn kind={view==="platform"?"primary":""} onClick={()=>setState({statsView:"platform"})}><Icon name="chart"/> Общая</Btn>
+          <Btn kind={view==="mine"?"primary":""} onClick={()=>setState({statsView:"mine"})}><Icon name="user"/> Моя статистика</Btn>
+          <Btn kind={view==="platform"?"primary":""} onClick={()=>setState({statsView:"platform"})}><Icon name="chart"/> Статистика платформы</Btn>
         </>
       ) : null}
 
@@ -1714,7 +2071,7 @@ function PageStats(){
   );
 
   function renderMine(){
-    const subs = st.mySubmissions.filter(inRange);
+    const subs = (st.mySubmissions || []).filter(inRange);
     const approved = subs.filter(s=>s.status==="approved");
     const pending = subs.filter(s=>s.status==="pending");
     const rejected = subs.filter(s=>s.status==="rejected");
@@ -1728,6 +2085,7 @@ function PageStats(){
       typeMap.set(key, (typeMap.get(key)||0) + (Number(s.points)||0));
     });
     const topType = Array.from(typeMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    const radar = topType.slice(0,6);
 
     return (
       <div className="glass card">
@@ -1747,32 +2105,70 @@ function PageStats(){
 
         <div className="grid2">
           <div className="glass card">
-            <div className="h2">Баллы по {mode==="365d"?"месяцам":"дням"}</div>
+            <div className="h2">Линейная с областями: баллы по {mode==="365d"?"месяцам":"дням"}</div>
             <div className="sep"></div>
-            <BarChart values={bySeries} labels={bins.map(x=>x.label)} />
+            <AreaLineChart values={bySeries} labels={bins.map(x=>x.label)} />
           </div>
 
           <div className="glass card">
-            <div className="h2">Баллы по типам (топ-12)</div>
+            <div className="h2">Кольцевая: статусы заявок</div>
             <div className="sep"></div>
-            {topType.length ? (
-              <BarChart values={topType.map(x=>x[1])} labels={topType.map(x=>x[0].slice(0,10)+"…")} />
-            ) : (
-              <p className="p">Нет одобренных KPI в диапазоне.</p>
-            )}
+            <DonutChart
+              segments={[
+                { label:"approved", value: approved.length },
+                { label:"pending", value: pending.length },
+                { label:"rejected", value: rejected.length }
+              ]}
+              centerLabel={subs.length}
+            />
           </div>
+
+          <div className="glass card">
+            <div className="h2">Гистограмма: баллы за KPI</div>
+            <div className="sep"></div>
+            <HistogramChart data={approved.map(s=>Number(s.points)||0)} />
+          </div>
+
+          <div className="glass card">
+            <div className="h2">Лепестковая: топ-типов по баллам</div>
+            <div className="sep"></div>
+            <RadarChart labels={radar.map(x=>x[0])} values={radar.map(x=>x[1])} />
+            {!radar.length ? <p className="p">Нет одобренных KPI в диапазоне.</p> : null}
+          </div>
+        </div>
+
+        <div className="sep"></div>
+
+        <div className="glass card">
+          <div className="h2">Топ типов (таблица)</div>
+          <div className="sep"></div>
+          {topType.length ? (
+            <div className="heatwrap">
+              <table className="table">
+                <thead><tr><th>Тип</th><th>Баллы</th></tr></thead>
+                <tbody>
+                  {topType.slice(0,12).map(([name, pts])=>(
+                    <tr key={name}>
+                      <td className="tiny"><b>{name}</b></td>
+                      <td className="tiny"><b>{fmtPoints(pts)}</b></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p className="p">Нет данных.</p>}
         </div>
       </div>
     );
   }
 
   function renderPlatform(){
-    const subs = st.adminRecentSubs.filter(inRange);
+    const subs = (st.adminRecentSubs || []).filter(inRange);
     const approved = subs.filter(s=>s.status==="approved");
     const pending = subs.filter(s=>s.status==="pending");
     const rejected = subs.filter(s=>s.status==="rejected");
 
-    const teachers = st.users.filter(x => (x.role||"teacher") !== "admin");
+    const teachers = (st.users || []).filter(x => (x.role||"teacher") !== "admin");
 
     const totalApprovedPts = sum(approved, s=>s.points);
     const bySeries = bins.map(b => seriesPoints(approved, b));
@@ -1785,9 +2181,12 @@ function PageStats(){
       .map(([uid,pts])=>({uid,pts, user: teachers.find(t=>t.uid===uid)}))
       .sort((a,b)=>b.pts-a.pts).slice(0,10);
 
-    const typeMap = new Map();
-    approved.forEach(s=>typeMap.set(s.typeName||"—", (typeMap.get(s.typeName||"—")||0) + (Number(s.points)||0)));
-    const topType = Array.from(typeMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,12);
+    const sectionMap = new Map();
+    approved.forEach(s=>{
+      const key = s.typeSection || s.typeName || "—";
+      sectionMap.set(key, (sectionMap.get(key)||0) + (Number(s.points)||0));
+    });
+    const topSections = Array.from(sectionMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,7);
 
     // heatmap (top teachers x bins)
     const hmTeachers = topTeachers.map(x=>x.user).filter(Boolean).slice(0,10);
@@ -1801,12 +2200,12 @@ function PageStats(){
     const cellStyle = (v) => {
       if (!v) return { background:"rgba(255,255,255,0.06)" };
       const t = Math.min(1, v / maxCell);
-      if (t < 0.34) return { background:"rgba(255, 99, 132, 0.42)" };  // red-ish
-      if (t < 0.67) return { background:"rgba(255, 200, 87, 0.48)" };  // yellow-ish
-      return { background:"rgba(82, 214, 140, 0.50)" }; // green-ish
+      if (t < 0.34) return { background:"rgba(255, 99, 132, 0.42)" };
+      if (t < 0.67) return { background:"rgba(255, 200, 87, 0.48)" };
+      return { background:"rgba(82, 214, 140, 0.50)" };
     };
 
-    const hasAny = st.users.length || st.adminRecentSubs.length;
+    const hasAny = (st.users || []).length || (st.adminRecentSubs || []).length;
 
     return (
       <div className="glass card">
@@ -1833,6 +2232,25 @@ function PageStats(){
 
         <div className="grid2">
           <div className="glass card">
+            <div className="h2">График: баллы по {mode==="365d"?"месяцам":"дням"}</div>
+            <div className="sep"></div>
+            <LineChart values={bySeries} labels={bins.map(x=>x.label)} />
+          </div>
+
+          <div className="glass card">
+            <div className="h2">Кольцевая: статусы заявок</div>
+            <div className="sep"></div>
+            <DonutChart
+              segments={[
+                { label:"approved", value: approved.length },
+                { label:"pending", value: pending.length },
+                { label:"rejected", value: rejected.length }
+              ]}
+              centerLabel={subs.length}
+            />
+          </div>
+
+          <div className="glass card">
             <div className="h2">Топ-10 учителей</div>
             <div className="sep"></div>
             {topTeachers.length ? (
@@ -1841,23 +2259,10 @@ function PageStats(){
           </div>
 
           <div className="glass card">
-            <div className="h2">Баллы по типам</div>
+            <div className="h2">Лепестковая: баллы по разделам</div>
             <div className="sep"></div>
-            {topType.length ? (
-              <BarChart values={topType.map(x=>x[1])} labels={topType.map(x=>x[0].slice(0,10)+"…")} />
-            ) : <p className="p">Нет данных</p>}
-          </div>
-
-          <div className="glass card">
-            <div className="h2">Баллы по {mode==="365d"?"месяцам":"дням"}</div>
-            <div className="sep"></div>
-            <BarChart values={bySeries} labels={bins.map(x=>x.label)} />
-          </div>
-
-          <div className="glass card">
-            <div className="h2">Статусы</div>
-            <div className="sep"></div>
-            <BarChart values={[approved.length,pending.length,rejected.length]} labels={["approved","pending","rejected"]} />
+            <RadarChart labels={topSections.map(x=>x[0])} values={topSections.map(x=>x[1])} />
+            {!topSections.length ? <p className="p">Нет данных</p> : null}
           </div>
         </div>
 
@@ -1865,7 +2270,7 @@ function PageStats(){
 
         <div className="glass card">
           <div className="h2">Тепловая карта: teacher × {mode==="365d"?"месяц":"день"}</div>
-          <p className="p">Показывает <b>одобренные</b> баллы. Для компактности — только топ-10 по баллам за выбранный диапазон.</p>
+          <p className="p">Показывает <b>одобренные</b> баллы. Для компактности — только топ-10 по баллам за диапазон.</p>
           <div className="sep"></div>
 
           <div className="heatwrap">
@@ -1904,9 +2309,9 @@ function PageStats(){
   if (u.role === "teacher"){
     return view === "platform" ? renderPlatform() : renderMine();
   }
-
   return renderPlatform();
 }
+
 
 
 
@@ -1941,37 +2346,40 @@ function PageAdminApprovals(){
       <p className="p">Pending-заявки. Approve добавляет баллы в totalPoints.</p>
       <div className="sep"></div>
 
-      <div className="heatwrap">
-        <table className="table">
-          <thead><tr><th>Учитель</th><th>Тип / Title</th><th>Дата</th><th>Баллы</th><th>Evidence</th><th>Действия</th></tr></thead>
-          <tbody>
-            {pending.map(s=>{
-              const tu = usersMap.get(s.uid);
-              return (
-                <tr key={s.id}>
-                  <td className="tiny"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || s.uid}</div></td>
-                  <td className="tiny"><div><b>{s.typeName}</b></div><div className="muted tiny">{s.title}</div>{s.description?<div className="muted tiny" style={{marginTop:4}}>{s.description}</div>:null}</td>
-                  <td className="tiny">{s.eventDate}</td>
-                  <td className="tiny"><b>{fmtPoints(s.points)}</b></td>
-                  <td className="tiny">
-                    <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
-                      {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">Ссылка</a> : null}
-                      {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">Файл</a> : null}
-                      {!s.evidenceLink && !s.evidenceFileUrl ? <span className="muted tiny">—</span> : null}
-                    </div>
-                  </td>
-                  <td className="tiny">
-                    <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
-                      <Btn kind="ok" onClick={()=>decide(s.id,"approve")} disabled={st.loading}><Icon name="check"/> Approve</Btn>
-                      <Btn kind="danger" onClick={()=>decide(s.id,"reject")} disabled={st.loading}><Icon name="x"/> Reject</Btn>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {!pending.length && <tr><td colSpan="6" className="tiny muted">Нет заявок на проверке</td></tr>}
-          </tbody>
-        </table>
+      {!pending.length && <p className="p muted" style={{padding:"12px 0"}}>Нет заявок на проверке</p>}
+      <div className="mobile-cards">
+        {pending.map(s=>{
+          const tu = usersMap.get(s.uid);
+          return (
+            <div key={s.id} className="mobile-card glass">
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">Учитель</span>
+                <span className="mobile-card__val"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || s.uid}</div></span>
+              </div>
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">Тип / Название</span>
+                <span className="mobile-card__val"><b>{s.typeName}</b><div className="muted tiny">{s.title}</div>{s.description ? <div className="muted tiny">{s.description}</div> : null}</span>
+              </div>
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">Дата / Баллы</span>
+                <span className="mobile-card__val">{s.eventDate} · <b>{fmtPoints(s.points)} pts</b></span>
+              </div>
+              {(s.evidenceLink || s.evidenceFileUrl) && (
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Evidence</span>
+                  <span className="mobile-card__val" style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">Ссылка</a> : null}
+                    {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">Файл</a> : null}
+                  </span>
+                </div>
+              )}
+              <div className="mobile-card__actions">
+                <Btn kind="ok" onClick={()=>decide(s.id,"approve")} disabled={st.loading}><Icon name="check"/> Approve</Btn>
+                <Btn kind="danger" onClick={()=>decide(s.id,"reject")} disabled={st.loading}><Icon name="x"/> Reject</Btn>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -2030,67 +2438,59 @@ function PageAdminRequests(){
         <p className="p">Проверьте заявления от учителей. На одобрении можно указать, сколько баллов добавить/снять (шаблоны: -2, +2).</p>
         <div className="sep"></div>
 
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Учитель</th><th>Тип</th><th>Период</th><th>Баланс отгулов</th><th>Δ баллы</th><th>Δ отгулы</th><th>Действия</th></tr></thead>
-            <tbody>
-              {pending.map(r=>{
-                const tu = usersMap.get(r.uid);
-                const delta = getDelta(r.id);
-                const cd = compPreview(r);
-                return (
-                  <tr key={r.id}>
-                    <td className="tiny"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></td>
-                    <td className="tiny"><div><b>{r.kindLabel || requestKindLabel(r.kind)}</b></div>{r.note ? <div className="muted tiny" style={{marginTop:4}}>{r.note}</div> : null}</td>
-                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}<div className="muted tiny">дней: {Number(r.days)||dateRangeDays(r.dateFrom,r.dateTo)}</div></td>
-                    <td className="tiny"><b>{fmtPoints(tu?.compDays || 0)}</b></td>
-                    <td className="tiny">
-                      <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
-                        <Input type="number" value={delta} onChange={(e)=>setDelta(r.id, e.target.value)} style={{maxWidth:110}}/>
-                        <Btn type="button" onClick={()=>setDelta(r.id, -2)}>-2</Btn>
-                        <Btn type="button" onClick={()=>setDelta(r.id, +2)}>+2</Btn>
-                      </div>
-                    </td>
-                    <td className="tiny"><b>{signNum(cd)}</b></td>
-                    <td className="tiny">
-                      <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
-                        <Btn kind="ok" onClick={()=>decide(r.id,"approve")} disabled={st.loading}><Icon name="check"/> OK</Btn>
-                        <Btn kind="danger" onClick={()=>decide(r.id,"reject")} disabled={st.loading}><Icon name="x"/> Нет</Btn>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!pending.length && <tr><td colSpan="7" className="tiny muted">Нет заявлений на проверке</td></tr>}
-            </tbody>
-          </table>
+        {!pending.length && <p className="p muted" style={{padding:"12px 0"}}>Нет заявлений на проверке</p>}
+        <div className="mobile-cards">
+          {pending.map(r=>{
+            const tu = usersMap.get(r.uid);
+            const delta = getDelta(r.id);
+            const cd = compPreview(r);
+            return (
+              <div key={r.id} className="mobile-card glass">
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Учитель</span>
+                  <span className="mobile-card__val"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></span>
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Тип / Период</span>
+                  <span className="mobile-card__val"><b>{r.kindLabel || requestKindLabel(r.kind)}</b><div className="muted tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""} · дней: {Number(r.days)||dateRangeDays(r.dateFrom,r.dateTo)}</div>{r.note ? <div className="muted tiny">{r.note}</div> : null}</span>
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Баланс отгулов / Δ</span>
+                  <span className="mobile-card__val"><b>{fmtPoints(tu?.compDays || 0)}</b> отгулов · Δ отгулы: <b>{signNum(cd)}</b></span>
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Δ баллы</span>
+                  <span className="mobile-card__val" style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                    <Input type="number" value={delta} onChange={(e)=>setDelta(r.id, e.target.value)} style={{maxWidth:100}}/>
+                    <Btn type="button" onClick={()=>setDelta(r.id, -2)}>-2</Btn>
+                    <Btn type="button" onClick={()=>setDelta(r.id, +2)}>+2</Btn>
+                  </span>
+                </div>
+                <div className="mobile-card__actions">
+                  <Btn kind="ok" onClick={()=>decide(r.id,"approve")} disabled={st.loading}><Icon name="check"/> OK</Btn>
+                  <Btn kind="danger" onClick={()=>decide(r.id,"reject")} disabled={st.loading}><Icon name="x"/> Нет</Btn>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <div className="glass card">
         <div className="h2">Последние решения</div>
         <div className="sep"></div>
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Учитель</th><th>Тип</th><th>Период</th><th>Статус</th><th>Δ баллы</th><th>Δ отгулы</th></tr></thead>
-            <tbody>
-              {recent.map(r=>{
-                const tu = usersMap.get(r.uid);
-                return (
-                  <tr key={r.id}>
-                    <td className="tiny"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></td>
-                    <td className="tiny">{r.kindLabel || requestKindLabel(r.kind)}</td>
-                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}</td>
-                    <td className="tiny"><Pill kind={r.status}>{r.status}</Pill></td>
-                    <td className="tiny"><b>{signNum(r.pointsDelta||0)}</b></td>
-                    <td className="tiny"><b>{signNum(r.compDaysDelta||0)}</b></td>
-                  </tr>
-                );
-              })}
-              {!recent.length && <tr><td colSpan="6" className="tiny muted">Пока нет истории</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <DataCards
+          emptyText="Пока нет истории"
+          columns={[
+            { key:"teacher", label:"Учитель", render: r => { const tu=usersMap.get(r.uid); return <><b>{tu?.displayName||"—"}</b><div className="muted tiny">{tu?.email||r.uid}</div></>; } },
+            { key:"kind", label:"Тип", render: r => r.kindLabel || requestKindLabel(r.kind) },
+            { key:"period", label:"Период", render: r => `${r.dateFrom}${r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}` },
+            { key:"status", label:"Статус", render: r => <Pill kind={r.status}>{r.status}</Pill> },
+            { key:"pts", label:"Δ баллы", render: r => <b>{signNum(r.pointsDelta||0)}</b> },
+            { key:"cd", label:"Δ отгулы", render: r => <b>{signNum(r.compDaysDelta||0)}</b> }
+          ]}
+          rows={recent.map(r=>({...r, __key:r.id}))}
+        />
 
         <div className="sep"></div>
         <div className="help">Правило отгулов: «Приход в не будний день» добавляет +1 отгул за каждый день в периоде. «Отдых / отгул в будний день» списывает отгулы.</div>
@@ -2159,23 +2559,17 @@ function PageAdminTypes(){
         </div>
         <div className="sep"></div>
 
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Section</th><th>Subsection</th><th>Name</th><th>Points</th><th>Active</th></tr></thead>
-            <tbody>
-              {st.types.map(t=>(
-                <tr key={t.id}>
-                  <td className="tiny">{t.section}</td>
-                  <td className="tiny">{t.subsection}</td>
-                  <td className="tiny"><b>{t.name}</b></td>
-                  <td className="tiny">{fmtPoints(t.defaultPoints)}</td>
-                  <td className="tiny"><input type="checkbox" checked={!!t.active} onChange={(e)=>toggle(t.id, e.target.checked)} /></td>
-                </tr>
-              ))}
-              {!st.types.length && <tr><td colSpan="5" className="tiny muted">Нет типов</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <DataCards
+          emptyText="Нет типов"
+          columns={[
+            { key:"section", label:"Section" },
+            { key:"subsection", label:"Subsection" },
+            { key:"name", label:"Name", render: t => <b>{t.name}</b> },
+            { key:"defaultPoints", label:"Points", render: t => fmtPoints(t.defaultPoints) },
+            { key:"active", label:"Active", render: t => <input type="checkbox" checked={!!t.active} onChange={(e)=>toggle(t.id, e.target.checked)} /> }
+          ]}
+          rows={st.types.map(t=>({...t, __key:t.id}))}
+        />
       </div>
 
       <div className="glass card">
@@ -2242,29 +2636,32 @@ function PageAdminUsers(){
 
       <div className="sep"></div>
 
-      <div className="heatwrap">
-        <table className="table">
-          <thead><tr><th>ФИО</th><th>Школа / Предмет</th><th>Email</th><th>Баллы</th><th>Роль</th><th>Действия</th></tr></thead>
-          <tbody>
-            {filtered.map(x=>(
-              <tr key={x.uid}>
-                <td className="tiny"><b>{x.displayName || "—"}</b></td>
-                <td className="tiny">{x.school || "—"}<div className="muted tiny">{x.subject || "—"}</div></td>
-                <td className="tiny">{x.email}</td>
-                <td className="tiny"><b>{fmtPoints(x.totalPoints)}</b></td>
-                <td className="tiny"><Pill kind={x.role==="admin"?"pending":"approved"}>{x.role}</Pill></td>
-                <td className="tiny">
-                  <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
-                    <Btn onClick={()=>setR(x.uid,"teacher")} disabled={st.loading}>teacher</Btn>
-                    <Btn onClick={()=>setR(x.uid,"admin")} disabled={st.loading}>admin</Btn>
-                    <Btn kind="primary" onClick={()=>navigate("admin/teacher", { uid: (x.uid || x.id) })}>Профиль</Btn>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!filtered.length && <tr><td colSpan="6" className="tiny muted">Нет результатов</td></tr>}
-          </tbody>
-        </table>
+      {!filtered.length && <p className="p muted" style={{padding:"12px 0"}}>Нет результатов</p>}
+      <div className="mobile-cards">
+        {filtered.map(x=>(
+          <div key={x.uid} className="mobile-card glass">
+            <div className="mobile-card__row">
+              <span className="mobile-card__label">ФИО / Email</span>
+              <span className="mobile-card__val">
+                <b>{x.displayName || "—"}</b>
+                <div className="muted tiny">{x.email}</div>
+              </span>
+            </div>
+            <div className="mobile-card__row">
+              <span className="mobile-card__label">Школа / Предмет</span>
+              <span className="mobile-card__val">{x.school || "—"} · <span className="muted">{x.subject || "—"}</span></span>
+            </div>
+            <div className="mobile-card__row">
+              <span className="mobile-card__label">Баллы / Роль</span>
+              <span className="mobile-card__val"><b>{fmtPoints(x.totalPoints)}</b> pts · <Pill kind={x.role==="admin"?"pending":"approved"}>{x.role}</Pill></span>
+            </div>
+            <div className="mobile-card__actions">
+              <Btn onClick={()=>setR(x.uid,"teacher")} disabled={st.loading}>teacher</Btn>
+              <Btn onClick={()=>setR(x.uid,"admin")} disabled={st.loading}>admin</Btn>
+              <Btn kind="primary" onClick={()=>navigate("admin/teacher", { uid: (x.uid || x.id) })}>Профиль</Btn>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -2646,20 +3043,20 @@ async function hydrateForUser(userDoc){
         myRequests: []
       });
     }else{
-      // teacher: нужны свои данные + общие данные (users + submissions) для рейтинга и общей статистики
-      const [types, users, recentSubs, my, myReq] = await Promise.all([
+      // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
+      const [types, my, myReq, users, recent] = await Promise.all([
         fetchTypesActive(),
-        fetchUsersAll(),
-        fetchAdminRecentSubs(),
         fetchMySubmissions(userDoc.uid),
-        fetchMyRequests(userDoc.uid)
+        fetchMyRequests(userDoc.uid),
+        fetchUsersAll(),
+        fetchAdminRecentSubs()
       ]);
       setState({
         types,
-        users,
-        adminRecentSubs: recentSubs,
         mySubmissions: my,
         myRequests: myReq,
+        users,
+        adminRecentSubs: recent,
         pendingSubmissions: [],
         pendingRequests: [],
         adminRecentRequests: []
@@ -2671,8 +3068,10 @@ async function hydrateForUser(userDoc){
   }
 }
 
+
 async function bootstrap(){
   setupMobileDrawer();
+  applyTheme(store.state.theme);
   window.addEventListener("hashchange", () => render().catch(console.error));
 
   // Needed for signInWithRedirect flows (including Microsoft on mobile)

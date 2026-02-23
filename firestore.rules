@@ -1,38 +1,77 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
-    function isSelf(uid) { return isSignedIn() && request.auth.uid == uid; }
+
+    // ── helpers ────────────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
     function isAdmin() {
       return isSignedIn()
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
     }
 
+    // ── users ──────────────────────────────────────────────────────────────
     match /users/{uid} {
       allow read: if isSignedIn();
       allow create: if isSelf(uid);
+
+      // Учитель может редактировать только «личные» поля.
+      // Защищённые поля (role, totalPoints, compDays, email, uid, createdAt)
+      // менять может только транзакция от имени администратора.
       allow update: if isAdmin()
         || (isSelf(uid)
-            && request.resource.data.uid == resource.data.uid
-            && request.resource.data.email == resource.data.email
-            && request.resource.data.role == resource.data.role
+            && request.resource.data.uid        == resource.data.uid
+            && request.resource.data.email      == resource.data.email
+            && request.resource.data.role       == resource.data.role
             && request.resource.data.totalPoints == resource.data.totalPoints
-            && request.resource.data.createdAt == resource.data.createdAt);
+            && request.resource.data.compDays   == resource.data.compDays   // FIX: учитель не может менять отгулы сам
+            && request.resource.data.createdAt  == resource.data.createdAt);
+
       allow delete: if isAdmin();
     }
 
+    // ── types ──────────────────────────────────────────────────────────────
     match /types/{id} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow read:                    if isSignedIn();
+      allow create, update, delete:  if isAdmin();
     }
 
+    // ── submissions ────────────────────────────────────────────────────────
     match /submissions/{id} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      // Учитель видит только свои заявки; админ видит все
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      // Учитель создаёт заявку строго от своего uid, со статусом pending
       allow create: if isSignedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == "pending"
-        && request.resource.data.points is number
+        && request.resource.data.uid       == request.auth.uid
+        && request.resource.data.status    == "pending"
+        && request.resource.data.points    is number
         && request.resource.data.eventDate is string;
+
+      // Менять/удалять заявку может только админ
+      allow update, delete: if isAdmin();
+    }
+
+    // ── requests (teacher statements / отгулы) ─────────────────────────────
+    // БЫЛО: правило отсутствовало → Firebase отклонял все операции (permission-denied)
+    match /requests/{id} {
+      // Учитель видит только свои заявления; админ видит все
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      // Учитель создаёт заявление строго от своего uid, со статусом pending
+      allow create: if isSignedIn()
+        && request.resource.data.uid    == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.kind   is string
+        && request.resource.data.dateFrom is string;
+
+      // Менять/удалять заявление может только админ
       allow update, delete: if isAdmin();
     }
   }

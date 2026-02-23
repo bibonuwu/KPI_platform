@@ -46,13 +46,12 @@ import {
 
 /** Firebase config (given) */
 const firebaseConfig = {
-  apiKey: "AIzaSyAQlLh2Abk92sZVCSsYSCxvps4Uld3C1Lk",
-  authDomain: "bibonrat.firebaseapp.com",
-  databaseURL: "https://bibonrat-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "bibonrat",
-  storageBucket: "bibonrat.firebasestorage.app",
-  messagingSenderId: "78759159251",
-  appId: "1:78759159251:web:3e40d7d5a2aa762f01bb26"
+  apiKey: "AIzaSyCekqSbjlZDcTw7DB3vr_FLBFXsv9ooCt4",
+  authDomain: "kpiplatform-85ef9.firebaseapp.com",
+  projectId: "kpiplatform-85ef9",
+  storageBucket: "kpiplatform-85ef9.firebasestorage.app",
+  messagingSenderId: "1020879305293",
+  appId: "1:1020879305293:web:07d435100d116ae998fa04"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -106,7 +105,8 @@ const store = {
 
     // ui
     statsRangeMode: "14d",
-    statsView: "mine"
+    statsView: "mine",
+    theme: (function(){ try{ return localStorage.getItem("kpi_theme")||"dark"; }catch(e){ return "dark"; } })()
   },
   subs: new Set()
 };
@@ -123,6 +123,15 @@ function useStore(){
     return () => store.subs.delete(fn);
   }, []);
   return store.state;
+}
+
+function applyTheme(t){
+  document.documentElement.setAttribute("data-theme", t);
+  try{ localStorage.setItem("kpi_theme", t); }catch(e){}
+  setState({ theme: t });
+}
+function toggleTheme(){
+  applyTheme(store.state.theme === "dark" ? "light" : "dark");
 }
 
 /** ---------- router ---------- */
@@ -211,19 +220,23 @@ async function render(){
   mount("mount-overlays", <ErrorBoundary name="overlays"><Overlays/></ErrorBoundary>);
 
   // Pages (only active route)
+  // If still booting (auth state not yet known), show loader instead of page
+  // This avoids the "Rendered more hooks" violation caused by early returns inside page components
   const show = (p) => p === path;
-  mount("mount-login", show("login") ? <ErrorBoundary name="login"><PageLogin/></ErrorBoundary> : null);
-  mount("mount-profile", show("profile") ? <ErrorBoundary name="profile"><PageProfile/></ErrorBoundary> : null);
-  mount("mount-rating", show("rating") ? <ErrorBoundary name="rating"><PageRating/></ErrorBoundary> : null);
-  mount("mount-stats", show("stats") ? <ErrorBoundary name="stats"><PageStats/></ErrorBoundary> : null);
-  mount("mount-add", show("add") ? <ErrorBoundary name="add"><PageAdd/></ErrorBoundary> : null);
-  mount("mount-requests", show("requests") ? <ErrorBoundary name="requests"><PageRequests/></ErrorBoundary> : null);
+  const booting = store.state.booting;
 
-  mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals"><PageAdminApprovals/></ErrorBoundary> : null);
-  mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests"><PageAdminRequests/></ErrorBoundary> : null);
-  mount("mount-admin-types", show("admin/types") ? <ErrorBoundary name="admin/types"><PageAdminTypes/></ErrorBoundary> : null);
-  mount("mount-admin-users", show("admin/users") ? <ErrorBoundary name="admin/users"><PageAdminUsers/></ErrorBoundary> : null);
-  mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher"><PageAdminTeacher/></ErrorBoundary> : null);
+  mount("mount-login",    show("login")    ? <ErrorBoundary name="login"><PageLogin/></ErrorBoundary>          : null);
+  mount("mount-profile",  show("profile")  ? <ErrorBoundary name="profile">{booting ? <LoadingScreen/> : <PageProfile/>}</ErrorBoundary>   : null);
+  mount("mount-rating",   show("rating")   ? <ErrorBoundary name="rating">{booting ? <LoadingScreen/> : <PageRating/>}</ErrorBoundary>    : null);
+  mount("mount-stats",    show("stats")    ? <ErrorBoundary name="stats">{booting ? <LoadingScreen/> : <PageStats/>}</ErrorBoundary>      : null);
+  mount("mount-add",      show("add")      ? <ErrorBoundary name="add">{booting ? <LoadingScreen/> : <PageAdd/>}</ErrorBoundary>        : null);
+  mount("mount-requests", show("requests") ? <ErrorBoundary name="requests">{booting ? <LoadingScreen/> : <PageRequests/>}</ErrorBoundary>  : null);
+
+  mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen/> : <PageAdminApprovals/>}</ErrorBoundary> : null);
+  mount("mount-admin-requests",  show("admin/requests")  ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen/> : <PageAdminRequests/>}</ErrorBoundary>  : null);
+  mount("mount-admin-types",     show("admin/types")     ? <ErrorBoundary name="admin/types">{booting ? <LoadingScreen/> : <PageAdminTypes/>}</ErrorBoundary>     : null);
+  mount("mount-admin-users",     show("admin/users")     ? <ErrorBoundary name="admin/users">{booting ? <LoadingScreen/> : <PageAdminUsers/>}</ErrorBoundary>     : null);
+  mount("mount-admin-teacher",   show("admin/teacher")   ? <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen/> : <PageAdminTeacher/>}</ErrorBoundary>   : null);
 }
 
 function setupMobileDrawer(){
@@ -596,6 +609,8 @@ function Icon({ name }){
     case "x": return <svg {...common}><path {...s} d="M6 6l12 12M18 6L6 18"/></svg>;
     case "file": return <svg {...common}><path {...s} d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path {...s} d="M14 2v6h6"/></svg>;
     case "shield": return <svg {...common}><path {...s} d="M12 22s8-4 8-10V6l-8-3-8 3v6c0 6 8 10 8 10z"/></svg>;
+    case "sun": return <svg {...common}><circle {...s} cx="12" cy="12" r="4"/><path {...s} d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>;
+    case "moon": return <svg {...common}><path {...s} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>;
     default: return null;
   }
 }
@@ -604,10 +619,63 @@ const Input = (p) => <input className="input" {...p} />;
 const Select = (p) => <select className="select" {...p} />;
 const Textarea = (p) => <textarea className="textarea" {...p} />;
 const Pill = ({ kind, children }) => <span className={`pill ${kind}`}>{children}</span>;
+// Mobile-friendly data display: cards on mobile, table on desktop
+function DataCards({ columns, rows, emptyText = "Нет данных" }){
+  if (!rows.length) return <p className="p muted" style={{padding:"12px 0"}}>{emptyText}</p>;
+  return (
+    <div className="datacards-wrap">
+      {/* Desktop: table */}
+      <div className="heatwrap desktop-table">
+        <table className="table">
+          <thead><tr>{columns.map(c=><th key={c.key}>{c.label}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((row,i)=>(
+              <tr key={row.__key ?? i}>
+                {columns.map(c=>(
+                  <td key={c.key} className="tiny">{c.render ? c.render(row) : row[c.key]}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Mobile: cards */}
+      <div className="mobile-cards">
+        {rows.map((row,i)=>(
+          <div key={row.__key ?? i} className="mobile-card glass">
+            {columns.map(c=>(
+              <div key={c.key} className="mobile-card__row">
+                <span className="mobile-card__label">{c.label}</span>
+                <span className="mobile-card__val">{c.render ? c.render(row) : row[c.key]}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+function LoadingScreen(){
+  return (
+    <div style={{display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"60px 20px", gap:16}}>
+      <div style={{
+        width:42, height:42, borderRadius:14,
+        background:"linear-gradient(135deg,#6c8fff,#a78bfa)",
+        display:"grid", placeItems:"center",
+        fontWeight:800, fontSize:14, color:"#fff",
+        animation:"kpiPulse 1.4s ease-in-out infinite"
+      }}>KP</div>
+      <style>{`@keyframes kpiPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.94)}}`}</style>
+      <p className="p" style={{margin:0}}>Загрузка…</p>
+    </div>
+  );
+}
 
 function Guard(){
   return (
-    <div className="glass card">
+    <div className="glass card" style={{maxWidth:360}}>
       <div className="h2">Нужна авторизация</div>
       <p className="p">Войдите, чтобы продолжить.</p>
       <div className="sep"></div>
@@ -716,12 +784,21 @@ function SidebarNav(){
 function TopbarRight(){
   const st = useStore();
   const u = st.userDoc;
+  const isDark = st.theme !== "light";
   return (
-    <div style={{display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", justifyContent:"flex-end"}}>
+    <div style={{display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", justifyContent:"flex-end"}}>
+      <button
+        className="iconbtn theme-toggle"
+        onClick={toggleTheme}
+        aria-label={isDark ? "Светлая тема" : "Тёмная тема"}
+        title={isDark ? "Светлая тема" : "Тёмная тема"}
+      >
+        <Icon name={isDark ? "sun" : "moon"}/>
+      </button>
       {u ? (
         <>
           <Pill kind={u.role==="admin" ? "pending" : "approved"}>{u.role}</Pill>
-          <div className="tiny" style={{maxWidth:340, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+          <div className="tiny" style={{maxWidth:260, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
             <b>{u.displayName || "Без имени"}</b> <span className="muted">· {u.email}</span>
           </div>
           <Btn kind="ghost" onClick={async()=>{ await signOut(auth); toast("Вы вышли"); navigate("login"); }}>
@@ -1237,7 +1314,6 @@ function PageLogin(){
       setState({ loading:true });
       await signInWithEmailAndPassword(auth, email, pass);
       toast("Добро пожаловать!","ok");
-      navigate("profile");
     }catch(err){
       console.error(err);
       toast(err?.message || "Ошибка входа","error");
@@ -1261,7 +1337,6 @@ function PageLogin(){
 
       await signInWithPopup(auth, provider);
       toast("Добро пожаловать!","ok");
-      navigate("profile");
     }catch(err){
       console.error(err);
       toast(err?.message || "Ошибка входа через Microsoft","error");
@@ -1527,23 +1602,17 @@ async function save(){
       <div className="glass card">
         <div className="h2">Последние заявки</div>
         <div className="sep"></div>
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Дата</th><th>Тип</th><th>Название</th><th>Баллы</th><th>Статус</th></tr></thead>
-            <tbody>
-              {subs.slice(0,8).map(s=>(
-                <tr key={s.id}>
-                  <td className="tiny">{s.eventDate}</td>
-                  <td className="tiny">{s.typeName}</td>
-                  <td className="tiny">{s.title}</td>
-                  <td className="tiny"><b>{fmtPoints(s.points)}</b></td>
-                  <td className="tiny"><Pill kind={s.status}>{s.status}</Pill></td>
-                </tr>
-              ))}
-              {!subs.length && <tr><td colSpan="5" className="tiny muted">Пока нет заявок</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <DataCards
+          emptyText="Пока нет заявок"
+          columns={[
+            { key:"eventDate", label:"Дата" },
+            { key:"typeName", label:"Тип" },
+            { key:"title", label:"Название" },
+            { key:"points", label:"Баллы", render: s => <b>{fmtPoints(s.points)}</b> },
+            { key:"status", label:"Статус", render: s => <Pill kind={s.status}>{s.status}</Pill> }
+          ]}
+          rows={subs.slice(0,8).map(s=>({...s, __key:s.id}))}
+        />
       </div>
     </div>
   );
@@ -1798,27 +1867,17 @@ function PageRequests(){
 
         <div className="sep"></div>
 
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Период</th><th>Тип</th><th>Статус</th><th>Δ баллы</th><th>Δ отгулы</th></tr></thead>
-            <tbody>
-              {reqs.slice(0,20).map(r=>{
-                const pts = Number(r.pointsDelta)||0;
-                const cd = Number(r.compDaysDelta)||0;
-                return (
-                  <tr key={r.id}>
-                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}</td>
-                    <td className="tiny"><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny" style={{marginTop:4}}>{r.note}</div> : null}</td>
-                    <td className="tiny"><Pill kind={r.status}>{r.status}</Pill></td>
-                    <td className="tiny">{r.status==="approved" ? <b>{signNum(pts)}</b> : <span className="muted">—</span>}</td>
-                    <td className="tiny">{r.status==="approved" ? <b>{signNum(cd)}</b> : <span className="muted">—</span>}</td>
-                  </tr>
-                );
-              })}
-              {!reqs.length && <tr><td colSpan="5" className="tiny muted">Пока нет заявлений</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <DataCards
+          emptyText="Пока нет заявлений"
+          columns={[
+            { key:"period", label:"Период", render: r => `${r.dateFrom}${r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}` },
+            { key:"kind", label:"Тип", render: r => <><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny">{r.note}</div> : null}</> },
+            { key:"status", label:"Статус", render: r => <Pill kind={r.status}>{r.status}</Pill> },
+            { key:"pts", label:"Δ баллы", render: r => r.status==="approved" ? <b>{signNum(Number(r.pointsDelta)||0)}</b> : <span className="muted">—</span> },
+            { key:"cd", label:"Δ отгулы", render: r => r.status==="approved" ? <b>{signNum(Number(r.compDaysDelta)||0)}</b> : <span className="muted">—</span> }
+          ]}
+          rows={reqs.slice(0,20).map(r=>({...r, __key:r.id}))}
+        />
       </div>
     </div>
   );
@@ -1984,30 +2043,23 @@ function PageStats(){
   }
 
   const Controls = () => (
-    <div style={{display:"flex", gap:10, flexWrap:"wrap", marginTop:10}}>
+    <div className="stats-controls">
       {u.role === "teacher" ? (
-        <>
-          <Btn kind={view==="mine"?"primary":""} onClick={()=>setState({statsView:"mine"})}><Icon name="user"/> Моя статистика</Btn>
-          <Btn kind={view==="platform"?"primary":""} onClick={()=>setState({statsView:"platform"})}><Icon name="chart"/> Статистика платформы</Btn>
-        </>
+        <div className="stats-controls__group">
+          <Btn kind={view==="mine"?"primary":""} onClick={()=>setState({statsView:"mine"})}><Icon name="user"/> Мои</Btn>
+          <Btn kind={view==="platform"?"primary":""} onClick={()=>setState({statsView:"platform"})}><Icon name="chart"/> Платформа</Btn>
+        </div>
       ) : null}
-
-      <Btn kind={mode==="14d"?"primary":""} onClick={()=>setState({statsRangeMode:"14d"})}>14 дней</Btn>
-      <Btn kind={mode==="365d"?"primary":""} onClick={()=>setState({statsRangeMode:"365d"})}>Год</Btn>
-
-      {u.role === "teacher" && view === "mine" ? (
-        <Btn onClick={()=>navigate("add")}>Добавить KPI</Btn>
-      ) : null}
-
-      {view === "platform" ? (
-        <Btn onClick={()=>navigate("rating")}>Рейтинг</Btn>
-      ) : null}
-
-      {u.role === "admin" ? (
-        <Btn onClick={()=>navigate("admin/approvals")}>Approvals</Btn>
-      ) : null}
-
-      <Btn onClick={refresh} disabled={st.loading}>Обновить</Btn>
+      <div className="stats-controls__group">
+        <Btn kind={mode==="14d"?"primary":""} onClick={()=>setState({statsRangeMode:"14d"})}>14 дней</Btn>
+        <Btn kind={mode==="365d"?"primary":""} onClick={()=>setState({statsRangeMode:"365d"})}>Год</Btn>
+      </div>
+      <div className="stats-controls__group">
+        {u.role === "teacher" && view === "mine" ? <Btn onClick={()=>navigate("add")}><Icon name="plus"/> KPI</Btn> : null}
+        {view === "platform" ? <Btn onClick={()=>navigate("rating")}>Рейтинг</Btn> : null}
+        {u.role === "admin" ? <Btn onClick={()=>navigate("admin/approvals")}>Approvals</Btn> : null}
+        <Btn onClick={refresh} disabled={st.loading}>Обновить</Btn>
+      </div>
     </div>
   );
 
@@ -2084,18 +2136,22 @@ function PageStats(){
           <div className="h2">Топ типов (таблица)</div>
           <div className="sep"></div>
           {topType.length ? (
-            <div className="heatwrap">
-              <table className="table">
-                <thead><tr><th>Тип</th><th>Баллы</th></tr></thead>
-                <tbody>
-                  {topType.slice(0,12).map(([name, pts])=>(
-                    <tr key={name}>
-                      <td className="tiny"><b>{name}</b></td>
-                      <td className="tiny"><b>{fmtPoints(pts)}</b></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="stats-toplist">
+              {topType.slice(0,12).map(([name, pts], i) => {
+                const max = topType[0][1];
+                return (
+                  <div key={name} className="stats-toplist__row">
+                    <span className="stats-toplist__num muted tiny">{i+1}</span>
+                    <div className="stats-toplist__bar-wrap">
+                      <div className="stats-toplist__label tiny">{name}</div>
+                      <div className="stats-toplist__bar">
+                        <div className="stats-toplist__fill" style={{width:`${Math.round((pts/max)*100)}%`}}/>
+                      </div>
+                    </div>
+                    <span className="stats-toplist__pts"><b>{fmtPoints(pts)}</b></span>
+                  </div>
+                );
+              })}
             </div>
           ) : <p className="p">Нет данных.</p>}
         </div>
@@ -2162,7 +2218,7 @@ function PageStats(){
           <p className="p">Общие данные ещё не загружены. Нажми <b>Обновить</b>.</p>
         ) : null}
 
-        <div className="grid4">
+        <div className="grid2">
           <div className="kpi"><div><div className="muted tiny">Teachers</div><b>{teachers.length}</b></div><Pill kind="approved">users</Pill></div>
           <div className="kpi"><div><div className="muted tiny">Submissions</div><b>{subs.length}</b></div><Pill kind="pending">range</Pill></div>
           <div className="kpi"><div><div className="muted tiny">Pending</div><b>{pending.length}</b></div><Pill kind="pending">pending</Pill></div>
@@ -2214,34 +2270,41 @@ function PageStats(){
           <p className="p">Показывает <b>одобренные</b> баллы. Для компактности — только топ-10 по баллам за диапазон.</p>
           <div className="sep"></div>
 
-          <div className="heatwrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Teacher</th>
-                  {bins.map(b => <th key={mode==="365d"?b.key:b.ymd}>{b.label}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {hmTeachers.map(t => (
-                  <tr key={t.uid}>
-                    <td className="tiny"><b>{t.displayName || t.email || "—"}</b></td>
-                    {bins.map(b => {
-                      const v = mode==="365d"
-                        ? sum(approved.filter(s=>s.uid===t.uid && (s.eventDate||"").slice(0,7)===b.key), s=>s.points)
-                        : sum(approved.filter(s=>s.uid===t.uid && s.eventDate===b.ymd), s=>s.points);
-                      return (
-                        <td key={mode==="365d"?b.key:b.ymd} className="tiny" style={cellStyle(v)} title={`${b.label}: ${v}`}>
-                          {v ? fmtPoints(v) : ""}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-                {!hmTeachers.length && <tr><td colSpan={bins.length+1} className="tiny muted">Нет данных</td></tr>}
-              </tbody>
-            </table>
-          </div>
+            {!hmTeachers.length
+            ? <p className="p">Нет данных</p>
+            : (
+              <div className="heatmap-wrap">
+                <div className="heatmap-scroll">
+                  <table className="table heatmap-table">
+                    <thead>
+                      <tr>
+                        <th className="heatmap-name-col">Учитель</th>
+                        {bins.map(b => <th key={mode==="365d"?b.key:b.ymd} className="heatmap-bin-col">{b.label}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hmTeachers.map(t => (
+                        <tr key={t.uid}>
+                          <td className="tiny heatmap-name-col"><b>{(t.displayName || t.email || "—").slice(0,14)}</b></td>
+                          {bins.map(b => {
+                            const v = mode==="365d"
+                              ? sum(approved.filter(s=>s.uid===t.uid && (s.eventDate||"").slice(0,7)===b.key), s=>s.points)
+                              : sum(approved.filter(s=>s.uid===t.uid && s.eventDate===b.ymd), s=>s.points);
+                            return (
+                              <td key={mode==="365d"?b.key:b.ymd} className="tiny" style={{...cellStyle(v), textAlign:"center", padding:"6px 4px", fontSize:11}} title={`${b.label}: ${v}`}>
+                                {v ? fmtPoints(v) : ""}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="help" style={{marginTop:8}}>← Прокрутите горизонтально для просмотра всей карты</p>
+              </div>
+            )
+          }
         </div>
       </div>
     );
@@ -2287,37 +2350,40 @@ function PageAdminApprovals(){
       <p className="p">Pending-заявки. Approve добавляет баллы в totalPoints.</p>
       <div className="sep"></div>
 
-      <div className="heatwrap">
-        <table className="table">
-          <thead><tr><th>Учитель</th><th>Тип / Title</th><th>Дата</th><th>Баллы</th><th>Evidence</th><th>Действия</th></tr></thead>
-          <tbody>
-            {pending.map(s=>{
-              const tu = usersMap.get(s.uid);
-              return (
-                <tr key={s.id}>
-                  <td className="tiny"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || s.uid}</div></td>
-                  <td className="tiny"><div><b>{s.typeName}</b></div><div className="muted tiny">{s.title}</div>{s.description?<div className="muted tiny" style={{marginTop:4}}>{s.description}</div>:null}</td>
-                  <td className="tiny">{s.eventDate}</td>
-                  <td className="tiny"><b>{fmtPoints(s.points)}</b></td>
-                  <td className="tiny">
-                    <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
-                      {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">Ссылка</a> : null}
-                      {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">Файл</a> : null}
-                      {!s.evidenceLink && !s.evidenceFileUrl ? <span className="muted tiny">—</span> : null}
-                    </div>
-                  </td>
-                  <td className="tiny">
-                    <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
-                      <Btn kind="ok" onClick={()=>decide(s.id,"approve")} disabled={st.loading}><Icon name="check"/> Approve</Btn>
-                      <Btn kind="danger" onClick={()=>decide(s.id,"reject")} disabled={st.loading}><Icon name="x"/> Reject</Btn>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {!pending.length && <tr><td colSpan="6" className="tiny muted">Нет заявок на проверке</td></tr>}
-          </tbody>
-        </table>
+      {!pending.length && <p className="p muted" style={{padding:"12px 0"}}>Нет заявок на проверке</p>}
+      <div className="mobile-cards">
+        {pending.map(s=>{
+          const tu = usersMap.get(s.uid);
+          return (
+            <div key={s.id} className="mobile-card glass">
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">Учитель</span>
+                <span className="mobile-card__val"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || s.uid}</div></span>
+              </div>
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">Тип / Название</span>
+                <span className="mobile-card__val"><b>{s.typeName}</b><div className="muted tiny">{s.title}</div>{s.description ? <div className="muted tiny">{s.description}</div> : null}</span>
+              </div>
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">Дата / Баллы</span>
+                <span className="mobile-card__val">{s.eventDate} · <b>{fmtPoints(s.points)} pts</b></span>
+              </div>
+              {(s.evidenceLink || s.evidenceFileUrl) && (
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Evidence</span>
+                  <span className="mobile-card__val" style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">Ссылка</a> : null}
+                    {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">Файл</a> : null}
+                  </span>
+                </div>
+              )}
+              <div className="mobile-card__actions">
+                <Btn kind="ok" onClick={()=>decide(s.id,"approve")} disabled={st.loading}><Icon name="check"/> Approve</Btn>
+                <Btn kind="danger" onClick={()=>decide(s.id,"reject")} disabled={st.loading}><Icon name="x"/> Reject</Btn>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -2376,67 +2442,59 @@ function PageAdminRequests(){
         <p className="p">Проверьте заявления от учителей. На одобрении можно указать, сколько баллов добавить/снять (шаблоны: -2, +2).</p>
         <div className="sep"></div>
 
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Учитель</th><th>Тип</th><th>Период</th><th>Баланс отгулов</th><th>Δ баллы</th><th>Δ отгулы</th><th>Действия</th></tr></thead>
-            <tbody>
-              {pending.map(r=>{
-                const tu = usersMap.get(r.uid);
-                const delta = getDelta(r.id);
-                const cd = compPreview(r);
-                return (
-                  <tr key={r.id}>
-                    <td className="tiny"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></td>
-                    <td className="tiny"><div><b>{r.kindLabel || requestKindLabel(r.kind)}</b></div>{r.note ? <div className="muted tiny" style={{marginTop:4}}>{r.note}</div> : null}</td>
-                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}<div className="muted tiny">дней: {Number(r.days)||dateRangeDays(r.dateFrom,r.dateTo)}</div></td>
-                    <td className="tiny"><b>{fmtPoints(tu?.compDays || 0)}</b></td>
-                    <td className="tiny">
-                      <div style={{display:"flex", gap:8, flexWrap:"wrap", alignItems:"center"}}>
-                        <Input type="number" value={delta} onChange={(e)=>setDelta(r.id, e.target.value)} style={{maxWidth:110}}/>
-                        <Btn type="button" onClick={()=>setDelta(r.id, -2)}>-2</Btn>
-                        <Btn type="button" onClick={()=>setDelta(r.id, +2)}>+2</Btn>
-                      </div>
-                    </td>
-                    <td className="tiny"><b>{signNum(cd)}</b></td>
-                    <td className="tiny">
-                      <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
-                        <Btn kind="ok" onClick={()=>decide(r.id,"approve")} disabled={st.loading}><Icon name="check"/> OK</Btn>
-                        <Btn kind="danger" onClick={()=>decide(r.id,"reject")} disabled={st.loading}><Icon name="x"/> Нет</Btn>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!pending.length && <tr><td colSpan="7" className="tiny muted">Нет заявлений на проверке</td></tr>}
-            </tbody>
-          </table>
+        {!pending.length && <p className="p muted" style={{padding:"12px 0"}}>Нет заявлений на проверке</p>}
+        <div className="mobile-cards">
+          {pending.map(r=>{
+            const tu = usersMap.get(r.uid);
+            const delta = getDelta(r.id);
+            const cd = compPreview(r);
+            return (
+              <div key={r.id} className="mobile-card glass">
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Учитель</span>
+                  <span className="mobile-card__val"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></span>
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Тип / Период</span>
+                  <span className="mobile-card__val"><b>{r.kindLabel || requestKindLabel(r.kind)}</b><div className="muted tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""} · дней: {Number(r.days)||dateRangeDays(r.dateFrom,r.dateTo)}</div>{r.note ? <div className="muted tiny">{r.note}</div> : null}</span>
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Баланс отгулов / Δ</span>
+                  <span className="mobile-card__val"><b>{fmtPoints(tu?.compDays || 0)}</b> отгулов · Δ отгулы: <b>{signNum(cd)}</b></span>
+                </div>
+                <div className="mobile-card__row">
+                  <span className="mobile-card__label">Δ баллы</span>
+                  <span className="mobile-card__val" style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                    <Input type="number" value={delta} onChange={(e)=>setDelta(r.id, e.target.value)} style={{maxWidth:100}}/>
+                    <Btn type="button" onClick={()=>setDelta(r.id, -2)}>-2</Btn>
+                    <Btn type="button" onClick={()=>setDelta(r.id, +2)}>+2</Btn>
+                  </span>
+                </div>
+                <div className="mobile-card__actions">
+                  <Btn kind="ok" onClick={()=>decide(r.id,"approve")} disabled={st.loading}><Icon name="check"/> OK</Btn>
+                  <Btn kind="danger" onClick={()=>decide(r.id,"reject")} disabled={st.loading}><Icon name="x"/> Нет</Btn>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <div className="glass card">
         <div className="h2">Последние решения</div>
         <div className="sep"></div>
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Учитель</th><th>Тип</th><th>Период</th><th>Статус</th><th>Δ баллы</th><th>Δ отгулы</th></tr></thead>
-            <tbody>
-              {recent.map(r=>{
-                const tu = usersMap.get(r.uid);
-                return (
-                  <tr key={r.id}>
-                    <td className="tiny"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></td>
-                    <td className="tiny">{r.kindLabel || requestKindLabel(r.kind)}</td>
-                    <td className="tiny">{r.dateFrom}{r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}</td>
-                    <td className="tiny"><Pill kind={r.status}>{r.status}</Pill></td>
-                    <td className="tiny"><b>{signNum(r.pointsDelta||0)}</b></td>
-                    <td className="tiny"><b>{signNum(r.compDaysDelta||0)}</b></td>
-                  </tr>
-                );
-              })}
-              {!recent.length && <tr><td colSpan="6" className="tiny muted">Пока нет истории</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <DataCards
+          emptyText="Пока нет истории"
+          columns={[
+            { key:"teacher", label:"Учитель", render: r => { const tu=usersMap.get(r.uid); return <><b>{tu?.displayName||"—"}</b><div className="muted tiny">{tu?.email||r.uid}</div></>; } },
+            { key:"kind", label:"Тип", render: r => r.kindLabel || requestKindLabel(r.kind) },
+            { key:"period", label:"Период", render: r => `${r.dateFrom}${r.dateTo && r.dateTo!==r.dateFrom ? ` → ${r.dateTo}` : ""}` },
+            { key:"status", label:"Статус", render: r => <Pill kind={r.status}>{r.status}</Pill> },
+            { key:"pts", label:"Δ баллы", render: r => <b>{signNum(r.pointsDelta||0)}</b> },
+            { key:"cd", label:"Δ отгулы", render: r => <b>{signNum(r.compDaysDelta||0)}</b> }
+          ]}
+          rows={recent.map(r=>({...r, __key:r.id}))}
+        />
 
         <div className="sep"></div>
         <div className="help">Правило отгулов: «Приход в не будний день» добавляет +1 отгул за каждый день в периоде. «Отдых / отгул в будний день» списывает отгулы.</div>
@@ -2505,23 +2563,17 @@ function PageAdminTypes(){
         </div>
         <div className="sep"></div>
 
-        <div className="heatwrap">
-          <table className="table">
-            <thead><tr><th>Section</th><th>Subsection</th><th>Name</th><th>Points</th><th>Active</th></tr></thead>
-            <tbody>
-              {st.types.map(t=>(
-                <tr key={t.id}>
-                  <td className="tiny">{t.section}</td>
-                  <td className="tiny">{t.subsection}</td>
-                  <td className="tiny"><b>{t.name}</b></td>
-                  <td className="tiny">{fmtPoints(t.defaultPoints)}</td>
-                  <td className="tiny"><input type="checkbox" checked={!!t.active} onChange={(e)=>toggle(t.id, e.target.checked)} /></td>
-                </tr>
-              ))}
-              {!st.types.length && <tr><td colSpan="5" className="tiny muted">Нет типов</td></tr>}
-            </tbody>
-          </table>
-        </div>
+        <DataCards
+          emptyText="Нет типов"
+          columns={[
+            { key:"section", label:"Section" },
+            { key:"subsection", label:"Subsection" },
+            { key:"name", label:"Name", render: t => <b>{t.name}</b> },
+            { key:"defaultPoints", label:"Points", render: t => fmtPoints(t.defaultPoints) },
+            { key:"active", label:"Active", render: t => <input type="checkbox" checked={!!t.active} onChange={(e)=>toggle(t.id, e.target.checked)} /> }
+          ]}
+          rows={st.types.map(t=>({...t, __key:t.id}))}
+        />
       </div>
 
       <div className="glass card">
@@ -2588,29 +2640,32 @@ function PageAdminUsers(){
 
       <div className="sep"></div>
 
-      <div className="heatwrap">
-        <table className="table">
-          <thead><tr><th>ФИО</th><th>Школа / Предмет</th><th>Email</th><th>Баллы</th><th>Роль</th><th>Действия</th></tr></thead>
-          <tbody>
-            {filtered.map(x=>(
-              <tr key={x.uid}>
-                <td className="tiny"><b>{x.displayName || "—"}</b></td>
-                <td className="tiny">{x.school || "—"}<div className="muted tiny">{x.subject || "—"}</div></td>
-                <td className="tiny">{x.email}</td>
-                <td className="tiny"><b>{fmtPoints(x.totalPoints)}</b></td>
-                <td className="tiny"><Pill kind={x.role==="admin"?"pending":"approved"}>{x.role}</Pill></td>
-                <td className="tiny">
-                  <div style={{display:"flex", gap:10, flexWrap:"wrap"}}>
-                    <Btn onClick={()=>setR(x.uid,"teacher")} disabled={st.loading}>teacher</Btn>
-                    <Btn onClick={()=>setR(x.uid,"admin")} disabled={st.loading}>admin</Btn>
-                    <Btn kind="primary" onClick={()=>navigate("admin/teacher", { uid: (x.uid || x.id) })}>Профиль</Btn>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!filtered.length && <tr><td colSpan="6" className="tiny muted">Нет результатов</td></tr>}
-          </tbody>
-        </table>
+      {!filtered.length && <p className="p muted" style={{padding:"12px 0"}}>Нет результатов</p>}
+      <div className="mobile-cards">
+        {filtered.map(x=>(
+          <div key={x.uid} className="mobile-card glass">
+            <div className="mobile-card__row">
+              <span className="mobile-card__label">ФИО / Email</span>
+              <span className="mobile-card__val">
+                <b>{x.displayName || "—"}</b>
+                <div className="muted tiny">{x.email}</div>
+              </span>
+            </div>
+            <div className="mobile-card__row">
+              <span className="mobile-card__label">Школа / Предмет</span>
+              <span className="mobile-card__val">{x.school || "—"} · <span className="muted">{x.subject || "—"}</span></span>
+            </div>
+            <div className="mobile-card__row">
+              <span className="mobile-card__label">Баллы / Роль</span>
+              <span className="mobile-card__val"><b>{fmtPoints(x.totalPoints)}</b> pts · <Pill kind={x.role==="admin"?"pending":"approved"}>{x.role}</Pill></span>
+            </div>
+            <div className="mobile-card__actions">
+              <Btn onClick={()=>setR(x.uid,"teacher")} disabled={st.loading}>teacher</Btn>
+              <Btn onClick={()=>setR(x.uid,"admin")} disabled={st.loading}>admin</Btn>
+              <Btn kind="primary" onClick={()=>navigate("admin/teacher", { uid: (x.uid || x.id) })}>Профиль</Btn>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -3020,6 +3075,7 @@ async function hydrateForUser(userDoc){
 
 async function bootstrap(){
   setupMobileDrawer();
+  applyTheme(store.state.theme);
   window.addEventListener("hashchange", () => render().catch(console.error));
 
   // Needed for signInWithRedirect flows (including Microsoft on mobile)
