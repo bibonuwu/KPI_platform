@@ -57,6 +57,23 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    // ── book quiz attempts (NIS-пен бірге оқиық) ────────────────────────────
+    match /bookQuizAttempts/{id} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
+
+      allow create: if isSignedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.bookKey is string
+        && request.resource.data.bookTitle is string
+        && request.resource.data.scorePercent is number
+        && request.resource.data.correctCount is number
+        && request.resource.data.totalCount is number
+        && request.resource.data.passed is bool;
+
+      allow update, delete: if isAdmin();
+    }
+
     // ── requests (teacher statements / отгулы) ─────────────────────────────
     // БЫЛО: правило отсутствовало → Firebase отклонял все операции (permission-denied)
     match /requests/{id} {

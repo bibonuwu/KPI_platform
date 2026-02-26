@@ -1782,6 +1782,356 @@ async function save(){
   );
 }
 
+
+const BOOK_QUIZ_LIBRARY = [
+  {
+    id: "auyl-shetindegi-ui",
+    month: "Ақпан",
+    title: "Әкім Тарази — «Ауыл шетіндегі үй»",
+    shortTitle: "Ауыл шетіндегі үй",
+    author: "Әкім Тарази",
+    points: 20,
+    thresholdPercent: 70,
+    note: "NIS-пен бірге оқиық жобасы · ақпан айы",
+    answerKeyNeedsReview: true,
+    questions: [
+      {
+        id: "q1",
+        text: "Шығарманың басты кейіпкері кім?",
+        options: [
+          { key: "A", text: "Сұлтан" },
+          { key: "B", text: "Еркебұлан" },
+          { key: "C", text: "Танабай" },
+          { key: "D", text: "Ақбар" }
+        ],
+        correct: "A"
+      },
+      {
+        id: "q2",
+        text: "Басты кейіпкердің «Жаман Сұлтан» аталуына басты себеп не болды?",
+        options: [
+          { key: "A", text: "Елге қарсы шыққаны" },
+          { key: "B", text: "Жұмысты дұрыс істемегені" },
+          { key: "C", text: "Өмірдегі сәтсіздіктері мен мінез-құлқы" },
+          { key: "D", text: "Бай адамдарға жақпағаны" }
+        ],
+        correct: "C"
+      },
+      {
+        id: "q3",
+        text: "Сұлтан колхозда қандай қызмет атқарады?",
+        options: [
+          { key: "A", text: "Колхоз бастығы" },
+          { key: "B", text: "Қойшы" },
+          { key: "C", text: "Қызылша суғаратын сушы" },
+          { key: "D", text: "Саудамен айналысты" }
+        ],
+        correct: "C"
+      },
+      {
+        id: "q4",
+        text: "Сұлтан түн ортасында Өгізөлген ойпаңында не үшін жалғыз қалды?",
+        options: [
+          { key: "A", text: "Батырхан қашып кеткендіктен" },
+          { key: "B", text: "Су бұратын қақпа ашылмай қалғандықтан" },
+          { key: "C", text: "Жаңбыр жауып кеткендіктен" },
+          { key: "D", text: "Ішімдік іздеп кеткендіктен" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q5",
+        text: "Жігіттердің көмекке келуіне не себеп болды?",
+        options: [
+          { key: "A", text: "Өз еріктерімен" },
+          { key: "B", text: "Батырханның өтінішімен" },
+          { key: "C", text: "Колхоз бастығынан қорыққандықтан" },
+          { key: "D", text: "Ақша алу үшін" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q6",
+        text: "Танабайдың Сұлтанға деген көзқарасы қандай болды?",
+        options: [
+          { key: "A", text: "Менсінбейтін" },
+          { key: "B", text: "Аяйтын" },
+          { key: "C", text: "Шынайы құрметтейтін" },
+          { key: "D", text: "Пайда үшін жақындасқан" }
+        ],
+        correct: "C"
+      },
+      {
+        id: "q7",
+        text: "Сұлтанның ісі оңға басуына өзі қандай екі себепті атады?",
+        options: [
+          { key: "A", text: "Ақша мен таныстық" },
+          { key: "B", text: "Танабай және өз еңбегі" },
+          { key: "C", text: "Ішімдік пен бастық" },
+          { key: "D", text: "Аруақ пен бақыт" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q8",
+        text: "Сұлтан көрген түсін қалай жорыды?",
+        options: [
+          { key: "A", text: "Жамандыққа" },
+          { key: "B", text: "Ауруға" },
+          { key: "C", text: "Береке мен жақсы хабарға" },
+          { key: "D", text: "Қайғылы оқиғаға" }
+        ],
+        correct: "C"
+      },
+      {
+        id: "q9",
+        text: "Гүлгауһардың тойында күйеу жігіттің кешігуінің нақты себебі қандай болды?",
+        options: [
+          { key: "A", text: "Ауырып қалған" },
+          { key: "B", text: "Жолда қалған" },
+          { key: "C", text: "Милицияға түсіп қалған" },
+          { key: "D", text: "Басқа қыз тапқан" }
+        ],
+        correct: "C"
+      },
+      {
+        id: "q10",
+        text: "Құдалардан Сарбалақ бүркітті не үшін сұрады?",
+        options: [
+          { key: "A", text: "Өзіне керек болғандықтан" },
+          { key: "B", text: "Байлығын көрсету үшін" },
+          { key: "C", text: "Танабайды қуантқысы келгендіктен" },
+          { key: "D", text: "Саудалау үшін" }
+        ],
+        correct: "C"
+      }
+    ]
+  },
+  {
+    id: "akboz-at",
+    month: "Наурыз",
+    title: "Тәкен Әлімқұлов — «Ақбоз ат»",
+    shortTitle: "Ақбоз ат",
+    author: "Тәкен Әлімқұлов",
+    points: 20,
+    thresholdPercent: 70,
+    note: "Викторина · 10 сұрақ",
+    answerKeyNeedsReview: false,
+    questions: [
+      {
+        id: "q1",
+        text: "Шынар қайда оқыған?",
+        options: [
+          { key: "A", text: "Алматыда" },
+          { key: "B", text: "Мәскеуде" },
+          { key: "C", text: "Қаратауда" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q2",
+        text: "Шынар кімнің қызы?",
+        options: [
+          { key: "A", text: "Механиктің қызы" },
+          { key: "B", text: "Директордың қызы" },
+          { key: "C", text: "Жылқышының қызы" }
+        ],
+        correct: "A"
+      },
+      {
+        id: "q3",
+        text: "Қараш Бековтің негізгі қызығушылығы не?",
+        options: [
+          { key: "A", text: "Жылқыны қарау және ауыл шаруашылығына көмектесу" },
+          { key: "B", text: "Газет жазу" },
+          { key: "C", text: "Шопандармен сөйлесу" }
+        ],
+        correct: "A"
+      },
+      {
+        id: "q4",
+        text: "Біркембай кім?",
+        options: [
+          { key: "A", text: "Елеусіздің досы" },
+          { key: "B", text: "«Бозтөбе» совхозының ақсақалы" },
+          { key: "C", text: "Жергілікті мектептің директоры" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q5",
+        text: "Елеусіз қандай кәсібімен айналысады?",
+        options: [
+          { key: "A", text: "Кинооператор" },
+          { key: "B", text: "Газеттің қызметкері" },
+          { key: "C", text: "Мектеп мұғалімі" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q6",
+        text: "Қараш Бековтің туған жері қайда?",
+        options: [
+          { key: "A", text: "Алматы" },
+          { key: "B", text: "Бұхар облысы" },
+          { key: "C", text: "Қаратау" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q7",
+        text: "Елеусіз Қарашқа қанша досы бар деп айтты?",
+        options: [
+          { key: "A", text: "10-ға жуық" },
+          { key: "B", text: "200 миллионнан асады" },
+          { key: "C", text: "Белгісіз" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q8",
+        text: "Шынар қай қалада оқыған?",
+        options: [
+          { key: "A", text: "Алматыда" },
+          { key: "B", text: "Мәскеуде" },
+          { key: "C", text: "Ташкентте" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q9",
+        text: "Қараш Бековтың мамандығы қандай?",
+        options: [
+          { key: "A", text: "Жазушы" },
+          { key: "B", text: "Кинооператор" },
+          { key: "C", text: "Дәрігер" }
+        ],
+        correct: "B"
+      },
+      {
+        id: "q10",
+        text: "Елеусіз балалар үйінде неше жасында тұрады?",
+        options: [
+          { key: "A", text: "5 жас" },
+          { key: "B", text: "13 жас" },
+          { key: "C", text: "9 жас" }
+        ],
+        correct: "B"
+      }
+    ]
+  },
+  {
+    id: "kentavr",
+    month: "Сәуір",
+    title: "Алтай Асқар — «Кентавр»",
+    shortTitle: "Кентавр",
+    author: "Алтай Асқар",
+    points: 20,
+    thresholdPercent: 70,
+    note: "Тест сұрақтары кейін қосылады",
+    questions: []
+  },
+  {
+    id: "komentogai",
+    month: "Мамыр",
+    title: "Сайын Мұратбеков — «Коментогай»",
+    shortTitle: "Коментогай",
+    author: "Сайын Мұратбеков",
+    points: 20,
+    thresholdPercent: 70,
+    note: "Тест сұрақтары кейін қосылады",
+    questions: []
+  }
+];
+
+async function fetchMyBookQuizAttempts(uid){
+  const qy = query(collection(db, "bookQuizAttempts"), where("uid", "==", uid));
+  const res = await getDocs(qy);
+  const arr = res.docs.map(d => ({ id:d.id, ...d.data() }));
+  arr.sort((a,b)=>tsKey(b)-tsKey(a));
+  return arr;
+}
+
+async function createBookQuizAttempt(data){
+  await addDoc(collection(db, "bookQuizAttempts"), {
+    uid: data.uid,
+    bookKey: safeText(data.bookKey),
+    bookTitle: safeText(data.bookTitle),
+    month: safeText(data.month),
+    correctCount: Number(data.correctCount) || 0,
+    totalCount: Number(data.totalCount) || 0,
+    scorePercent: Number(data.scorePercent) || 0,
+    passed: !!data.passed,
+    cooldownUntil: safeText(data.cooldownUntil),
+    thresholdPercent: Number(data.thresholdPercent) || 70,
+    pointsCandidate: Number(data.pointsCandidate) || 0,
+    createdAt: serverTimestamp()
+  });
+}
+
+async function createBookQuizRewardSubmission({ uid, book, result }){
+  await addDoc(collection(db, "submissions"), {
+    uid,
+    typeId: `book_quiz:${book.id}`,
+    typeName: "Книжный тест (NIS-пен бірге оқиық)",
+    typeSection: "Чтение",
+    typeSubsection: "Книжный тест",
+    points: Number(book.points) || 20,
+    title: `Книжный тест: ${book.title}`,
+    description: `Результат теста: ${result.correct}/${result.total} (${result.percent}%). Порог: ${book.thresholdPercent || 70}%`,
+    eventDate: ymd(),
+    evidenceLink: "",
+    evidenceFileUrl: "",
+    quizBookKey: book.id,
+    quizScorePercent: Number(result.percent) || 0,
+    quizCorrectCount: Number(result.correct) || 0,
+    quizTotalCount: Number(result.total) || 0,
+    status: "pending",
+    createdAt: serverTimestamp()
+  });
+}
+
+function calcQuizResult(book, answers){
+  const questions = book?.questions || [];
+  let correct = 0;
+  for (const q of questions){
+    if (!q?.correct) continue;
+    if ((answers?.[q.id] || "") === q.correct) correct += 1;
+  }
+  const total = questions.length;
+  const percent = total ? Math.round((correct / total) * 100) : 0;
+  return { correct, total, percent };
+}
+
+function getBookQuizStatus(book, attempts, submissions){
+  const items = (attempts || []).filter(a => a.bookKey === book.id);
+  const latest = items[0] || null;
+  const now = Date.now();
+  const cooldownUntilMs = latest?.cooldownUntil ? new Date(latest.cooldownUntil).getTime() : 0;
+  const isCooldown = !!cooldownUntilMs && cooldownUntilMs > now && !latest?.passed;
+  const hasRewardSubmission = (submissions || []).some(s => {
+    if ((s?.quizBookKey || "") === book.id && s.status !== "rejected") return true;
+    if ((s?.title || "").includes(book.title) && (s?.typeId || "").startsWith("book_quiz:") && s.status !== "rejected") return true;
+    return false;
+  });
+  const hasQuestions = !!(book.questions && book.questions.length);
+
+  let state = "ready";
+  if (!hasQuestions) state = "soon";
+  else if (hasRewardSubmission) state = "sent";
+  else if (isCooldown) state = "cooldown";
+  else if (latest?.passed) state = "passed";
+
+  return { state, latest, cooldownUntilMs, hasRewardSubmission, hasQuestions };
+}
+
+function fmtDateTimeSafe(v){
+  if (!v) return "";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleString("ru-RU", { day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+}
+
 function PageAdd(){
   const st = useStore();
   const u = st.userDoc;
@@ -1807,6 +2157,118 @@ function PageAdd(){
   const [description,setDescription] = useState("");
   const [evidenceLink,setEvidenceLink] = useState("");
   const [file,setFile] = useState(null);
+
+  // Book quiz state (+20 points after teacher/admin verification)
+  const [quizAttempts, setQuizAttempts] = useState([]);
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [selectedBookId, setSelectedBookId] = useState(BOOK_QUIZ_LIBRARY[0]?.id || "");
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizResult, setQuizResult] = useState(null);
+  const [quizSubmitting, setQuizSubmitting] = useState(false);
+
+  const selectedBook = BOOK_QUIZ_LIBRARY.find(b => b.id === selectedBookId) || BOOK_QUIZ_LIBRARY[0] || null;
+  const selectedStatus = useMemo(
+    () => selectedBook ? getBookQuizStatus(selectedBook, quizAttempts, st.mySubmissions || []) : null,
+    [selectedBookId, quizAttempts, (st.mySubmissions||[]).length]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!u?.uid) return;
+      try {
+        setQuizLoading(true);
+        const items = await fetchMyBookQuizAttempts(u.uid);
+        if (!cancelled) setQuizAttempts(items);
+      } catch (e) {
+        console.error(e);
+        toast("Не удалось загрузить историю тестов", "error");
+      } finally {
+        if (!cancelled) setQuizLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [u?.uid]);
+
+  async function refreshQuizAttempts(){
+    if (!u?.uid) return;
+    const items = await fetchMyBookQuizAttempts(u.uid);
+    setQuizAttempts(items);
+  }
+
+  function openQuiz(book){
+    setSelectedBookId(book.id);
+    setQuizOpen(true);
+    setQuizAnswers({});
+    setQuizResult(null);
+  }
+
+  function closeQuiz(){
+    setQuizOpen(false);
+    setQuizAnswers({});
+    setQuizResult(null);
+  }
+
+  async function submitBookQuiz(e){
+    e?.preventDefault?.();
+    if (!selectedBook) return;
+    const status = getBookQuizStatus(selectedBook, quizAttempts, st.mySubmissions || []);
+    if (!status.hasQuestions){ toast("Тест по этой книге пока не добавлен", "error"); return; }
+    if (status.state === "cooldown"){
+      toast(`Повторная попытка доступна после ${fmtDateTimeSafe(status.latest?.cooldownUntil)}`, "error");
+      return;
+    }
+    if (status.hasRewardSubmission){
+      toast("Баллы по этой книге уже отправлены на проверку", "ok");
+      return;
+    }
+
+    const unanswered = (selectedBook.questions || []).filter(q => !quizAnswers[q.id]);
+    if (unanswered.length){
+      toast(`Ответьте на все вопросы (${unanswered.length} осталось)`, "error");
+      return;
+    }
+
+    const result = calcQuizResult(selectedBook, quizAnswers);
+    const passed = result.percent >= (selectedBook.thresholdPercent || 70);
+    setQuizResult({ ...result, passed });
+
+    try {
+      setQuizSubmitting(true);
+      const cooldownUntil = passed ? "" : new Date(Date.now() + 24*60*60*1000).toISOString();
+
+      await createBookQuizAttempt({
+        uid: u.uid,
+        bookKey: selectedBook.id,
+        bookTitle: selectedBook.title,
+        month: selectedBook.month,
+        correctCount: result.correct,
+        totalCount: result.total,
+        scorePercent: result.percent,
+        passed,
+        cooldownUntil,
+        thresholdPercent: selectedBook.thresholdPercent || 70,
+        pointsCandidate: passed ? (selectedBook.points || 20) : 0
+      });
+
+      if (passed){
+        await createBookQuizRewardSubmission({ uid: u.uid, book: selectedBook, result });
+        const my = await fetchMySubmissions(u.uid);
+        setState({ mySubmissions: my });
+        toast(`Тест пройден (${result.percent}%). +${selectedBook.points || 20} баллов отправлены на проверку`, "ok");
+      } else {
+        toast(`Набрано ${result.percent}%. Повтор через 24 часа`, "error");
+      }
+
+      await refreshQuizAttempts();
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || "Ошибка при сохранении результата теста", "error");
+    } finally {
+      setQuizSubmitting(false);
+    }
+  }
 
   async function submit(e){
     e.preventDefault();
@@ -1894,10 +2356,151 @@ function PageAdd(){
       </div>
 
       <div className="glass card">
-        <div className="h2">Подсказки</div>
+        <div style={{display:"flex", justifyContent:"space-between", gap:10, alignItems:"center", flexWrap:"wrap"}}>
+          <div>
+            <div className="h2" style={{marginBottom:4}}>Подсказки · Книги месяца</div>
+            <div className="tiny muted">Откройте тест по книге. При результате от 70% система отправит +20 баллов на проверку.</div>
+          </div>
+          {quizLoading ? <Pill kind="pending">Загрузка...</Pill> : <Pill kind="approved">Тесты с БД</Pill>}
+        </div>
         <div className="sep"></div>
-        <p className="p">Админ увидит вашу заявку в Approvals и сможет approve/reject.</p>
+
+        <div className="book-month-grid">
+          {BOOK_QUIZ_LIBRARY.map(book => {
+            const qs = book.questions || [];
+            const status = getBookQuizStatus(book, quizAttempts, st.mySubmissions || []);
+            const isSelected = selectedBookId === book.id;
+            const stateLabel = status.state === "sent"
+              ? "На проверке"
+              : status.state === "cooldown"
+                ? "Пауза 24ч"
+                : status.state === "soon"
+                  ? "Скоро"
+                  : "Доступен";
+            return (
+              <div key={book.id} className={`book-month-card ${isSelected ? "active" : ""}`}>
+                <div className="book-month-card__top">
+                  <div className="book-month-card__month">{book.month}</div>
+                  <Pill kind={status.state === "sent" ? "pending" : status.state === "cooldown" ? "rejected" : status.state === "soon" ? "" : "approved"}>{stateLabel}</Pill>
+                </div>
+                <div className="book-month-card__title">{book.author}</div>
+                <div className="book-month-card__subtitle">«{book.shortTitle}»</div>
+                <div className="tiny muted" style={{marginTop:6}}>{book.note || ""}</div>
+                <div className="tiny muted" style={{marginTop:8}}>
+                  {qs.length ? `${qs.length} сұрақ · Порог ${book.thresholdPercent || 70}% · +${book.points || 20} балл` : "Тест сұрақтары әлі қосылмаған"}
+                </div>
+                {status.state === "cooldown" && status.latest?.cooldownUntil ? (
+                  <div className="tiny" style={{marginTop:8, color:"var(--red)"}}>Повтор: {fmtDateTimeSafe(status.latest.cooldownUntil)}</div>
+                ) : null}
+                <div style={{display:"flex", gap:8, marginTop:10, flexWrap:"wrap"}}>
+                  <Btn
+                    kind={isSelected ? "primary" : ""}
+                    onClick={()=>{ setSelectedBookId(book.id); if (qs.length) setQuizOpen(true); }}
+                    disabled={!qs.length}
+                    type="button"
+                  >
+                    {isSelected ? "Выбрано" : "Открыть"}
+                  </Btn>
+                  {qs.length ? <Btn type="button" kind="ghost" onClick={()=>openQuiz(book)}>Начать тест</Btn> : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="sep"></div>
+        <p className="p">Если тест не пройден (меньше 70%), повторная попытка блокируется на 24 часа. Это помогает проверить, действительно ли учитель читал книгу.</p>
+        {BOOK_QUIZ_LIBRARY.some(b => b.answerKeyNeedsReview) && (
+          <div className="help" style={{marginTop:8}}>⚠️ Для теста «Ауыл шетіндегі үй» ответы добавлены как рабочий ключ. Перед запуском в школе проверьте ключи у методиста.</div>
+        )}
       </div>
+
+      {selectedBook && quizOpen && (
+        <div className="glass card" style={{gridColumn:"1/-1"}}>
+          <div style={{display:"flex", justifyContent:"space-between", gap:10, alignItems:"center", flexWrap:"wrap"}}>
+            <div>
+              <div className="h2" style={{marginBottom:4}}>Книжный тест · {selectedBook.title}</div>
+              <div className="tiny muted">Порог прохождения: {selectedBook.thresholdPercent || 70}% · За прохождение: +{selectedBook.points || 20} баллов (на проверку)</div>
+            </div>
+            <div style={{display:"flex", gap:8, flexWrap:"wrap"}}>
+              {selectedStatus?.state === "sent" ? <Pill kind="pending">Баллы уже отправлены</Pill> : null}
+              {selectedStatus?.state === "cooldown" ? <Pill kind="rejected">Повтор позже</Pill> : null}
+              <Btn type="button" onClick={closeQuiz}>Скрыть</Btn>
+            </div>
+          </div>
+
+          {selectedBook.questions?.length ? (
+            <>
+              <div className="sep"></div>
+              <form onSubmit={submitBookQuiz}>
+                <div className="quiz-questions">
+                  {selectedBook.questions.map((q, idx) => {
+                    const picked = quizAnswers[q.id] || "";
+                    return (
+                      <div key={q.id} className="quiz-question-card">
+                        <div className="quiz-question-card__title">{idx+1}. {q.text}</div>
+                        <div className="quiz-options">
+                          {q.options.map(opt => {
+                            const checked = picked === opt.key;
+                            const showResult = !!quizResult;
+                            const isCorrect = q.correct === opt.key;
+                            const isWrongPicked = showResult && checked && !isCorrect;
+                            return (
+                              <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""} ${showResult && isCorrect ? "correct" : ""} ${isWrongPicked ? "wrong" : ""}`}>
+                                <input
+                                  type="radio"
+                                  name={`quiz_${selectedBook.id}_${q.id}`}
+                                  value={opt.key}
+                                  checked={checked}
+                                  onChange={()=>setQuizAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
+                                  disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
+                                />
+                                <span className="quiz-option__key">{opt.key}</span>
+                                <span>{opt.text}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {quizResult && (
+                  <div className={`quiz-result ${quizResult.passed ? "ok" : "fail"}`}>
+                    <div style={{fontWeight:800}}>
+                      {quizResult.passed ? "Тест пройден ✅" : "Тест не пройден ❌"}
+                    </div>
+                    <div className="tiny" style={{marginTop:4}}>
+                      Правильно: {quizResult.correct} из {quizResult.total} · {quizResult.percent}%
+                      {quizResult.passed
+                        ? ` · +${selectedBook.points || 20} баллов отправлены на проверку`
+                        : ` · Повторная попытка будет доступна через 24 часа`}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{display:"flex", gap:10, marginTop:14, flexWrap:"wrap"}}>
+                  <Btn
+                    kind="primary"
+                    type="submit"
+                    disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
+                  >
+                    {quizSubmitting ? "Сохраняем..." : "Завершить тест"}
+                  </Btn>
+                  <Btn type="button" onClick={()=>{ setQuizAnswers({}); setQuizResult(null); }} disabled={quizSubmitting}>Сбросить ответы</Btn>
+                </div>
+              </form>
+            </>
+          ) : (
+            <div className="sep"></div>
+          )}
+
+          {!selectedBook.questions?.length && (
+            <p className="p">Для этой книги тест ещё не добавлен. Можете прислать вопросы — я встрою их по аналогии.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
