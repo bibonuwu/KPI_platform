@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#080c14" />
+    <meta name="theme-color" content="#f4f6fb" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>KPI Platform — Teacher Rating</title>
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>NIS KPI Platform</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,7 +18,8 @@
     <style>
       /* Inline critical styles for instant render */
       *, *::before, *::after { box-sizing: border-box; }
-      html, body { height: 100%; margin: 0; background: #080c14; color: #f0f2f8; }
+      html, body { height: 100%; margin: 0; background: #f4f6fb; color: #1a1d2e; }
+      html[data-theme="dark"], html[data-theme="dark"] body { background: #0c1021; color: #f0f2f8; }
       body { font-family: 'Onest', system-ui, sans-serif; }
 
       .bootStatus {
@@ -28,51 +29,53 @@
         padding: 6px 12px;
         border-radius: 999px;
         font: 600 11px/1.2 'Onest', system-ui, sans-serif;
-        background: rgba(0,0,0,.5);
-        color: rgba(255,255,255,.8);
-        border: 1px solid rgba(255,255,255,.09);
+        background: rgba(255,255,255,.8);
+        color: rgba(0,0,0,.5);
+        border: 1px solid rgba(100,116,160,.1);
         backdrop-filter: blur(12px);
         z-index: 50;
         user-select: none;
         pointer-events: none;
         transition: opacity .3s;
       }
-      .bootStatus[data-kind="error"] { background: rgba(248,113,113,.2); border-color: rgba(248,113,113,.3); color: #f87171; }
-      .bootStatus[data-kind="ok"]    { background: rgba(52,211,153,.15); border-color: rgba(52,211,153,.25); color: #34d399; }
+      .bootStatus[data-kind="error"] { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.2); color: #ef4444; }
+      .bootStatus[data-kind="ok"]    { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.15); color: #10b981; }
 
       /* Loading splash */
       #splash {
         position: fixed; inset: 0; z-index: 100;
         display: grid; place-items: center;
-        background: #080c14;
+        background: #f4f6fb;
         transition: opacity .3s ease;
       }
+      html[data-theme="dark"] #splash { background: #0c1021; }
       #splash.done { opacity: 0; pointer-events: none; }
       .splash-logo {
-        width: 52px; height: 52px; border-radius: 16px;
-        background: linear-gradient(135deg, #6c8fff, #a78bfa);
+        width: 56px; height: 56px; border-radius: 18px;
+        background: #fff;
         display: grid; place-items: center;
-        font: 800 18px/1 'Onest', sans-serif;
-        color: #fff;
+        box-shadow: 0 6px 24px rgba(135,188,46,.3);
         animation: pulse 1.4s ease-in-out infinite;
+        overflow: hidden;
       }
+      .splash-logo img { width: 100%; height: 100%; object-fit: contain; }
       @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.7;transform:scale(.96)} }
     </style>
   </head>
 
   <body>
     <!-- Loading splash -->
-    <div id="splash"><div class="splash-logo">KP</div></div>
+    <div id="splash"><div class="splash-logo"><img src="/logo-nis.png" alt="NIS" /></div></div>
 
     <div class="bg"></div>
 
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
-          <div class="brand__logo">KP</div>
+          <div class="brand__logo"><img src="/logo-nis.png" alt="NIS" /></div>
           <div class="brand__text">
-            <div class="brand__name">KPI Platform</div>
-            <div class="brand__sub">Teacher Rating</div>
+            <div class="brand__name">NIS KPI Platform</div>
+            <div class="brand__sub">Мұғалімдер рейтингі</div>
           </div>
         </div>
 
@@ -94,8 +97,8 @@
             </button>
 
             <div class="topbar__title">
-              <div class="topbar__titleBig">KPI Platform</div>
-              <div class="topbar__titleSmall muted">Учительский рейтинг и KPI-достижения</div>
+              <div class="topbar__titleBig">NIS KPI Platform</div>
+              <div class="topbar__titleSmall muted">Мұғалімдер рейтингі мен KPI жетістіктері</div>
             </div>
           </div>
 
@@ -105,6 +108,10 @@
         <main class="content">
           <section class="route-section" data-route="login">
             <div class="route-inner" id="mount-login"></div>
+          </section>
+
+          <section class="route-section" data-route="onboarding">
+            <div class="route-inner" id="mount-onboarding"></div>
           </section>
 
           <section class="route-section" data-route="profile">
