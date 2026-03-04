@@ -335,6 +335,7 @@ function canAccess(path, userDoc) {
   const role = userDoc.role || "teacher";
   if (path === "onboarding") return true;
   if (role === "teacher") {
+    if (userDoc.onboarded !== true) return false; // block all pages until onboarding done
     if (path.startsWith("admin/")) return false;
     return ["profile", "rating", "stats", "add", "requests", "documents"].includes(path);
   }
@@ -1033,23 +1034,76 @@ function SidebarNav() {
   );
 }
 
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+  const days = ["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = now.getFullYear();
+  const day = days[now.getDay()];
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return (
+    <div className="live-clock">
+      <span className="live-clock__date">{dd}.{mm}.{yyyy} <span className="live-clock__day">{day}</span></span>
+      <span className="live-clock__time">{hh}:{min}</span>
+    </div>
+  );
+}
+
 function TopbarRight() {
   const st = useStore();
   const u = st.userDoc;
   const isDark = st.theme !== "light";
-  const [showOnline, setShowOnline] = useState(false);
-
-  const allUsers = st.users || [];
-  const onlineUsers = allUsers.filter(x => x.online === true);
-  const onlineCount = onlineUsers.length + (u ? 1 : 0); // include self even if not in users list
-  const totalCount = allUsers.length;
 
   return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      <LiveClock />
+      <button
+        className="iconbtn theme-toggle"
+        onClick={toggleTheme}
+        aria-label={isDark ? "Светлая тема" : "Тёмная тема"}
+        title={isDark ? "Светлая тема" : "Тёмная тема"}
+      >
+        <Icon name={isDark ? "sun" : "moon"} />
+      </button>
+      {u ? (
+        <>
+          <Pill kind={u.role === "admin" ? "pending" : "approved"}>{u.role}</Pill>
+          <div className="tiny" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <b>{u.displayName || "Без имени"}</b> <span className="muted">· {u.email}</span>
+          </div>
+          <Btn kind="ghost" onClick={async () => { const cu=auth.currentUser; if(cu) await setUserOnline(cu.uid,false); await signOut(auth); toast("Вы вышли"); navigate("login"); }}>
+            <Icon name="logout" /> Выйти
+          </Btn>
+        </>
+      ) : (
+        <div className="tiny muted">Гость</div>
+      )}
+    </div>
+  );
+}
+
+function OnlineWidget() {
+  const st = useStore();
+  const u = st.userDoc;
+  const [showOnline, setShowOnline] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  if (!u) return null;
+  const allUsers = st.users || [];
+  const onlineUsers = allUsers.filter(x => x.online === true);
+  const onlineCount = onlineUsers.length + 1;
+  const totalCount = allUsers.length;
+  return (
     <>
-      {showOnline && u?.role === "admin" && (
-        <div className="modal-backdrop" onClick={() => setShowOnline(false)}>
+      {showOnline && (
+        <div className="modalback" onClick={() => setShowOnline(false)}>
           <div className="modal glass" style={{ maxWidth: 400, width: "90vw" }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div className="modal__head">
               <div className="h2">Онлайн сейчас / Қазір онлайн</div>
               <Btn onClick={() => setShowOnline(false)}>✕</Btn>
             </div>
@@ -1061,7 +1115,7 @@ function TopbarRight() {
                   <div key={x.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--hover-bg)", borderRadius: 8 }}>
                     <span className="online-dot" />
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{x.displayName || x.email || "—"}</div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{x.displayName || x.email || "—"}</div>
                       <div className="tiny muted">{x.role} · {x.school || x.subject || x.email}</div>
                     </div>
                   </div>
@@ -1072,42 +1126,21 @@ function TopbarRight() {
           </div>
         </div>
       )}
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-        {u && (
-          <button
-            className="online-counter"
-            onClick={() => u.role === "admin" && setShowOnline(true)}
-            title={u.role === "admin" ? "Нажмите, чтобы увидеть список онлайн" : "Онлайн пользователей"}
-            style={{ cursor: u.role === "admin" ? "pointer" : "default" }}
-          >
-            <span className="online-dot" />
-            <span>{onlineCount} online</span>
-            <span style={{ color: "var(--muted)", margin: "0 2px" }}>/</span>
-            <span>{totalCount}</span>
-          </button>
-        )}
+      <div className={`online-widget${collapsed ? " online-widget--collapsed" : ""}`}>
         <button
-          className="iconbtn theme-toggle"
-          onClick={toggleTheme}
-          aria-label={isDark ? "Светлая тема" : "Тёмная тема"}
-          title={isDark ? "Светлая тема" : "Тёмная тема"}
+          className="online-widget__btn"
+          onClick={() => setShowOnline(true)}
+          title="Онлайн пользователи / Онлайн қолданушылар"
         >
-          <Icon name={isDark ? "sun" : "moon"} />
-        </button>
-        {u ? (
-          <>
-            <Pill kind={u.role === "admin" ? "pending" : "approved"}>{u.role}</Pill>
-            <div className="tiny" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              <b>{u.displayName || "Без имени"}</b> <span className="muted">· {u.email}</span>
+          <span className="online-dot" />
+          {!collapsed && (
+            <div className="online-widget__info">
+              <span className="online-widget__count">{onlineCount}</span>
+              <span className="online-widget__label">онлайн</span>
+              <span className="online-widget__total">/ {totalCount}</span>
             </div>
-            <Btn kind="ghost" onClick={async () => { const cu=auth.currentUser; if(cu) await setUserOnline(cu.uid,false); await signOut(auth); toast("Вы вышли"); navigate("login"); }}>
-              <Icon name="logout" /> Выйти
-            </Btn>
-          </>
-        ) : (
-          <div className="tiny muted">Гость</div>
-        )}
+          )}
+        </button>
       </div>
     </>
   );
@@ -1149,6 +1182,7 @@ function Overlays() {
         ))}
       </div>
       {st.modal?.kind === "crop" && <CropModal file={st.modal.file} onClose={() => setState({ modal: null })} />}
+      <OnlineWidget />
     </>
   );
 }
@@ -1776,6 +1810,16 @@ function PageOnboarding() {
     return [(t.clientX - rect.left) * scaleX, (t.clientY - rect.top) * scaleY];
   };
 
+  // Fill white bg on mount and on clear
+  const fillCanvasWhite = () => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, c.width, c.height);
+  };
+  useEffect(() => { fillCanvasWhite(); }, []); // eslint-disable-line
+
   const onDown = (e) => {
     e.preventDefault();
     setDrawing(true);
@@ -1804,9 +1848,7 @@ function PageOnboarding() {
   const onUp = () => setDrawing(false);
 
   const clearSig = () => {
-    const c = canvasRef.current;
-    if (!c) return;
-    c.getContext("2d").clearRect(0, 0, c.width, c.height);
+    fillCanvasWhite();
     setSigned(false);
   };
 
@@ -1873,156 +1915,210 @@ function PageOnboarding() {
 
   return (
     <div className="onboarding">
-      <div className="glass card">
-        <div className="onboarding__welcome">
-          <img src="/logo-nis.png" alt="NIS" style={{ width: 64, height: 64, objectFit: "contain", marginBottom: 12 }} />
-          <div className="h1">
-            {isOnboarded ? "Танысу аяқталды / Ознакомление пройдено" : "Қош келдіңіз! / Добро пожаловать!"}
-          </div>
-          <p className="p">{isOnboarded
-            ? "Сіз танысуды аяқтадыңыз. Төменде анықтамалық ақпарат / Вы уже прошли ознакомление. Ниже справочная информация."
-            : "Сіз жаңа қызметкерсіз. Төмендегі барлық құжаттармен танысып, қол қойыңыз / Вы новый сотрудник. Ознакомьтесь со всеми документами и подпишите."
-          }</p>
-          {!isOnboarded && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "8px 16px", background: "var(--hover-bg)", borderRadius: 20, fontSize: 13, fontWeight: 600, color: "var(--accent)" }}>
-              <div style={{ width: 80, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${(checkedCount / docs.length) * 100}%`, background: "var(--accent)", transition: "width .4s" }} />
-              </div>
-              {checkedCount}/{docs.length} оқылды / прочитано
-            </div>
-          )}
-        </div>
 
-        <div className="sep" />
-
-        <div className="h2">Ресми құжаттар / Официальные документы</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-          {docs.map((d, i) => (
-            <div key={i} style={{ border: `1px solid ${checks[i] || isOnboarded ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, overflow: "hidden", transition: "border-color .2s" }}>
-              <div
-                role="button"
-                tabIndex={0}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", cursor: "pointer", background: expanded === i ? "var(--hover-bg)" : "transparent" }}
-                onClick={() => setExpanded(expanded === i ? null : i)}
-              >
-                <div style={{
-                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-                  background: (checks[i] || isOnboarded) ? "var(--green, #22c55e)" : "var(--accent)",
-                  color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 13, fontWeight: 700, transition: "background .2s"
-                }}>
-                  {(checks[i] || isOnboarded) ? "✓" : i + 1}
-                </div>
-                <div style={{ flex: 1, fontWeight: 600, fontSize: 13 }}>{d.title}</div>
-                <div style={{ fontSize: 16, color: "var(--muted)", transform: expanded === i ? "rotate(180deg)" : "none", transition: "transform .2s" }}>▾</div>
-              </div>
-              {expanded === i && (
-                <div style={{ padding: "12px 16px 16px", background: "var(--card-bg, #fff)", borderTop: "1px solid var(--border)" }}>
-                  <div style={{ fontWeight: 700, fontSize: 12, color: "var(--accent)", marginBottom: 4, textTransform: "uppercase", letterSpacing: .5 }}>Қазақша</div>
-                  <p style={{ margin: "0 0 12px", fontSize: 13, lineHeight: 1.7, color: "var(--text)" }}>{d.kz}</p>
-                  <div style={{ fontWeight: 700, fontSize: 12, color: "var(--accent)", marginBottom: 4, textTransform: "uppercase", letterSpacing: .5 }}>Русский</div>
-                  <p style={{ margin: "0 0 14px", fontSize: 13, lineHeight: 1.7, color: "var(--text)" }}>{d.ru}</p>
-                  {!isOnboarded && (
-                    <button
-                      onClick={() => { if (!checks[i]) toggleCheck(i); setExpanded(null); }}
-                      style={{
-                        background: checks[i] ? "var(--green, #22c55e)" : "var(--accent)", color: "#fff",
-                        border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer",
-                        fontWeight: 600, fontSize: 13, transition: "background .2s"
-                      }}
-                    >
-                      {checks[i] ? "✓ Оқыдым / Прочитано" : "Оқыдым және келісемін / Прочитал(а) и согласен(а)"}
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+      {/* ═══ HERO BANNER ═══════════════════════════ */}
+      <div className={`onb-hero${isOnboarded ? " onb-hero--done" : ""}`}>
+        {/* Floating particles */}
+        <div className="onb-hero__particles" aria-hidden="true">
+          {["✦","★","✦","●","✦","★","✦","●","✦","★","✦","●"].map((s, i) => (
+            <span key={i} className="onb-particle" style={{ "--i": i }}>{s}</span>
           ))}
         </div>
 
-        {!isOnboarded && (
-          <>
-            <div className="sep" />
-            <div className="h2">Қол қою / Поставьте подпись</div>
-            <p className="p" style={{ marginBottom: 10 }}>
-              Қолыңызды төменге сызыңыз — бұл барлық ережелермен танысқаныңызды растайды.
-              <br /><span style={{ fontSize: 13, color: "var(--muted)" }}>Нарисуйте подпись мышкой или пальцем — это подтверждает ознакомление.</span>
-            </p>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 2 }}>Қалыңдық / Толщина:</span>
-              {[1, 2, 4].map(sz => (
-                <button
-                  key={sz}
-                  onClick={() => setBrushSize(sz)}
-                  style={{
-                    width: 32, height: 32, borderRadius: 8, border: `2px solid ${brushSize === sz ? "var(--accent)" : "var(--border)"}`,
-                    background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color .15s"
-                  }}
-                >
-                  <div style={{ width: Math.max(sz * 4, 8), height: sz, background: "#1a1d2e", borderRadius: 99 }} />
-                </button>
-              ))}
-            </div>
-            <canvas
-              ref={canvasRef}
-              width={800}
-              height={200}
-              className="signature-pad"
-              style={{ width: "100%", maxWidth: 500, height: 130, display: "block", cursor: "crosshair" }}
-              onMouseDown={onDown}
-              onMouseMove={onMove}
-              onMouseUp={onUp}
-              onMouseLeave={onUp}
-              onTouchStart={onDown}
-              onTouchMove={onMove}
-              onTouchEnd={onUp}
-            />
-            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-              <Btn onClick={clearSig}>Тазалау / Очистить</Btn>
-              <Btn kind="primary" onClick={submit} disabled={saving || !signed || !allChecked}>
-                {saving ? "Сақталуда... / Сохранение..." : "✅ Растау және қол қою / Подтвердить и подписать"}
-              </Btn>
-            </div>
-            {!allChecked && (
-              <p className="help" style={{ marginTop: 8 }}>
-                ⚠ Барлық құжаттарды ашып, «Оқыдым» деп белгілеңіз / Откройте каждый документ и нажмите «Прочитал(а)».
-              </p>
-            )}
-          </>
-        )}
+        <div className="onb-hero__inner">
+          <img src="/logo-nis.png" alt="NIS" className="onb-hero__logo" />
 
-        {isOnboarded && (
-          <>
-            <div className="sep" />
-            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
-              {u.signatureUrl && (
-                <div>
-                  <div className="h2" style={{ marginBottom: 8 }}>Сіздің қолыңыз / Ваша подпись</div>
-                  <img src={u.signatureUrl} alt="Подпись" style={{ maxWidth: 220, border: "1px solid var(--border)", borderRadius: 8, padding: 8, background: "#fff" }} />
+          <div className="onb-hero__badge">
+            {isOnboarded ? "✅ Ознакомление завершено" : "🎉 Жаңа қызметкер / Новый сотрудник"}
+          </div>
+
+          <div className="onb-hero__title">
+            {isOnboarded
+              ? "Қош келдіңіз, NIS отбасы!"
+              : "Қош келдіңіз! Добро пожаловать!"}
+          </div>
+          {u.displayName && (
+            <div className="onb-hero__name">{u.displayName}</div>
+          )}
+          <div className="onb-hero__sub">
+            {isOnboarded
+              ? "Сіз барлық құжаттармен таныстыңыз және қол қойдыңыз. / Вы успешно прошли ознакомление и подписали все документы."
+              : "Барлық құжаттармен танысып, қол қойыңыз — содан кейін платформаға кіре аласыз. / Ознакомьтесь с документами и подпишите — после этого получите доступ к платформе."}
+          </div>
+
+          {/* Step indicators */}
+          <div className="onb-steps">
+            <div className={`onb-step${allChecked ? " onb-step--done" : checkedCount > 0 ? " onb-step--active" : ""}`}>
+              <div className="onb-step__num">{allChecked ? "✓" : "1"}</div>
+              <div className="onb-step__label">Құжаттар<br/><span>Документы</span></div>
+            </div>
+            <div className={`onb-steps__line${allChecked ? " onb-steps__line--done" : ""}`} />
+            <div className={`onb-step${isOnboarded ? " onb-step--done" : allChecked ? " onb-step--active" : ""}`}>
+              <div className="onb-step__num">{isOnboarded ? "✓" : "2"}</div>
+              <div className="onb-step__label">Қол қою<br/><span>Подпись</span></div>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          {!isOnboarded && (
+            <div className="onb-progress">
+              <div className="onb-progress__bar">
+                <div className="onb-progress__fill" style={{ width: `${(checkedCount / docs.length) * 100}%` }} />
+              </div>
+              <span className="onb-progress__label">{checkedCount}/{docs.length} прочитано</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ DOCUMENTS ════════════════════════════ */}
+      <div className="glass card onb-docs-card">
+        <div className="onb-docs-header">
+          <div style={{ fontSize: 20, fontWeight: 800 }}>📄 Ресми құжаттар / Официальные документы</div>
+          {isOnboarded && <span className="pill approved">Барлығы оқылды ✓</span>}
+        </div>
+
+        <div className="onb-docs-list">
+          {docs.map((d, i) => {
+            const done = checks[i] || isOnboarded;
+            const isOpen = expanded === i;
+            return (
+              <div key={i} className={`onb-doc${done ? " onb-doc--done" : ""}${isOpen ? " onb-doc--open" : ""}`}
+                style={{ animationDelay: `${i * 0.07}s` }}>
+                <div
+                  className="onb-doc__head"
+                  role="button" tabIndex={0}
+                  onClick={() => setExpanded(isOpen ? null : i)}
+                >
+                  <div className={`onb-doc__num${done ? " onb-doc__num--done" : ""}`}>
+                    {done ? "✓" : i + 1}
+                  </div>
+                  <div className="onb-doc__title">{d.title}</div>
+                  <div className={`onb-doc__chevron${isOpen ? " onb-doc__chevron--open" : ""}`}>›</div>
                 </div>
-              )}
-              <div>
-                <div className="h2" style={{ marginBottom: 8 }}>Мәртебе / Статус</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
-                    <span style={{ color: "var(--green, #22c55e)", fontWeight: 700 }}>✓</span>
-                    <span>Барлық құжаттар оқылды / Все документы прочитаны</span>
+                {isOpen && (
+                  <div className="onb-doc__body">
+                    <div className="onb-doc__lang-label">🇰🇿 Қазақша</div>
+                    <p className="onb-doc__text">{d.kz}</p>
+                    <div className="onb-doc__lang-label">🇷🇺 Русский</div>
+                    <p className="onb-doc__text">{d.ru}</p>
+                    {!isOnboarded && (
+                      <button
+                        className={`onb-doc__confirm${checks[i] ? " onb-doc__confirm--done" : ""}`}
+                        onClick={() => { if (!checks[i]) toggleCheck(i); setExpanded(null); }}
+                      >
+                        {checks[i] ? "✓ Оқыдым / Прочитано" : "Оқыдым және келісемін / Прочитал(а) и согласен(а) →"}
+                      </button>
+                    )}
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
-                    <span style={{ color: "var(--green, #22c55e)", fontWeight: 700 }}>✓</span>
-                    <span>Қол қойылды / Подпись поставлена</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═══ SIGNATURE ════════════════════════════ */}
+      {!isOnboarded && (
+        <div className={`onb-sig-section glass card${allChecked ? " onb-sig-section--ready" : ""}`}>
+          {!allChecked ? (
+            <div className="onb-sig-locked">
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Қол қою бөлімі / Раздел подписи</div>
+              <p className="p" style={{ textAlign: "center" }}>
+                Барлық {docs.length} құжатты оқығаннан кейін қол қою мүмкін болады.<br />
+                <span style={{ fontSize: 13 }}>Раздел подписи откроется после прочтения всех {docs.length} документов.</span>
+              </p>
+              <div className="onb-sig-locked__progress">
+                <div className="onb-sig-locked__fill" style={{ width: `${(checkedCount / docs.length) * 100}%` }} />
+              </div>
+              <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>{checkedCount} / {docs.length}</div>
+            </div>
+          ) : (
+            <>
+              <div className="onb-sig-ready-banner">
+                <div className="onb-sig-ready-banner__icon">🎊</div>
+                <div className="onb-sig-ready-banner__title">Барлық құжаттар оқылды! / Все документы прочитаны!</div>
+                <div className="onb-sig-ready-banner__sub">Соңғы қадам — қолтаңба / Последний шаг — поставьте подпись</div>
+              </div>
+
+              <div className="onb-sig-wrap">
+                <div className="onb-sig-wrap__head">
+                  <div>
+                    <div className="h2" style={{ marginBottom: 4 }}>✍ Қол қою / Поставьте подпись</div>
+                    <p className="p" style={{ margin: 0, fontSize: 13 }}>
+                      Ақ жолаққа қолыңызды сызыңыз / Нарисуйте подпись мышкой или пальцем
+                    </p>
                   </div>
-                  {u.onboardedAt && (
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-                      Күні / Дата: {new Date(u.onboardedAt.seconds * 1000).toLocaleDateString("ru-RU")}
-                    </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>Толщина:</span>
+                    {[1, 2, 4].map(sz => (
+                      <button key={sz} onClick={() => setBrushSize(sz)} style={{
+                        width: 32, height: 32, borderRadius: 8,
+                        border: `2px solid ${brushSize === sz ? "var(--accent)" : "var(--border)"}`,
+                        background: brushSize === sz ? "var(--hover-bg)" : "transparent",
+                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s"
+                      }}>
+                        <div style={{ width: Math.max(sz * 4, 8), height: sz, background: "#1a2035", borderRadius: 99 }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="onb-sig-canvas-wrap">
+                  <canvas
+                    ref={canvasRef}
+                    width={800}
+                    height={200}
+                    className="onb-sig-canvas"
+                    onMouseDown={onDown}
+                    onMouseMove={onMove}
+                    onMouseUp={onUp}
+                    onMouseLeave={onUp}
+                    onTouchStart={onDown}
+                    onTouchMove={onMove}
+                    onTouchEnd={onUp}
+                  />
+                  {!signed && (
+                    <div className="onb-sig-hint">✍ Здесь поставьте подпись / Мұнда қол қойыңыз</div>
                   )}
                 </div>
+
+                <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+                  <Btn onClick={clearSig}>↺ Тазалау / Очистить</Btn>
+                  <Btn kind="primary" onClick={submit} disabled={saving || !signed}>
+                    {saving ? "Сақталуда..." : "✅ Растау және қол қою / Подтвердить и подписать"}
+                  </Btn>
+                  {signed && <span style={{ fontSize: 13, color: "var(--green)", fontWeight: 700 }}>✓ Қол қойылды / Подпись готова</span>}
+                </div>
               </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ═══ ALREADY ONBOARDED ════════════════════ */}
+      {isOnboarded && (
+        <div className="glass card onb-done-card">
+          <div className="onb-done-card__icon">🏆</div>
+          <div className="onb-done-card__title">Ознакомление пройдено успешно!</div>
+          <div className="onb-done-card__checks">
+            <div className="onb-done-check"><span>✓</span> Барлық құжаттар оқылды / Все документы прочитаны</div>
+            <div className="onb-done-check"><span>✓</span> Қол қойылды / Подпись поставлена</div>
+            {u.onboardedAt && (
+              <div className="onb-done-check">
+                <span>📅</span> Күні / Дата: {new Date(u.onboardedAt.seconds * 1000).toLocaleDateString("ru-RU")}
+              </div>
+            )}
+          </div>
+          {u.signatureUrl && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--muted)", marginBottom: 8, textTransform: "uppercase", letterSpacing: .4 }}>Сіздің қолыңыз / Ваша подпись</div>
+              <img src={u.signatureUrl} alt="Подпись" className="onb-done-card__sig" />
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2033,8 +2129,41 @@ function PageLogin() {
   const st = useStore();
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [slide, setSlide] = useState(0);
 
   useEffect(() => { if (st.userDoc) navigate("profile"); }, [st.userDoc]);
+
+  useEffect(() => {
+    const id = setInterval(() => setSlide(s => (s + 1) % 3), 4500);
+    return () => clearInterval(id);
+  }, []);
+
+  const slides = [
+    {
+      icon: "📊",
+      title: "Платформа KPI",
+      titleKz: "KPI Платформасы",
+      desc: "Автоматический учёт и рейтингование профессиональных достижений педагогов Назарбаев Интеллектуальных Школ.",
+      descKz: "НИШ мұғалімдерінің кәсіби жетістіктерін автоматты есепке алу және рейтингілеу.",
+      accent: "#87BC2E",
+    },
+    {
+      icon: "🏆",
+      title: "Рейтинг в реальном времени",
+      titleKz: "Нақты уақыттағы рейтинг",
+      desc: "Видите своё место среди коллег, динамику роста баллов и достижения лучших педагогов школы.",
+      descKz: "Әріптестер арасындағы орыныңызды, балл өсу динамикасы мен үздік мұғалімдердің жетістіктерін көріңіз.",
+      accent: "#4f9cf9",
+    },
+    {
+      icon: "✨",
+      title: "Просто и удобно",
+      titleKz: "Қарапайым және ыңғайлы",
+      desc: "Добавляйте KPI через форму, прикладывайте документы, подтверждайте подписью — всё в одном месте.",
+      descKz: "Форма арқылы KPI қосыңыз, құжаттар тіркеңіз, қолтаңбамен растаңыз — бәрі бір жерде.",
+      accent: "#a78bfa",
+    },
+  ];
 
   async function submit(e) {
     e.preventDefault();
@@ -2052,17 +2181,9 @@ function PageLogin() {
     try {
       setState({ loading: true });
       const provider = new OAuthProvider("microsoft.com");
-      provider.setCustomParameters({
-        prompt: "select_account",
-        tenant: MICROSOFT_TENANT
-      });
-
+      provider.setCustomParameters({ prompt: "select_account", tenant: MICROSOFT_TENANT });
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-      if (isMobile) {
-        await signInWithRedirect(auth, provider);
-        return; // дальше будет редирект
-      }
-
+      if (isMobile) { await signInWithRedirect(auth, provider); return; }
       await signInWithPopup(auth, provider);
       toast("Добро пожаловать!", "ok");
     } catch (err) {
@@ -2071,32 +2192,107 @@ function PageLogin() {
     } finally { setState({ loading: false }); }
   }
 
+  const s = slides[slide];
+
   return (
-    <div className="grid2">
-      <div className="glass card">
-        <div className="h1">Вход</div>
-        <p className="p">Войдите, чтобы добавлять KPI и видеть рейтинг.</p>
-        <div className="sep"></div>
-        <form onSubmit={submit}>
-          <div className="label">Email</div>
-          <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
-          <div className="label">Пароль</div>
-          <Input value={pass} onChange={(e) => setPass(e.target.value)} type="password" required />
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            <Btn kind="primary" type="submit" disabled={st.loading}>Войти</Btn>
-            <Btn type="button" onClick={signInMicrosoft} disabled={st.loading}>Войти через Microsoft</Btn>
+    <div className="login-page">
+
+      {/* ═══ LEFT: Slideshow ═══ */}
+      <div className="login-slider">
+        {/* Animated bg blobs */}
+        <div className="login-slider__blobs" aria-hidden="true">
+          <div className="login-blob login-blob--1" />
+          <div className="login-blob login-blob--2" />
+          <div className="login-blob login-blob--3" />
+        </div>
+
+        <div className="login-slider__inner">
+          {/* Brand */}
+          <div className="login-slider__brand">
+            <img src="/logo-nis.png" alt="NIS" className="login-slider__logo" />
+            <div>
+              <div className="login-slider__brandname">NIS KPI Platform</div>
+              <div className="login-slider__brandsub">Назарбаев Зияткерлік Мектептері</div>
+            </div>
           </div>
-        </form>
+
+          {/* Slide */}
+          <div className="login-slide" key={slide}>
+            <div className="login-slide__icon" style={{ "--accent": s.accent }}>{s.icon}</div>
+            <div className="login-slide__title">{s.title}</div>
+            <div className="login-slide__title-kz">{s.titleKz}</div>
+            <div className="login-slide__desc">{s.desc}</div>
+            <div className="login-slide__desc-kz">{s.descKz}</div>
+          </div>
+
+          {/* Dots */}
+          <div className="login-dots">
+            {slides.map((sl, i) => (
+              <button
+                key={i}
+                className={`login-dot${i === slide ? " login-dot--active" : ""}`}
+                onClick={() => setSlide(i)}
+                aria-label={`Слайд ${i + 1}`}
+                style={{ "--acc": sl.accent }}
+              />
+            ))}
+          </div>
+
+          {/* Bottom strip */}
+          <div className="login-slider__footer">
+            <div className="login-slider__stat"><span>📈</span> Жетістіктерді бақылаңыз</div>
+            <div className="login-slider__stat"><span>🎯</span> Мақсатқа жетіңіз</div>
+            <div className="login-slider__stat"><span>🏅</span> Рейтингте көтеріліңіз</div>
+          </div>
+        </div>
       </div>
 
-      <div className="glass card">
-        <div className="h2">Как работает</div>
-        <div className="sep"></div>
-        <div className="kpi"><div><b>1)</b> Отправляй KPI</div><b>+</b></div>
-        <div style={{ height: 10 }} />
-        <div className="kpi"><div><b>2)</b> Админ проверяет</div><b>✓</b></div>
-        <div style={{ height: 10 }} />
-        <div className="kpi"><div><b>3)</b> Рейтинг растёт</div><b>★</b></div>
+      {/* ═══ RIGHT: Form ═══ */}
+      <div className="login-form-panel">
+        <div className="login-form-wrap">
+          <div className="login-form-header">
+            <div className="login-form-logo">
+              <img src="/logo-nis.png" alt="NIS" />
+            </div>
+            <div className="login-form-title">Кіру / Войти</div>
+            <div className="login-form-sub">Платформаға кіру үшін аккаунтыңызды пайдаланыңыз</div>
+          </div>
+
+          {/* Microsoft btn — primary CTA */}
+          <button
+            className="login-ms-btn"
+            onClick={signInMicrosoft}
+            disabled={st.loading}
+            type="button"
+          >
+            <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+              <path d="M1 1h9v9H1z" fill="#f25022"/>
+              <path d="M11 1h9v9h-9z" fill="#7fba00"/>
+              <path d="M1 11h9v9H1z" fill="#00a4ef"/>
+              <path d="M11 11h9v9h-9z" fill="#ffb900"/>
+            </svg>
+            {st.loading ? "Жүктелуде..." : "Microsoft арқылы кіру / Войти через Microsoft"}
+          </button>
+
+          <div className="login-divider"><span>немесе / или</span></div>
+
+          <form onSubmit={submit}>
+            <div className="login-field">
+              <label className="login-label">Email</label>
+              <Input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="name@nis.edu.kz" required />
+            </div>
+            <div className="login-field" style={{ marginTop: 10 }}>
+              <label className="login-label">Пароль / Құпиясөз</label>
+              <Input value={pass} onChange={e => setPass(e.target.value)} type="password" placeholder="••••••••" required />
+            </div>
+            <Btn kind="primary" type="submit" disabled={st.loading}
+              style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: "12px 20px", fontSize: 15 }}>
+              {st.loading ? "Кіру..." : "Кіру / Войти →"}
+            </Btn>
+          </form>
+
+          <div className="login-form-footer">© 2025 Назарбаев Зияткерлік Мектептері</div>
+        </div>
       </div>
     </div>
   );
@@ -3298,6 +3494,7 @@ function PageRating() {
       <div className="podium">
         {[1, 0, 2].map((idx, i) => {
           const t = top3[idx];
+          const isChamp = idx === 0;
           if (!t) {
             return (
               <div key={i} className="podium__item glass">
@@ -3309,8 +3506,36 @@ function PageRating() {
               </div>
             );
           }
+          if (isChamp) {
+            return (
+              <div key={t.uid} className="podium__item podium__item--champ glass first">
+                {/* Decorative shimmer strips */}
+                <div className="champ-shimmer" aria-hidden="true" />
+                <div className="podium__inner">
+                  <div className="champ-crown">👑</div>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                    <div className="podiumAvatar podiumAvatar--champ">
+                      {t.avatarUrl
+                        ? <img src={t.avatarUrl} alt="" />
+                        : <span style={{ fontWeight: 900, fontSize: 22 }}>{(t.displayName || t.email || "?").slice(0, 1).toUpperCase()}</span>}
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div className="champ-rank-badge">#1 Чемпион · {trend.get(t.uid)}</div>
+                      <div className="champ-name">{t.displayName || t.email}</div>
+                      <div className="podium__meta">{t.school || "—"} · {t.subject || "—"}</div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div className="champ-points">{fmtPoints(t.totalPoints)}</div>
+                      <div className="tiny" style={{ color: "#d4a800", fontWeight: 700 }}>pts</div>
+                    </div>
+                  </div>
+                  <div className="champ-stars" aria-hidden="true">★ ★ ★ ★ ★</div>
+                </div>
+              </div>
+            );
+          }
           return (
-            <div key={t.uid} className={`podium__item glass ${idx === 0 ? "first" : ""}`}>
+            <div key={t.uid} className="podium__item glass">
               <div className="podium__inner" style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <div className="podiumAvatar">
                   {t.avatarUrl
