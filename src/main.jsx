@@ -1024,7 +1024,7 @@ function SidebarNav() {
             className="navlink"
             role="button"
             tabIndex={0}
-            onClick={async () => { const cu=auth.currentUser; if(cu) await setUserOnline(cu.uid,false); await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}
+            onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}
           >
             <Icon name="logout" /> Выйти
           </div>
@@ -1040,7 +1040,7 @@ function LiveClock() {
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
   }, []);
-  const days = ["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
+  const days = ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"];
   const dd = String(now.getDate()).padStart(2, "0");
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const yyyy = now.getFullYear();
@@ -1077,7 +1077,7 @@ function TopbarRight() {
           <div className="tiny" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             <b>{u.displayName || "Без имени"}</b> <span className="muted">· {u.email}</span>
           </div>
-          <Btn kind="ghost" onClick={async () => { const cu=auth.currentUser; if(cu) await setUserOnline(cu.uid,false); await signOut(auth); toast("Вы вышли"); navigate("login"); }}>
+          <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast("Вы вышли"); navigate("login"); }}>
             <Icon name="logout" /> Выйти
           </Btn>
         </>
@@ -1920,7 +1920,7 @@ function PageOnboarding() {
       <div className={`onb-hero${isOnboarded ? " onb-hero--done" : ""}`}>
         {/* Floating particles */}
         <div className="onb-hero__particles" aria-hidden="true">
-          {["✦","★","✦","●","✦","★","✦","●","✦","★","✦","●"].map((s, i) => (
+          {["✦", "★", "✦", "●", "✦", "★", "✦", "●", "✦", "★", "✦", "●"].map((s, i) => (
             <span key={i} className="onb-particle" style={{ "--i": i }}>{s}</span>
           ))}
         </div>
@@ -1950,12 +1950,12 @@ function PageOnboarding() {
           <div className="onb-steps">
             <div className={`onb-step${allChecked ? " onb-step--done" : checkedCount > 0 ? " onb-step--active" : ""}`}>
               <div className="onb-step__num">{allChecked ? "✓" : "1"}</div>
-              <div className="onb-step__label">Құжаттар<br/><span>Документы</span></div>
+              <div className="onb-step__label">Құжаттар<br /><span>Документы</span></div>
             </div>
             <div className={`onb-steps__line${allChecked ? " onb-steps__line--done" : ""}`} />
             <div className={`onb-step${isOnboarded ? " onb-step--done" : allChecked ? " onb-step--active" : ""}`}>
               <div className="onb-step__num">{isOnboarded ? "✓" : "2"}</div>
-              <div className="onb-step__label">Қол қою<br/><span>Подпись</span></div>
+              <div className="onb-step__label">Қол қою<br /><span>Подпись</span></div>
             </div>
           </div>
 
@@ -2266,10 +2266,10 @@ function PageLogin() {
             type="button"
           >
             <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
-              <path d="M1 1h9v9H1z" fill="#f25022"/>
-              <path d="M11 1h9v9h-9z" fill="#7fba00"/>
-              <path d="M1 11h9v9H1z" fill="#00a4ef"/>
-              <path d="M11 11h9v9h-9z" fill="#ffb900"/>
+              <path d="M1 1h9v9H1z" fill="#f25022" />
+              <path d="M11 1h9v9h-9z" fill="#7fba00" />
+              <path d="M1 11h9v9H1z" fill="#00a4ef" />
+              <path d="M11 11h9v9h-9z" fill="#ffb900" />
             </svg>
             {st.loading ? "Жүктелуде..." : "Microsoft арқылы кіру / Войти через Microsoft"}
           </button>
@@ -2420,7 +2420,7 @@ function PageProfile() {
                 <input hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
               </label>
               {u.role !== "admin" && <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> Добавить KPI</Btn>}
-              <Btn kind="ghost" onClick={async () => { const cu=auth.currentUser; if(cu) await setUserOnline(cu.uid,false); await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}>
+              <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}>
                 <Icon name="logout" /> Выйти
               </Btn>
             </div>
@@ -3332,115 +3332,115 @@ function PageRequests() {
 
   return (
     <>
-    {/* Modal: view document for a specific request */}
-    {viewReq && (
-      <div className="modalback" onClick={() => setViewReq(null)}>
-        <div className="modal glass" onClick={e => e.stopPropagation()} style={{ maxHeight: "90vh", overflowY: "auto" }}>
-          <div className="modal__head">
-            <div className="h2">Құжат / Документ</div>
-            <button className="iconbtn" onClick={() => setViewReq(null)}><Icon name="x" /></button>
+      {/* Modal: view document for a specific request */}
+      {viewReq && (
+        <div className="modalback" onClick={() => setViewReq(null)}>
+          <div className="modal glass" onClick={e => e.stopPropagation()} style={{ maxHeight: "-webkit-fill-available", overflowY: "auto" }}>
+            <div className="modal__head">
+              <div className="h2">Құжат / Документ</div>
+              <button className="iconbtn" onClick={() => setViewReq(null)}><Icon name="x" /></button>
+            </div>
+            <DocumentPreview
+              request={viewReq}
+              user={u}
+              signatureUrl={u.signatureUrl}
+              onPrint={() => window.print()}
+            />
           </div>
-          <DocumentPreview
-            request={viewReq}
-            user={u}
-            signatureUrl={u.signatureUrl}
-            onPrint={() => window.print()}
+        </div>
+      )}
+
+      <div className="grid2">
+        <div className="glass card">
+          <div className="h1">Өтініштер / Заявления</div>
+          <p className="p">Өтініш жасаңыз — әкімші мақұлдайды немесе қабылдамайды.</p>
+          <div className="sep"></div>
+
+          <form onSubmit={submit}>
+            <div className="label">Өтініш түрі / Тип заявления</div>
+            <Select value={kind} onChange={(e) => setKind(e.target.value)}>
+              {REQUEST_KINDS.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
+            </Select>
+
+            <div className="grid2">
+              <div>
+                <div className="label">Бастап / С какого числа</div>
+                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} required />
+              </div>
+              <div>
+                <div className="label">Дейін / До какого числа</div>
+                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} required />
+              </div>
+            </div>
+
+            <div className="label">Себебі / Причина</div>
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Себебін жазыңыз / Причина, детали..." />
+
+            <div className="label">Қосымша файл / Вложение (необязательно)</div>
+            <Input type="file" onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
+            {evidenceFile && <div className="help">Файл: {evidenceFile.name}</div>}
+
+            <div className="help" style={{ marginTop: 8 }}>
+              Кезеңдегі күндер: <b>{days}</b>. {k.compMode === "earn" && <>Мақұлданғаннан кейін демалыс қосылады: <b>+{days}</b>.</>}
+              {k.compMode === "use" && <>Мақұлданғаннан кейін демалыс есептен шығарылады: <b>-{days}</b>.</>}
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+              <Btn kind="primary" type="submit" disabled={st.loading}><Icon name="check" /> Жіберу / Отправить</Btn>
+              <Btn type="button" onClick={() => setShowPreview(!showPreview)}><Icon name="file" /> {showPreview ? "Жасыру" : "Алдын-ала қарау"}</Btn>
+              <Btn type="button" onClick={refresh} disabled={st.loading}>Жаңарту / Обновить</Btn>
+            </div>
+          </form>
+
+          {showPreview && (
+            <>
+              <div className="sep" />
+              <div className="h2">Алдын-ала қарау / Предпросмотр</div>
+              <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} />
+            </>
+          )}
+        </div>
+
+        <div className="glass card">
+          <div className="h2">Менің өтініштерім / Мои заявления</div>
+          <div className="sep"></div>
+
+          <div className="grid3">
+            <div className="kpi">
+              <div><div className="muted tiny">Демалыс (баланс)</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.compDays || 0)}</div></div>
+              <Pill kind="approved">демалыс</Pill>
+            </div>
+            <div className="kpi">
+              <div><div className="muted tiny">Өтініштер</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(reqs.length)}</div></div>
+              <span className="tiny muted">күтуде {pending.length}</span>
+            </div>
+            <div className="kpi">
+              <div><div className="muted tiny">Демалыс болжамы</div><div style={{ fontWeight: 900, fontSize: 22 }}>{compPreview ? signNum(compPreview) : "0"}</div></div>
+              <span className="tiny muted">жаңа үшін</span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <Pill kind="approved">мақұлданды: {approved.length}</Pill>
+            <Pill kind="pending">күтуде: {pending.length}</Pill>
+            <Pill kind="rejected">қабылданбады: {rejected.length}</Pill>
+          </div>
+
+          <div className="sep"></div>
+
+          <DataCards
+            emptyText="Өтініш жоқ / Пока нет заявлений"
+            columns={[
+              { key: "period", label: "Кезең", render: r => `${r.dateFrom}${r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}` },
+              { key: "kind", label: "Түрі", render: r => <><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny">{r.note}</div> : null}</> },
+              { key: "status", label: "Мәртебе", render: r => <Pill kind={r.status}>{r.status === "approved" ? "мақұлданды" : r.status === "rejected" ? "қабылданбады" : "күтуде"}</Pill> },
+              { key: "pts", label: "Δ баллы", render: r => r.status === "approved" ? <b>{signNum(Number(r.pointsDelta) || 0)}</b> : <span className="muted">—</span> },
+              { key: "actions", label: "", render: r => <Btn kind="ghost" onClick={() => setViewReq(r)}><Icon name="file" /></Btn> }
+            ]}
+            rows={reqs.slice(0, 20).map(r => ({ ...r, __key: r.id }))}
           />
         </div>
       </div>
-    )}
-
-    <div className="grid2">
-      <div className="glass card">
-        <div className="h1">Өтініштер / Заявления</div>
-        <p className="p">Өтініш жасаңыз — әкімші мақұлдайды немесе қабылдамайды.</p>
-        <div className="sep"></div>
-
-        <form onSubmit={submit}>
-          <div className="label">Өтініш түрі / Тип заявления</div>
-          <Select value={kind} onChange={(e) => setKind(e.target.value)}>
-            {REQUEST_KINDS.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
-          </Select>
-
-          <div className="grid2">
-            <div>
-              <div className="label">Бастап / С какого числа</div>
-              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} required />
-            </div>
-            <div>
-              <div className="label">Дейін / До какого числа</div>
-              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} required />
-            </div>
-          </div>
-
-          <div className="label">Себебі / Причина</div>
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Себебін жазыңыз / Причина, детали..." />
-
-          <div className="label">Қосымша файл / Вложение (необязательно)</div>
-          <Input type="file" onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
-          {evidenceFile && <div className="help">Файл: {evidenceFile.name}</div>}
-
-          <div className="help" style={{ marginTop: 8 }}>
-            Кезеңдегі күндер: <b>{days}</b>. {k.compMode === "earn" && <>Мақұлданғаннан кейін демалыс қосылады: <b>+{days}</b>.</>}
-            {k.compMode === "use" && <>Мақұлданғаннан кейін демалыс есептен шығарылады: <b>-{days}</b>.</>}
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            <Btn kind="primary" type="submit" disabled={st.loading}><Icon name="check" /> Жіберу / Отправить</Btn>
-            <Btn type="button" onClick={() => setShowPreview(!showPreview)}><Icon name="file" /> {showPreview ? "Жасыру" : "Алдын-ала қарау"}</Btn>
-            <Btn type="button" onClick={refresh} disabled={st.loading}>Жаңарту / Обновить</Btn>
-          </div>
-        </form>
-
-        {showPreview && (
-          <>
-            <div className="sep" />
-            <div className="h2">Алдын-ала қарау / Предпросмотр</div>
-            <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} />
-          </>
-        )}
-      </div>
-
-      <div className="glass card">
-        <div className="h2">Менің өтініштерім / Мои заявления</div>
-        <div className="sep"></div>
-
-        <div className="grid3">
-          <div className="kpi">
-            <div><div className="muted tiny">Демалыс (баланс)</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.compDays || 0)}</div></div>
-            <Pill kind="approved">демалыс</Pill>
-          </div>
-          <div className="kpi">
-            <div><div className="muted tiny">Өтініштер</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(reqs.length)}</div></div>
-            <span className="tiny muted">күтуде {pending.length}</span>
-          </div>
-          <div className="kpi">
-            <div><div className="muted tiny">Демалыс болжамы</div><div style={{ fontWeight: 900, fontSize: 22 }}>{compPreview ? signNum(compPreview) : "0"}</div></div>
-            <span className="tiny muted">жаңа үшін</span>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Pill kind="approved">мақұлданды: {approved.length}</Pill>
-          <Pill kind="pending">күтуде: {pending.length}</Pill>
-          <Pill kind="rejected">қабылданбады: {rejected.length}</Pill>
-        </div>
-
-        <div className="sep"></div>
-
-        <DataCards
-          emptyText="Өтініш жоқ / Пока нет заявлений"
-          columns={[
-            { key: "period", label: "Кезең", render: r => `${r.dateFrom}${r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}` },
-            { key: "kind", label: "Түрі", render: r => <><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny">{r.note}</div> : null}</> },
-            { key: "status", label: "Мәртебе", render: r => <Pill kind={r.status}>{r.status === "approved" ? "мақұлданды" : r.status === "rejected" ? "қабылданбады" : "күтуде"}</Pill> },
-            { key: "pts", label: "Δ баллы", render: r => r.status === "approved" ? <b>{signNum(Number(r.pointsDelta) || 0)}</b> : <span className="muted">—</span> },
-            { key: "actions", label: "", render: r => <Btn kind="ghost" onClick={() => setViewReq(r)}><Icon name="file" /></Btn> }
-          ]}
-          rows={reqs.slice(0, 20).map(r => ({ ...r, __key: r.id }))}
-        />
-      </div>
-    </div>
     </>
   );
 }

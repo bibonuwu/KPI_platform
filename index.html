@@ -1,230 +1,296 @@
 <!doctype html>
 <html lang="ru" data-theme="light">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#f4f6fb" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <title>NIS KPI Platform</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f6fb" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>NIS KPI Platform</title>
 
-    <link rel="icon" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
 
-    <style>
-      /* Inline critical styles for instant render */
-      *, *::before, *::after { box-sizing: border-box; }
-      html, body { height: 100%; margin: 0; background: #f4f6fb; color: #1a1d2e; }
-      html[data-theme="dark"], html[data-theme="dark"] body { background: #0c1021; color: #f0f2f8; }
-      body { font-family: 'Onest', system-ui, sans-serif; }
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
 
-      .bootStatus {
-        position: fixed;
-        top: 12px;
-        right: 12px;
-        padding: 6px 12px;
-        border-radius: 999px;
-        font: 600 11px/1.2 'Onest', system-ui, sans-serif;
-        background: rgba(255,255,255,.8);
-        color: rgba(0,0,0,.5);
-        border: 1px solid rgba(100,116,160,.1);
-        backdrop-filter: blur(12px);
-        z-index: 50;
-        user-select: none;
-        pointer-events: none;
-        transition: opacity .3s;
+  <style>
+    /* Inline critical styles for instant render */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: #f4f6fb;
+      color: #1a1d2e;
+    }
+
+    html[data-theme="dark"],
+    html[data-theme="dark"] body {
+      background: #0c1021;
+      color: #f0f2f8;
+    }
+
+    body {
+      font-family: 'Onest', system-ui, sans-serif;
+    }
+
+    .bootStatus {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font: 600 11px/1.2 'Onest', system-ui, sans-serif;
+      background: rgba(255, 255, 255, .8);
+      color: rgba(0, 0, 0, .5);
+      border: 1px solid rgba(100, 116, 160, .1);
+      backdrop-filter: blur(12px);
+      z-index: 50;
+      user-select: none;
+      pointer-events: none;
+      transition: opacity .3s;
+    }
+
+    .bootStatus[data-kind="error"] {
+      background: rgba(239, 68, 68, .1);
+      border-color: rgba(239, 68, 68, .2);
+      color: #ef4444;
+    }
+
+    .bootStatus[data-kind="ok"] {
+      background: rgba(16, 185, 129, .08);
+      border-color: rgba(16, 185, 129, .15);
+      color: #10b981;
+    }
+
+    /* Loading splash */
+    #splash {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      background: #f4f6fb;
+      transition: opacity .3s ease;
+    }
+
+    html[data-theme="dark"] #splash {
+      background: #0c1021;
+    }
+
+    #splash.done {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .splash-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      background: #fff;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 6px 24px rgba(135, 188, 46, .3);
+      animation: pulse 1.4s ease-in-out infinite;
+      overflow: hidden;
+    }
+
+    .splash-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1)
       }
-      .bootStatus[data-kind="error"] { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.2); color: #ef4444; }
-      .bootStatus[data-kind="ok"]    { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.15); color: #10b981; }
 
-      /* Loading splash */
-      #splash {
-        position: fixed; inset: 0; z-index: 100;
-        display: grid; place-items: center;
-        background: #f4f6fb;
-        transition: opacity .3s ease;
+      50% {
+        opacity: .7;
+        transform: scale(.96)
       }
-      html[data-theme="dark"] #splash { background: #0c1021; }
-      #splash.done { opacity: 0; pointer-events: none; }
-      .splash-logo {
-        width: 56px; height: 56px; border-radius: 18px;
-        background: #fff;
-        display: grid; place-items: center;
-        box-shadow: 0 6px 24px rgba(135,188,46,.3);
-        animation: pulse 1.4s ease-in-out infinite;
-        overflow: hidden;
-      }
-      .splash-logo img { width: 100%; height: 100%; object-fit: contain; }
-      @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.7;transform:scale(.96)} }
-    </style>
-  </head>
+    }
+  </style>
+</head>
 
-  <body>
-    <!-- Loading splash -->
-    <div id="splash"><div class="splash-logo"><img src="/logo-nis.png" alt="NIS" /></div></div>
+<body>
+  <!-- Loading splash -->
+  <div id="splash">
+    <div class="splash-logo"><img src="/logo-nis.png" alt="NIS" /></div>
+  </div>
 
-    <div class="bg"></div>
+  <div class="bg"></div>
 
-    <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="brand__logo"><img src="/logo-nis.png" alt="NIS" /></div>
-          <div class="brand__text">
-            <div class="brand__name">NIS KPI Platform</div>
-            <div class="brand__sub">Мұғалімдер рейтингі</div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand__logo"><img src="/logo-nis.png" alt="NIS" /></div>
+        <div class="brand__text">
+          <div class="brand__name">NIS KPI Platform</div>
+          <div class="brand__sub">Мұғалімдер рейтингі</div>
+        </div>
+      </div>
+
+      <div id="mount-sidebar" class="mount"></div>
+
+      <div class="sidebar__foot">
+        <div class="tiny muted">© KPI Platform</div>
+        <div class="tiny muted" style="margin-top:2px">React + Vite + Firebase</div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar glass">
+        <div class="topbar__left">
+          <button class="iconbtn mobile-only" id="btnMobileMenu" aria-label="Меню">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M4 7h16M4 12h10M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </button>
+
+          <div class="topbar__title">
+            <div class="topbar__titleBig">NIS KPI Platform</div>
+            <div class="topbar__titleSmall muted">Мұғалімдер рейтингі мен KPI жетістіктері</div>
           </div>
         </div>
 
-        <div id="mount-sidebar" class="mount"></div>
+        <div id="mount-topbar" class="mount"></div>
+      </header>
 
-        <div class="sidebar__foot">
-          <div class="tiny muted">© KPI Platform</div>
-          <div class="tiny muted" style="margin-top:2px">React + Vite + Firebase</div>
-        </div>
-      </aside>
+      <main class="content">
+        <section class="route-section" data-route="login">
+          <div class="route-inner" id="mount-login"></div>
+        </section>
 
-      <div class="main">
-        <header class="topbar glass">
-          <div class="topbar__left">
-            <button class="iconbtn mobile-only" id="btnMobileMenu" aria-label="Меню">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M4 7h16M4 12h10M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-            </button>
+        <section class="route-section" data-route="onboarding">
+          <div class="route-inner" id="mount-onboarding"></div>
+        </section>
 
-            <div class="topbar__title">
-              <div class="topbar__titleBig">NIS KPI Platform</div>
-              <div class="topbar__titleSmall muted">Мұғалімдер рейтингі мен KPI жетістіктері</div>
-            </div>
-          </div>
+        <section class="route-section" data-route="profile">
+          <div class="route-inner" id="mount-profile"></div>
+        </section>
 
-          <div id="mount-topbar" class="mount"></div>
-        </header>
+        <section class="route-section" data-route="rating">
+          <div class="route-inner" id="mount-rating"></div>
+        </section>
 
-        <main class="content">
-          <section class="route-section" data-route="login">
-            <div class="route-inner" id="mount-login"></div>
-          </section>
+        <section class="route-section" data-route="stats">
+          <div class="route-inner" id="mount-stats"></div>
+        </section>
 
-          <section class="route-section" data-route="onboarding">
-            <div class="route-inner" id="mount-onboarding"></div>
-          </section>
+        <section class="route-section" data-route="add">
+          <div class="route-inner" id="mount-add"></div>
+        </section>
 
-          <section class="route-section" data-route="profile">
-            <div class="route-inner" id="mount-profile"></div>
-          </section>
+        <section class="route-section" data-route="requests">
+          <div class="route-inner" id="mount-requests"></div>
+        </section>
 
-          <section class="route-section" data-route="rating">
-            <div class="route-inner" id="mount-rating"></div>
-          </section>
+        <section class="route-section" data-route="documents">
+          <div class="route-inner" id="mount-documents"></div>
+        </section>
 
-          <section class="route-section" data-route="stats">
-            <div class="route-inner" id="mount-stats"></div>
-          </section>
+        <section class="route-section" data-route="admin/approvals">
+          <div class="route-inner" id="mount-admin-approvals"></div>
+        </section>
 
-          <section class="route-section" data-route="add">
-            <div class="route-inner" id="mount-add"></div>
-          </section>
+        <section class="route-section" data-route="admin/requests">
+          <div class="route-inner" id="mount-admin-requests"></div>
+        </section>
 
-          <section class="route-section" data-route="requests">
-            <div class="route-inner" id="mount-requests"></div>
-          </section>
+        <section class="route-section" data-route="admin/documents">
+          <div class="route-inner" id="mount-admin-documents"></div>
+        </section>
 
-          <section class="route-section" data-route="documents">
-            <div class="route-inner" id="mount-documents"></div>
-          </section>
+        <section class="route-section" data-route="admin/types">
+          <div class="route-inner" id="mount-admin-types"></div>
+        </section>
 
-          <section class="route-section" data-route="admin/approvals">
-            <div class="route-inner" id="mount-admin-approvals"></div>
-          </section>
+        <section class="route-section" data-route="admin/users">
+          <div class="route-inner" id="mount-admin-users"></div>
+        </section>
 
-          <section class="route-section" data-route="admin/requests">
-            <div class="route-inner" id="mount-admin-requests"></div>
-          </section>
+        <section class="route-section" data-route="admin/teacher">
+          <div class="route-inner" id="mount-admin-teacher"></div>
+        </section>
+      </main>
 
-          <section class="route-section" data-route="admin/documents">
-            <div class="route-inner" id="mount-admin-documents"></div>
-          </section>
-
-          <section class="route-section" data-route="admin/types">
-            <div class="route-inner" id="mount-admin-types"></div>
-          </section>
-
-          <section class="route-section" data-route="admin/users">
-            <div class="route-inner" id="mount-admin-users"></div>
-          </section>
-
-          <section class="route-section" data-route="admin/teacher">
-            <div class="route-inner" id="mount-admin-teacher"></div>
-          </section>
-        </main>
-
-        <nav class="bottomnav mobile-only" aria-label="Навигация">
-          <div id="mount-bottomnav" class="mount"></div>
-        </nav>
-      </div>
+      <nav class="bottomnav mobile-only" aria-label="Навигация">
+        <div id="mount-bottomnav" class="mount"></div>
+      </nav>
     </div>
+  </div>
 
-    <!-- Mobile drawer backdrop -->
-    <div class="drawer-backdrop" id="mobileDrawerBackdrop" hidden></div>
-    <div class="drawer" id="mobileDrawer" hidden>
-      <div class="drawer__head">
-        <div class="drawer__title">Меню</div>
-        <button class="iconbtn" id="btnDrawerClose" aria-label="Закрыть">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
-      <div id="mount-drawer" class="mount"></div>
+  <!-- Mobile drawer backdrop -->
+  <div class="drawer-backdrop" id="mobileDrawerBackdrop" hidden></div>
+  <div class="drawer" id="mobileDrawer" hidden>
+    <div class="drawer__head">
+      <div class="drawer__title">Меню</div>
+      <button class="iconbtn" id="btnDrawerClose" aria-label="Закрыть">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
     </div>
+    <div id="mount-drawer" class="mount"></div>
+  </div>
 
-    <!-- Boot status badge (top-right, hidden by default) -->
-    <div class="bootStatus" id="boot-status" style="opacity:0"></div>
+  <!-- Boot status badge (top-right, hidden by default) -->
+  <div class="bootStatus" id="boot-status" style="opacity:0"></div>
 
-    <!-- Overlays (toasts, modals) -->
-    <div id="mount-overlays"></div>
+  <!-- Overlays (toasts, modals) -->
+  <div id="mount-overlays"></div>
 
-    <script type="module" src="/src/main.jsx"></script>
+  <script type="module" src="/src/main.jsx"></script>
 
-    <script>
-      // Boot diagnostics
-      window.__kpiBoot = { loaded: false, errors: [] };
+  <script>
+    // Boot diagnostics
+    window.__kpiBoot = { loaded: false, errors: [] };
 
-      function __kpiSetBoot(text, kind) {
-        var el = document.getElementById("boot-status");
-        if (!el) return;
-        el.textContent = text;
-        el.dataset.kind = kind || "info";
-        el.style.opacity = "1";
-        // Auto-hide "ok" badge after 3s
-        if (kind === "ok") {
-          setTimeout(function(){ el.style.opacity = "0"; }, 3000);
-        }
+    function __kpiSetBoot(text, kind) {
+      var el = document.getElementById("boot-status");
+      if (!el) return;
+      el.textContent = text;
+      el.dataset.kind = kind || "info";
+      el.style.opacity = "1";
+      // Auto-hide "ok" badge after 3s
+      if (kind === "ok") {
+        setTimeout(function () { el.style.opacity = "0"; }, 3000);
       }
+    }
 
-      // Remove splash on first paint after module load
-      window.addEventListener("load", function() {
-        var splash = document.getElementById("splash");
-        if (splash) {
-          splash.classList.add("done");
-          setTimeout(function(){ splash.remove(); }, 350);
-        }
-      });
+    // Remove splash on first paint after module load
+    window.addEventListener("load", function () {
+      var splash = document.getElementById("splash");
+      if (splash) {
+        splash.classList.add("done");
+        setTimeout(function () { splash.remove(); }, 350);
+      }
+    });
 
-      window.addEventListener("error", function(e) {
-        window.__kpiBoot.errors.push(String(e && (e.message || e.error || e)));
-        __kpiSetBoot("Ошибка JS: " + (e.message || "см. консоль"), "error");
-      });
+    window.addEventListener("error", function (e) {
+      window.__kpiBoot.errors.push(String(e && (e.message || e.error || e)));
+      __kpiSetBoot("Ошибка JS: " + (e.message || "см. консоль"), "error");
+    });
 
-      window.addEventListener("unhandledrejection", function(e) {
-        window.__kpiBoot.errors.push("Promise: " + String(e && e.reason || e));
-        __kpiSetBoot("Promise error: см. консоль", "error");
-      });
-    </script>
-  </body>
+    window.addEventListener("unhandledrejection", function (e) {
+      window.__kpiBoot.errors.push("Promise: " + String(e && e.reason || e));
+      __kpiSetBoot("Promise error: см. консоль", "error");
+    });
+  </script>
+</body>
+
 </html>
