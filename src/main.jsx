@@ -26,6 +26,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   addDoc,
   getDocs,
@@ -267,6 +268,10 @@ const store = {
     pendingRequests: [],
     adminRecentRequests: [],
 
+    // documents (admin → teacher)
+    myDocuments: [],
+    allDocuments: [],
+
     // ui
     statsRangeMode: "14d",
     statsView: "mine",
@@ -301,8 +306,8 @@ function toggleTheme() {
 /** ---------- router ---------- */
 const ROUTES = [
   "login", "onboarding", "profile", "rating", "stats", "add",
-  "requests",
-  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher"
+  "requests", "documents",
+  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents"
 ];
 
 function parseRoute() {
@@ -331,11 +336,11 @@ function canAccess(path, userDoc) {
   if (path === "onboarding") return true;
   if (role === "teacher") {
     if (path.startsWith("admin/")) return false;
-    return ["profile", "rating", "stats", "add", "requests"].includes(path);
+    return ["profile", "rating", "stats", "add", "requests", "documents"].includes(path);
   }
   if (role === "admin") {
     if (path === "add") return false;
-    return ["profile", "rating", "stats"].includes(path) || path.startsWith("admin/");
+    return ["profile", "rating", "stats", "documents"].includes(path) || path.startsWith("admin/");
   }
   return false;
 }
@@ -397,9 +402,11 @@ async function render() {
   mount("mount-stats", show("stats") ? <ErrorBoundary name="stats">{booting ? <LoadingScreen /> : <PageStats />}</ErrorBoundary> : null);
   mount("mount-add", show("add") ? <ErrorBoundary name="add">{booting ? <LoadingScreen /> : <PageAdd />}</ErrorBoundary> : null);
   mount("mount-requests", show("requests") ? <ErrorBoundary name="requests">{booting ? <LoadingScreen /> : <PageRequests />}</ErrorBoundary> : null);
+  mount("mount-documents", show("documents") ? <ErrorBoundary name="documents">{booting ? <LoadingScreen /> : <PageDocuments />}</ErrorBoundary> : null);
 
   mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary> : null);
   mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary> : null);
+  mount("mount-admin-documents", show("admin/documents") ? <ErrorBoundary name="admin/documents">{booting ? <LoadingScreen /> : <PageAdminDocuments />}</ErrorBoundary> : null);
   mount("mount-admin-types", show("admin/types") ? <ErrorBoundary name="admin/types">{booting ? <LoadingScreen /> : <PageAdminTypes />}</ErrorBoundary> : null);
   mount("mount-admin-users", show("admin/users") ? <ErrorBoundary name="admin/users">{booting ? <LoadingScreen /> : <PageAdminUsers />}</ErrorBoundary> : null);
   mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen /> : <PageAdminTeacher />}</ErrorBoundary> : null);
@@ -696,6 +703,72 @@ async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, evidenc
   });
 }
 
+/* -------- Online presence -------- */
+async function setUserOnline(uid, isOnline) {
+  try {
+    await updateDoc(doc(db, "users", uid), {
+      online: isOnline,
+      lastSeen: serverTimestamp()
+    });
+  } catch (e) {
+    console.warn("Presence update failed:", e);
+  }
+}
+
+/* -------- Delete user + their data -------- */
+async function deleteUserAndData(uid) {
+  const [subs, reqs, docs] = await Promise.all([
+    getDocs(query(collection(db, "submissions"), where("uid", "==", uid))),
+    getDocs(query(collection(db, "requests"), where("uid", "==", uid))),
+    getDocs(query(collection(db, "documents"), where("toUid", "==", uid)))
+  ]);
+  await Promise.all([
+    ...subs.docs.map(d => deleteDoc(d.ref)),
+    ...reqs.docs.map(d => deleteDoc(d.ref)),
+    ...docs.docs.map(d => deleteDoc(d.ref)),
+    deleteDoc(doc(db, "users", uid))
+  ]);
+}
+
+/* -------- Documents (admin → teacher) -------- */
+async function createDocument({ fromUid, toUid, toEmail, toName, title, body, requireSignature }) {
+  await addDoc(collection(db, "documents"), {
+    fromUid,
+    toUid,
+    toEmail: safeText(toEmail),
+    toName: safeText(toName),
+    title: safeText(title),
+    body: safeText(body),
+    requireSignature: !!requireSignature,
+    status: "sent",
+    signatureUrl: null,
+    signedAt: null,
+    createdAt: serverTimestamp()
+  });
+}
+async function fetchDocumentsForTeacher(uid) {
+  const qy = query(collection(db, "documents"), where("toUid", "==", uid));
+  const res = await getDocs(qy);
+  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
+  arr.sort((a, b) => tsKey(b) - tsKey(a));
+  return arr;
+}
+async function fetchAllDocuments() {
+  const qy = query(collection(db, "documents"), orderBy("createdAt", "desc"), limit(5000));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function signDocument(docId, sigUrl) {
+  await updateDoc(doc(db, "documents", docId), {
+    status: "signed",
+    signatureUrl: safeText(sigUrl),
+    signedAt: serverTimestamp()
+  });
+}
+async function markDocumentViewed(docId) {
+  await updateDoc(doc(db, "documents", docId), { status: "viewed" });
+}
+
 async function decideTeacherRequest(reqId, adminUid, action, pointsDelta) {
   const rRef = doc(db, "requests", reqId);
   await runTransaction(db, async (tx) => {
@@ -896,8 +969,9 @@ function SidebarNav() {
     { p: "rating", t: "Рейтинг", i: "rank" },
     { p: "stats", t: "Статистика", i: "chart" },
     { p: "requests", t: "Заявления", i: "file" },
+    { p: "documents", t: "Документы", i: "shield" },
     { p: "add", t: "Добавить KPI", i: "plus" },
-    { p: "onboarding", t: "Ознакомление", i: "shield" },
+    { p: "onboarding", t: "Ознакомление", i: "check" },
   ];
   const adminMain = [
     { p: "profile", t: "Профиль", i: "user" },
@@ -905,31 +979,40 @@ function SidebarNav() {
     { p: "stats", t: "Статистика", i: "chart" },
   ];
   const admin = [
-    { p: "admin/approvals", t: "Approvals", i: "check" },
+    { p: "admin/approvals", t: "Одобрения", i: "check" },
     { p: "admin/requests", t: "Заявления", i: "file" },
-    { p: "admin/types", t: "Types", i: "file" },
-    { p: "admin/users", t: "Users", i: "shield" },
+    { p: "admin/documents", t: "Документы", i: "shield" },
+    { p: "admin/types", t: "Типы KPI", i: "file" },
+    { p: "admin/users", t: "Сотрудники", i: "user" },
   ];
   const list = !u ? [
     { p: "login", t: "Войти", i: "user" },
   ] : (u.role === "admin" ? adminMain : teacher);
 
+  const badgeFor = (p) => {
+    if (p === "admin/approvals") return (st.pendingSubmissions || []).length || 0;
+    if (p === "admin/requests") return (st.pendingRequests || []).length || 0;
+    if (p === "documents") return (st.myDocuments || []).filter(d => d.status === "sent").length || 0;
+    return 0;
+  };
+  const NavLink = ({ it }) => {
+    const badge = badgeFor(it.p);
+    return (
+      <div className={`navlink ${path === it.p ? "active" : ""}`} role="button" tabIndex={0} onClick={() => navigate(it.p)}>
+        <Icon name={it.i} /> {it.t}
+        {badge > 0 && <span className="nav-badge">{badge > 99 ? "99+" : badge}</span>}
+      </div>
+    );
+  };
+
   return (
     <div className="sidenav">
       <div className="navsec">Навигация</div>
-      {list.map(it => (
-        <div key={it.p} className={`navlink ${path === it.p ? "active" : ""}`} role="button" tabIndex={0} onClick={() => navigate(it.p)}>
-          <Icon name={it.i} /> {it.t}
-        </div>
-      ))}
+      {list.map(it => <NavLink key={it.p} it={it} />)}
       {u?.role === "admin" && (
         <>
           <div className="navsec">Админ</div>
-          {admin.map(it => (
-            <div key={it.p} className={`navlink ${path === it.p ? "active" : ""}`} role="button" tabIndex={0} onClick={() => navigate(it.p)}>
-              <Icon name={it.i} /> {it.t}
-            </div>
-          ))}
+          {admin.map(it => <NavLink key={it.p} it={it} />)}
         </>
       )}
 
@@ -940,7 +1023,7 @@ function SidebarNav() {
             className="navlink"
             role="button"
             tabIndex={0}
-            onClick={async () => { await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}
+            onClick={async () => { const cu=auth.currentUser; if(cu) await setUserOnline(cu.uid,false); await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}
           >
             <Icon name="logout" /> Выйти
           </div>
@@ -954,30 +1037,79 @@ function TopbarRight() {
   const st = useStore();
   const u = st.userDoc;
   const isDark = st.theme !== "light";
+  const [showOnline, setShowOnline] = useState(false);
+
+  const allUsers = st.users || [];
+  const onlineUsers = allUsers.filter(x => x.online === true);
+  const onlineCount = onlineUsers.length + (u ? 1 : 0); // include self even if not in users list
+  const totalCount = allUsers.length;
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-      <button
-        className="iconbtn theme-toggle"
-        onClick={toggleTheme}
-        aria-label={isDark ? "Светлая тема" : "Тёмная тема"}
-        title={isDark ? "Светлая тема" : "Тёмная тема"}
-      >
-        <Icon name={isDark ? "sun" : "moon"} />
-      </button>
-      {u ? (
-        <>
-          <Pill kind={u.role === "admin" ? "pending" : "approved"}>{u.role}</Pill>
-          <div className="tiny" style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            <b>{u.displayName || "Без имени"}</b> <span className="muted">· {u.email}</span>
+    <>
+      {showOnline && u?.role === "admin" && (
+        <div className="modal-backdrop" onClick={() => setShowOnline(false)}>
+          <div className="modal glass" style={{ maxWidth: 400, width: "90vw" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div className="h2">Онлайн сейчас / Қазір онлайн</div>
+              <Btn onClick={() => setShowOnline(false)}>✕</Btn>
+            </div>
+            {onlineUsers.length === 0 ? (
+              <p className="p muted">Нет активных пользователей</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
+                {onlineUsers.map(x => (
+                  <div key={x.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--hover-bg)", borderRadius: 8 }}>
+                    <span className="online-dot" />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{x.displayName || x.email || "—"}</div>
+                      <div className="tiny muted">{x.role} · {x.school || x.subject || x.email}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="help" style={{ marginTop: 12 }}>Жалпы / Всего: {totalCount} сотрудник</p>
           </div>
-          <Btn kind="ghost" onClick={async () => { await signOut(auth); toast("Вы вышли"); navigate("login"); }}>
-            <Icon name="logout" /> Выйти
-          </Btn>
-        </>
-      ) : (
-        <div className="tiny muted">Гость</div>
+        </div>
       )}
-    </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+        {u && (
+          <button
+            className="online-counter"
+            onClick={() => u.role === "admin" && setShowOnline(true)}
+            title={u.role === "admin" ? "Нажмите, чтобы увидеть список онлайн" : "Онлайн пользователей"}
+            style={{ cursor: u.role === "admin" ? "pointer" : "default" }}
+          >
+            <span className="online-dot" />
+            <span>{onlineCount} online</span>
+            <span style={{ color: "var(--muted)", margin: "0 2px" }}>/</span>
+            <span>{totalCount}</span>
+          </button>
+        )}
+        <button
+          className="iconbtn theme-toggle"
+          onClick={toggleTheme}
+          aria-label={isDark ? "Светлая тема" : "Тёмная тема"}
+          title={isDark ? "Светлая тема" : "Тёмная тема"}
+        >
+          <Icon name={isDark ? "sun" : "moon"} />
+        </button>
+        {u ? (
+          <>
+            <Pill kind={u.role === "admin" ? "pending" : "approved"}>{u.role}</Pill>
+            <div className="tiny" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <b>{u.displayName || "Без имени"}</b> <span className="muted">· {u.email}</span>
+            </div>
+            <Btn kind="ghost" onClick={async () => { const cu=auth.currentUser; if(cu) await setUserOnline(cu.uid,false); await signOut(auth); toast("Вы вышли"); navigate("login"); }}>
+              <Icon name="logout" /> Выйти
+            </Btn>
+          </>
+        ) : (
+          <div className="tiny muted">Гость</div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -1619,25 +1751,29 @@ function DocumentPreview({ request, user, signatureUrl, adminSignatureUrl, onPri
 /** ---------- PageOnboarding ---------- */
 function PageOnboarding() {
   const st = useStore();
-  const u = st.userDoc;
-  if (!u) return <Guard />;
-  if (!canAccess("onboarding", u)) return <Guard />;
-
+  // All hooks MUST be called before any conditional returns (React rules)
   const canvasRef = useRef(null);
   const [drawing, setDrawing] = useState(false);
   const [signed, setSigned] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [checks, setChecks] = useState([false, false, false, false]);
+  const [checks, setChecks] = useState([false, false, false, false, false]);
+  const [expanded, setExpanded] = useState(null);
+  const [brushSize, setBrushSize] = useState(2);
+
+  const u = st.userDoc;
+  if (!u) return <Guard />;
+  if (!canAccess("onboarding", u)) return <Guard />;
 
   const isOnboarded = u.onboarded === true;
 
-  // Canvas drawing
   const getPos = (e) => {
     const c = canvasRef.current;
     if (!c) return [0, 0];
     const rect = c.getBoundingClientRect();
+    const scaleX = c.width / rect.width;
+    const scaleY = c.height / rect.height;
     const t = e.touches ? e.touches[0] : e;
-    return [t.clientX - rect.left, t.clientY - rect.top];
+    return [(t.clientX - rect.left) * scaleX, (t.clientY - rect.top) * scaleY];
   };
 
   const onDown = (e) => {
@@ -1656,8 +1792,9 @@ function PageOnboarding() {
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const [x, y] = getPos(e);
-    ctx.lineWidth = 2;
+    ctx.lineWidth = brushSize;
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.strokeStyle = "#1a1d2e";
     ctx.lineTo(x, y);
     ctx.stroke();
@@ -1683,63 +1820,122 @@ function PageOnboarding() {
 
   const submit = async () => {
     if (!signed || !allChecked) {
-      toast("Пожалуйста, поставьте все галочки и подпись", "error");
+      toast("Барлық құжаттарды оқып, қол қойыңыз / Прочитайте все документы и поставьте подпись", "error");
       return;
     }
     try {
       setSaving(true);
-      // Upload signature
       const c = canvasRef.current;
       const blob = await new Promise(res => c.toBlob(res, "image/png"));
       const sigUrl = await uploadFile(`signatures/${u.uid}/${Date.now()}_onboarding.png`, new File([blob], "sig.png", { type: "image/png" }));
-
-      await updateProfile(u.uid, {
-        onboarded: true,
-        onboardedAt: serverTimestamp(),
-        signatureUrl: sigUrl
-      });
+      await updateProfile(u.uid, { onboarded: true, onboardedAt: serverTimestamp(), signatureUrl: sigUrl });
       const freshUser = await ensureUserDoc(u.uid, u.email);
       setState({ userDoc: freshUser });
-      toast("Ознакомление завершено! Добро пожаловать!", "ok");
+      toast("Танысу аяқталды! Қош келдіңіз! / Ознакомление завершено! Добро пожаловать!", "ok");
       navigate("profile");
     } catch (e) {
       console.error(e);
-      toast(e?.message || "Ошибка сохранения", "error");
+      toast(e?.message || "Қате / Ошибка сохранения", "error");
     } finally {
       setSaving(false);
     }
   };
 
-  const steps = [
-    { title: "Ознакомьтесь с платформой", desc: "KPI Platform предназначена для учёта и рейтинга достижений учителей. Каждое достижение оценивается баллами." },
-    { title: "Добавляйте свои KPI", desc: "Перейдите в раздел «Добавить KPI», выберите категорию и опишите достижение. Прикрепите подтверждающий документ." },
-    { title: "Следите за рейтингом", desc: "После одобрения администратором баллы зачисляются. Ваш рейтинг виден в разделе «Рейтинг»." },
-    { title: "Подавайте заявления", desc: "В разделе «Заявления» оформляйте отпрашивания и отгулы. Администратор рассмотрит и ответит." }
+  const docs = [
+    {
+      title: "Платформаны пайдалану ережелері / Правила пользования платформой",
+      kz: "NIS KPI Platform — мұғалімдердің кәсіби жетістіктерін есепке алу және рейтингін жасау жүйесі. Платформаны пайдалану барлық педагогтар үшін міндетті. Деректерді дәл және уақытылы енгізу — ар-намыс міндеттемесі.",
+      ru: "NIS KPI Platform — система учёта и рейтингования профессиональных достижений педагогов. Пользование платформой обязательно для всех педагогов. Точность и своевременность вносимых данных является обязательством каждого сотрудника.",
+    },
+    {
+      title: "Дербес деректерді өңдеуге келісім / Согласие на обработку персональных данных",
+      kz: "Мен, төменде қол қоюшы, өзімнің жеке деректерімді (аты-жөні, лауазымы, электрондық поштасы, жұмыс нәтижелері) «Назарбаев Зияткерлік Мектептері» АҚ ішіндегі рейтинг мен есеп беру мақсаттарында өңдеуге өз еркіммен келісімімді беремін.",
+      ru: "Я, нижеподписавшийся, добровольно даю согласие на обработку моих персональных данных (ФИО, должность, e-mail, результаты работы) в целях рейтингования и отчётности внутри АО «Назарбаев Интеллектуальные Школы».",
+    },
+    {
+      title: "Ішкі еңбек тәртібі / Внутренний трудовой распорядок",
+      kz: "Жұмыс уақыты: 09:00–18:00 (дүйсенбі–жұма). Кешіккен жағдайда жазбаша хабарлама қажет. Жоқтықты рәсімдеу платформадағы «Өтініштер» бөлімі арқылы жүзеге асырылады. Ережені бұзу тәртіптік шараларға әкеледі.",
+      ru: "Рабочее время: 09:00–18:00 (понедельник–пятница). При опоздании обязательно письменное уведомление. Оформление отсутствия осуществляется через раздел «Заявления» на платформе. Нарушение регламента влечёт дисциплинарные меры.",
+    },
+    {
+      title: "KPI есептеу қағидалары / Принципы начисления KPI",
+      kz: "Жетістіктер санаттар бойынша бағаланады: кәсіби даму, жарыстар, жобалар, зерттеу жұмыстары және т.б. Балдарды тек әкімші растайды. Дәлелсіз немесе жалған мәліметтер тәртіптік жауапкершілікке әкеледі.",
+      ru: "Достижения оцениваются по категориям: профессиональное развитие, конкурсы, проекты, исследовательские работы и др. Баллы начисляются исключительно администратором после проверки. Недостоверные данные влекут дисциплинарную ответственность.",
+    },
+    {
+      title: "Платформа қауіпсіздігі / Безопасность платформы",
+      kz: "Кіру деректерін (логин, пароль) үшінші тұлғаларға беруге тыйым салынады. Күдікті белсенділік анықталса, дереу әкімшіге хабарлаңыз. Есептік жазбаңызды үнемі бақылауда ұстаңыз.",
+      ru: "Передача учётных данных (логин, пароль) третьим лицам строго запрещена. При обнаружении подозрительной активности немедленно уведомите администратора. Регулярно следите за безопасностью своей учётной записи.",
+    },
   ];
+
+  const checkedCount = isOnboarded ? docs.length : checks.filter(Boolean).length;
 
   return (
     <div className="onboarding">
       <div className="glass card">
         <div className="onboarding__welcome">
-          <div className="onboarding__icon">👋</div>
-          <div className="h1">{isOnboarded ? "Ознакомление пройдено" : "Добро пожаловать!"}</div>
+          <img src="/logo-nis.png" alt="NIS" style={{ width: 64, height: 64, objectFit: "contain", marginBottom: 12 }} />
+          <div className="h1">
+            {isOnboarded ? "Танысу аяқталды / Ознакомление пройдено" : "Қош келдіңіз! / Добро пожаловать!"}
+          </div>
           <p className="p">{isOnboarded
-            ? "Вы уже прошли ознакомление. Ниже информация о платформе для справки."
-            : "Вы — новый сотрудник на платформе. Пожалуйста, ознакомьтесь с правилами и подпишите."
+            ? "Сіз танысуды аяқтадыңыз. Төменде анықтамалық ақпарат / Вы уже прошли ознакомление. Ниже справочная информация."
+            : "Сіз жаңа қызметкерсіз. Төмендегі барлық құжаттармен танысып, қол қойыңыз / Вы новый сотрудник. Ознакомьтесь со всеми документами и подпишите."
           }</p>
+          {!isOnboarded && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, padding: "8px 16px", background: "var(--hover-bg)", borderRadius: 20, fontSize: 13, fontWeight: 600, color: "var(--accent)" }}>
+              <div style={{ width: 80, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${(checkedCount / docs.length) * 100}%`, background: "var(--accent)", transition: "width .4s" }} />
+              </div>
+              {checkedCount}/{docs.length} оқылды / прочитано
+            </div>
+          )}
         </div>
 
         <div className="sep" />
 
-        <div className="h2">Как работает платформа</div>
-        <div className="onboarding__steps">
-          {steps.map((s, i) => (
-            <div key={i} className="onboarding__step" onClick={() => !isOnboarded && toggleCheck(i)} style={{ cursor: isOnboarded ? "default" : "pointer" }}>
-              <div className="onboarding__step-num" style={checks[i] || isOnboarded ? { background: "var(--green)" } : {}}>{checks[i] || isOnboarded ? "✓" : i + 1}</div>
-              <div className="onboarding__step-text">
-                <div className="onboarding__step-title">{s.title}</div>
-                <div className="onboarding__step-desc">{s.desc}</div>
+        <div className="h2">Ресми құжаттар / Официальные документы</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+          {docs.map((d, i) => (
+            <div key={i} style={{ border: `1px solid ${checks[i] || isOnboarded ? "var(--accent)" : "var(--border)"}`, borderRadius: 10, overflow: "hidden", transition: "border-color .2s" }}>
+              <div
+                role="button"
+                tabIndex={0}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", cursor: "pointer", background: expanded === i ? "var(--hover-bg)" : "transparent" }}
+                onClick={() => setExpanded(expanded === i ? null : i)}
+              >
+                <div style={{
+                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                  background: (checks[i] || isOnboarded) ? "var(--green, #22c55e)" : "var(--accent)",
+                  color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, fontWeight: 700, transition: "background .2s"
+                }}>
+                  {(checks[i] || isOnboarded) ? "✓" : i + 1}
+                </div>
+                <div style={{ flex: 1, fontWeight: 600, fontSize: 13 }}>{d.title}</div>
+                <div style={{ fontSize: 16, color: "var(--muted)", transform: expanded === i ? "rotate(180deg)" : "none", transition: "transform .2s" }}>▾</div>
               </div>
+              {expanded === i && (
+                <div style={{ padding: "12px 16px 16px", background: "var(--card-bg, #fff)", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "var(--accent)", marginBottom: 4, textTransform: "uppercase", letterSpacing: .5 }}>Қазақша</div>
+                  <p style={{ margin: "0 0 12px", fontSize: 13, lineHeight: 1.7, color: "var(--text)" }}>{d.kz}</p>
+                  <div style={{ fontWeight: 700, fontSize: 12, color: "var(--accent)", marginBottom: 4, textTransform: "uppercase", letterSpacing: .5 }}>Русский</div>
+                  <p style={{ margin: "0 0 14px", fontSize: 13, lineHeight: 1.7, color: "var(--text)" }}>{d.ru}</p>
+                  {!isOnboarded && (
+                    <button
+                      onClick={() => { if (!checks[i]) toggleCheck(i); setExpanded(null); }}
+                      style={{
+                        background: checks[i] ? "var(--green, #22c55e)" : "var(--accent)", color: "#fff",
+                        border: "none", borderRadius: 8, padding: "8px 18px", cursor: "pointer",
+                        fontWeight: 600, fontSize: 13, transition: "background .2s"
+                      }}
+                    >
+                      {checks[i] ? "✓ Оқыдым / Прочитано" : "Оқыдым және келісемін / Прочитал(а) и согласен(а)"}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1747,15 +1943,32 @@ function PageOnboarding() {
         {!isOnboarded && (
           <>
             <div className="sep" />
-            <div className="h2">Поставьте подпись</div>
-            <p className="p" style={{ marginBottom: 10 }}>Нарисуйте подпись мышкой или пальцем ниже. Это подтверждает, что вы ознакомились с правилами.</p>
-
+            <div className="h2">Қол қою / Поставьте подпись</div>
+            <p className="p" style={{ marginBottom: 10 }}>
+              Қолыңызды төменге сызыңыз — бұл барлық ережелермен танысқаныңызды растайды.
+              <br /><span style={{ fontSize: 13, color: "var(--muted)" }}>Нарисуйте подпись мышкой или пальцем — это подтверждает ознакомление.</span>
+            </p>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 2 }}>Қалыңдық / Толщина:</span>
+              {[1, 2, 4].map(sz => (
+                <button
+                  key={sz}
+                  onClick={() => setBrushSize(sz)}
+                  style={{
+                    width: 32, height: 32, borderRadius: 8, border: `2px solid ${brushSize === sz ? "var(--accent)" : "var(--border)"}`,
+                    background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "border-color .15s"
+                  }}
+                >
+                  <div style={{ width: Math.max(sz * 4, 8), height: sz, background: "#1a1d2e", borderRadius: 99 }} />
+                </button>
+              ))}
+            </div>
             <canvas
               ref={canvasRef}
-              width={400}
-              height={120}
+              width={800}
+              height={200}
               className="signature-pad"
-              style={{ width: "100%", maxWidth: 400, height: 120, display: "block" }}
+              style={{ width: "100%", maxWidth: 500, height: 130, display: "block", cursor: "crosshair" }}
               onMouseDown={onDown}
               onMouseMove={onMove}
               onMouseUp={onUp}
@@ -1765,20 +1978,48 @@ function PageOnboarding() {
               onTouchEnd={onUp}
             />
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-              <Btn onClick={clearSig}>Очистить</Btn>
+              <Btn onClick={clearSig}>Тазалау / Очистить</Btn>
               <Btn kind="primary" onClick={submit} disabled={saving || !signed || !allChecked}>
-                {saving ? "Сохранение..." : "✅ Подтвердить и подписать"}
+                {saving ? "Сақталуда... / Сохранение..." : "✅ Растау және қол қою / Подтвердить и подписать"}
               </Btn>
             </div>
-            {!allChecked && <p className="help" style={{ marginTop: 8 }}>Нажмите на каждый пункт выше, чтобы отметить как прочитанный.</p>}
+            {!allChecked && (
+              <p className="help" style={{ marginTop: 8 }}>
+                ⚠ Барлық құжаттарды ашып, «Оқыдым» деп белгілеңіз / Откройте каждый документ и нажмите «Прочитал(а)».
+              </p>
+            )}
           </>
         )}
 
-        {isOnboarded && u.signatureUrl && (
+        {isOnboarded && (
           <>
             <div className="sep" />
-            <div className="h2">Ваша подпись</div>
-            <img src={u.signatureUrl} alt="Подпись" style={{ maxWidth: 200, border: "1px solid var(--border)", borderRadius: 8, padding: 8, background: "#fff" }} />
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
+              {u.signatureUrl && (
+                <div>
+                  <div className="h2" style={{ marginBottom: 8 }}>Сіздің қолыңыз / Ваша подпись</div>
+                  <img src={u.signatureUrl} alt="Подпись" style={{ maxWidth: 220, border: "1px solid var(--border)", borderRadius: 8, padding: 8, background: "#fff" }} />
+                </div>
+              )}
+              <div>
+                <div className="h2" style={{ marginBottom: 8 }}>Мәртебе / Статус</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+                    <span style={{ color: "var(--green, #22c55e)", fontWeight: 700 }}>✓</span>
+                    <span>Барлық құжаттар оқылды / Все документы прочитаны</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+                    <span style={{ color: "var(--green, #22c55e)", fontWeight: 700 }}>✓</span>
+                    <span>Қол қойылды / Подпись поставлена</span>
+                  </div>
+                  {u.onboardedAt && (
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                      Күні / Дата: {new Date(u.onboardedAt.seconds * 1000).toLocaleDateString("ru-RU")}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </>
         )}
       </div>
@@ -1864,42 +2105,30 @@ function PageLogin() {
 
 function PageProfile() {
   const st = useStore();
-  const u = st.userDoc;
-  const subs = st.mySubmissions || [];
+  const u = st.userDoc; // read early, guard comes AFTER all hooks
+
+  // ALL hooks before any early return
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ displayName: "", school: "", subject: "", experienceYears: 0, phone: "", city: "", position: "" });
+  const [pw, setPw] = useState({ current: "", next: "", next2: "" });
+  useEffect(() => {
+    if (!u) return;
+    setForm({ displayName: u.displayName || "", school: u.school || "", subject: u.subject || "", experienceYears: u.experienceYears || 0, phone: u.phone || "", city: u.city || "", position: u.position || "" });
+  }, [u?.uid]);
+  useEffect(() => setPw({ current: "", next: "", next2: "" }), [u?.uid]);
 
   if (!u) return <Guard />;
   if (!canAccess("profile", u)) return <Guard />;
 
+  const subs = st.mySubmissions || [];
   const lvl = levelFromPoints(u.totalPoints || 0);
   const approved = subs.filter(s => s.status === "approved");
   const pending = subs.filter(s => s.status === "pending");
   const rejected = subs.filter(s => s.status === "rejected");
 
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    displayName: u.displayName || "",
-    school: u.school || "",
-    subject: u.subject || "",
-    experienceYears: u.experienceYears || 0,
-    phone: u.phone || "",
-    city: u.city || "",
-    position: u.position || ""
-  });
-  useEffect(() => setForm({
-    displayName: u.displayName || "",
-    school: u.school || "",
-    subject: u.subject || "",
-    experienceYears: u.experienceYears || 0,
-    phone: u.phone || "",
-    city: u.city || "",
-    position: u.position || ""
-  }), [u.uid]);
-
   // --- Security / password change ---
   const authUser = st.authUser;
   const isPasswordProvider = !!(authUser?.providerData || []).some(p => p?.providerId === "password");
-  const [pw, setPw] = useState({ current: "", next: "", next2: "" });
-  useEffect(() => setPw({ current: "", next: "", next2: "" }), [u.uid]);
 
   async function changePassword() {
     const user = auth.currentUser;
@@ -1995,7 +2224,7 @@ function PageProfile() {
                 <input hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
               </label>
               {u.role !== "admin" && <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> Добавить KPI</Btn>}
-              <Btn kind="ghost" onClick={async () => { await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}>
+              <Btn kind="ghost" onClick={async () => { const cu=auth.currentUser; if(cu) await setUserOnline(cu.uid,false); await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}>
                 <Icon name="logout" /> Выйти
               </Btn>
             </div>
@@ -2457,31 +2686,17 @@ function fmtDateTimeSafe(v) {
 
 function PageAdd() {
   const st = useStore();
-  const u = st.userDoc;
-  if (!u) return <Guard />;
-  if (!canAccess("add", u)) return <Guard />;
+  const u = st.userDoc; // read early, guard comes AFTER all hooks
 
-  const types = st.types.filter(t => t.active);
-  const sections = Array.from(new Set(types.map(t => t.section))).sort();
-  const [section, setSection] = useState(sections[0] || "");
-  const subs = useMemo(() => Array.from(new Set(types.filter(t => t.section === section).map(t => t.subsection))).sort(), [types, section]);
-  const [subsection, setSubsection] = useState(subs[0] || "");
-  const opts = useMemo(() => types.filter(t => t.section === section && t.subsection === subsection), [types, section, subsection]);
-  const [typeId, setTypeId] = useState(opts[0]?.id || "");
-
-  useEffect(() => setSection(sections[0] || ""), [sections.join("|")]);
-  useEffect(() => setSubsection(subs[0] || ""), [subs.join("|")]);
-  useEffect(() => setTypeId(opts[0]?.id || ""), [opts.map(x => x.id).join("|")]);
-
-  const type = opts.find(x => x.id === typeId) || null;
-
+  // ALL hooks before any early return
+  const [section, setSection] = useState("");
+  const [subsection, setSubsection] = useState("");
+  const [typeId, setTypeId] = useState("");
   const [eventDate, setEventDate] = useState(ymd());
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [evidenceLink, setEvidenceLink] = useState("");
   const [file, setFile] = useState(null);
-
-  // Book quiz state (+20 points after teacher/admin verification)
   const [quizAttempts, setQuizAttempts] = useState([]);
   const [quizLoading, setQuizLoading] = useState(false);
   const [selectedBookId, setSelectedBookId] = useState(BOOK_QUIZ_LIBRARY[0]?.id || "");
@@ -2490,12 +2705,19 @@ function PageAdd() {
   const [quizResult, setQuizResult] = useState(null);
   const [quizSubmitting, setQuizSubmitting] = useState(false);
 
+  const types = (st.types || []).filter(t => t.active);
+  const sections = Array.from(new Set(types.map(t => t.section))).sort();
+  const subs = useMemo(() => Array.from(new Set(types.filter(t => t.section === section).map(t => t.subsection))).sort(), [types, section]);
+  const opts = useMemo(() => types.filter(t => t.section === section && t.subsection === subsection), [types, section, subsection]);
   const selectedBook = BOOK_QUIZ_LIBRARY.find(b => b.id === selectedBookId) || BOOK_QUIZ_LIBRARY[0] || null;
   const selectedStatus = useMemo(
     () => selectedBook ? getBookQuizStatus(selectedBook, quizAttempts, st.mySubmissions || []) : null,
     [selectedBookId, quizAttempts, (st.mySubmissions || []).length]
   );
 
+  useEffect(() => setSection(sections[0] || ""), [sections.join("|")]);
+  useEffect(() => setSubsection(subs[0] || ""), [subs.join("|")]);
+  useEffect(() => setTypeId(opts[0]?.id || ""), [opts.map(x => x.id).join("|")]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -2513,6 +2735,11 @@ function PageAdd() {
     })();
     return () => { cancelled = true; };
   }, [u?.uid]);
+
+  if (!u) return <Guard />;
+  if (!canAccess("add", u)) return <Guard />;
+
+  const type = opts.find(x => x.id === typeId) || null;
 
   async function refreshQuizAttempts() {
     if (!u?.uid) return;
@@ -2830,12 +3057,9 @@ function PageAdd() {
 
 function PageRequests() {
   const st = useStore();
-  const u = st.userDoc;
-  const reqs = st.myRequests || [];
+  const u = st.userDoc; // read early, guard comes AFTER all hooks
 
-  if (!u) return <Guard />;
-  if (!canAccess("requests", u)) return <Guard />;
-
+  // ALL hooks before any early return
   const [kind, setKind] = useState(REQUEST_KINDS[0]?.key || "leave");
   const [dateFrom, setDateFrom] = useState(ymd());
   const [dateTo, setDateTo] = useState(ymd());
@@ -2843,9 +3067,13 @@ function PageRequests() {
   const [evidenceFile, setEvidenceFile] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [viewReq, setViewReq] = useState(null);
-
-  const k = REQUEST_KINDS.find(x => x.key === kind) || REQUEST_KINDS[0];
   const days = useMemo(() => dateRangeDays(dateFrom, dateTo), [dateFrom, dateTo]);
+
+  if (!u) return <Guard />;
+  if (!canAccess("requests", u)) return <Guard />;
+
+  const reqs = st.myRequests || [];
+  const k = REQUEST_KINDS.find(x => x.key === kind) || REQUEST_KINDS[0];
   const compPreview = k.compMode === "earn" ? days : k.compMode === "use" ? -days : 0;
 
   const pending = reqs.filter(r => r.status === "pending");
@@ -3201,14 +3429,44 @@ function PageStats() {
     </div>
   );
 
+  // Trend: compare current half of range vs previous half
+  const halfBins = Math.ceil(bins.length / 2);
+  const recentBins = new Set(bins.slice(-halfBins).map(b => mode === "365d" ? b.key : b.ymd));
+  const olderBins = new Set(bins.slice(0, halfBins).map(b => mode === "365d" ? b.key : b.ymd));
+
+  const trendPct = (curr, prev) => {
+    if (!prev) return curr > 0 ? 100 : 0;
+    return Math.round(((curr - prev) / prev) * 100);
+  };
+  const TrendBadge = ({ curr, prev }) => {
+    const pct = trendPct(curr, prev);
+    const up = pct >= 0;
+    return (
+      <span style={{ fontSize: 11, fontWeight: 700, color: up ? "var(--green, #22c55e)" : "var(--red, #ef4444)", marginLeft: 6 }}>
+        {up ? "▲" : "▼"} {Math.abs(pct)}%
+      </span>
+    );
+  };
+
   function renderMine() {
-    const subs = (st.mySubmissions || []).filter(inRange);
+    const allMy = (st.mySubmissions || []);
+    const subs = allMy.filter(inRange);
     const approved = subs.filter(s => s.status === "approved");
     const pending = subs.filter(s => s.status === "pending");
     const rejected = subs.filter(s => s.status === "rejected");
 
     const totalPts = sum(approved, s => s.points);
     const bySeries = bins.map(b => seriesPoints(approved, b));
+
+    // Trend calculation
+    const recentPts = sum(approved.filter(s => {
+      const k = mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate;
+      return recentBins.has(k);
+    }), s => s.points);
+    const olderPts = sum(approved.filter(s => {
+      const k = mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate;
+      return olderBins.has(k);
+    }), s => s.points);
 
     const typeMap = new Map();
     approved.forEach(s => {
@@ -3218,31 +3476,65 @@ function PageStats() {
     const topType = Array.from(typeMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 12);
     const radar = topType.slice(0, 6);
 
+    const sectionMap = new Map();
+    approved.forEach(s => {
+      const key = s.typeSection || "Басқа / Прочее";
+      sectionMap.set(key, (sectionMap.get(key) || 0) + (Number(s.points) || 0));
+    });
+    const topSections = Array.from(sectionMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const totalForPie = sum(topSections, x => x[1]) || 1;
+
+    // For gauge: use all-time total from user doc
+    const allTimeTotal = Number(u.totalPoints) || 0;
+    const GOAL = 200;
+
     return (
       <div className="glass card">
-        <div className="h1">Моя статистика</div>
-        <p className="p">Диапазон: <b>{mode === "365d" ? "год" : "14 дней"}</b>.</p>
+        <div className="h1">Менің статистикам / Моя статистика</div>
+        <p className="p">Диапазон: <b>{mode === "365d" ? "жыл / год" : "14 күн / дней"}</b>.</p>
         <Controls />
 
         <div className="sep"></div>
 
         <div className="grid3">
-          <div className="kpi"><div><div className="muted tiny">Одобрено (баллы)</div><b>{fmtPoints(totalPts)}</b></div><Pill kind="approved">approved</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">Pending</div><b>{fmtPoints(pending.length)}</b></div><Pill kind="pending">pending</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">Rejected</div><b>{fmtPoints(rejected.length)}</b></div><Pill kind="rejected">rejected</Pill></div>
+          <div className="kpi">
+            <div>
+              <div className="muted tiny">Мақұлданды / Одобрено (балл)</div>
+              <b>{fmtPoints(totalPts)}</b>
+              <TrendBadge curr={recentPts} prev={olderPts} />
+            </div>
+            <Pill kind="approved">approved</Pill>
+          </div>
+          <div className="kpi">
+            <div><div className="muted tiny">Күтуде / В ожидании</div><b>{pending.length}</b></div>
+            <Pill kind="pending">pending</Pill>
+          </div>
+          <div className="kpi">
+            <div><div className="muted tiny">Қабылданбады / Отклонено</div><b>{rejected.length}</b></div>
+            <Pill kind="rejected">rejected</Pill>
+          </div>
         </div>
 
         <div className="sep"></div>
 
         <div className="grid2">
           <div className="glass card">
-            <div className="h2">Линейная с областями: баллы по {mode === "365d" ? "месяцам" : "дням"}</div>
+            <div className="h2">Балл динамикасы / Динамика баллов ({mode === "365d" ? "ай / мес." : "күн / дни"})</div>
             <div className="sep"></div>
             <AreaLineChart values={bySeries} labels={bins.map(x => x.label)} />
           </div>
 
+          <div className="glass card" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div className="h2" style={{ alignSelf: "flex-start" }}>Мақсат прогресі / Прогресс к цели ({GOAL} балл)</div>
+            <div className="sep" style={{ alignSelf: "stretch" }}></div>
+            <GaugeChart value={Math.min(allTimeTotal, GOAL)} max={GOAL} label={`${fmtPoints(allTimeTotal)} / ${GOAL}`} sublabel="жалпы / всего баллов" />
+            <p className="help" style={{ marginTop: 8, textAlign: "center" }}>
+              {allTimeTotal >= GOAL ? "🎉 Мақсатқа жеттіңіз! / Цель достигнута!" : `${fmtPoints(GOAL - allTimeTotal)} балл қалды / осталось`}
+            </p>
+          </div>
+
           <div className="glass card">
-            <div className="h2">Кольцевая: статусы заявок</div>
+            <div className="h2">Мәртебе / Статусы өтінімдер</div>
             <div className="sep"></div>
             <DonutChart
               segments={[
@@ -3255,23 +3547,50 @@ function PageStats() {
           </div>
 
           <div className="glass card">
-            <div className="h2">Гистограмма: баллы за KPI</div>
+            <div className="h2">Санат бойынша / По разделам</div>
+            <div className="sep"></div>
+            {topSections.length ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {topSections.map(([sec, pts]) => {
+                  const pct = Math.round((pts / totalForPie) * 100);
+                  return (
+                    <div key={sec}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
+                        <span style={{ color: "var(--text)", fontWeight: 600 }}>{sec}</span>
+                        <span style={{ color: "var(--accent)", fontWeight: 700 }}>{fmtPoints(pts)} балл ({pct}%)</span>
+                      </div>
+                      <div style={{ height: 7, background: "var(--border)", borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: "var(--accent)", borderRadius: 4, transition: "width .5s" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <p className="p">Деректер жоқ / Нет данных</p>}
+          </div>
+        </div>
+
+        <div className="sep"></div>
+
+        <div className="grid2">
+          <div className="glass card">
+            <div className="h2">Гистограмма / Гистограмма: баллов за KPI</div>
             <div className="sep"></div>
             <HistogramChart data={approved.map(s => Number(s.points) || 0)} />
           </div>
 
           <div className="glass card">
-            <div className="h2">Лепестковая: топ-типов по баллам</div>
+            <div className="h2">Лепестковая / Радар: топ-категорий</div>
             <div className="sep"></div>
             <RadarChart labels={radar.map(x => x[0])} values={radar.map(x => x[1])} />
-            {!radar.length ? <p className="p">Нет одобренных KPI в диапазоне.</p> : null}
+            {!radar.length ? <p className="p">Диапазондағы KPI жоқ / Нет одобренных KPI в диапазоне.</p> : null}
           </div>
         </div>
 
         <div className="sep"></div>
 
         <div className="glass card">
-          <div className="h2">Топ типов (таблица)</div>
+          <div className="h2">Топ типтері / Топ типов (кесте / таблица)</div>
           <div className="sep"></div>
           {topType.length ? (
             <div className="stats-toplist">
@@ -3291,7 +3610,7 @@ function PageStats() {
                 );
               })}
             </div>
-          ) : <p className="p">Нет данных.</p>}
+          ) : <p className="p">Деректер жоқ / Нет данных.</p>}
         </div>
       </div>
     );
@@ -3308,6 +3627,16 @@ function PageStats() {
     const totalApprovedPts = sum(approved, s => s.points);
     const bySeries = bins.map(b => seriesPoints(approved, b));
 
+    // Trend
+    const recentPts = sum(approved.filter(s => {
+      const k = mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate;
+      return recentBins.has(k);
+    }), s => s.points);
+    const olderPts = sum(approved.filter(s => {
+      const k = mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate;
+      return olderBins.has(k);
+    }), s => s.points);
+
     const pointsByTeacher = new Map();
     approved.forEach(s => {
       pointsByTeacher.set(s.uid, (pointsByTeacher.get(s.uid) || 0) + (Number(s.points) || 0));
@@ -3323,6 +3652,20 @@ function PageStats() {
     });
     const topSections = Array.from(sectionMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 7);
 
+    // Stacked bar: approved/pending/rejected by time bin
+    const stackedData = bins.map(b => {
+      const bKey = mode === "365d" ? b.key : b.ymd;
+      const inBin = subs.filter(s => (mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate) === bKey);
+      return {
+        label: b.label,
+        segments: [
+          { value: sum(inBin.filter(s => s.status === "approved"), s => s.points), color: "rgba(135,188,46,.8)" },
+          { value: inBin.filter(s => s.status === "pending").length * 5, color: "rgba(251,191,36,.7)" },
+          { value: inBin.filter(s => s.status === "rejected").length * 3, color: "rgba(239,68,68,.6)" }
+        ]
+      };
+    });
+
     // heatmap (top teachers x bins)
     const hmTeachers = topTeachers.map(x => x.user).filter(Boolean).slice(0, 10);
     const maxCell = Math.max(1, ...hmTeachers.map(t => Math.max(0, ...bins.map(b => {
@@ -3337,43 +3680,50 @@ function PageStats() {
       const t = Math.min(1, v / maxCell);
       if (t < 0.34) return { background: "rgba(255, 99, 132, 0.42)" };
       if (t < 0.67) return { background: "rgba(255, 200, 87, 0.48)" };
-      return { background: "rgba(82, 214, 140, 0.50)" };
+      return { background: "rgba(135, 188, 46, 0.45)" };
     };
 
     const hasAny = (st.users || []).length || (st.adminRecentSubs || []).length;
 
     return (
       <div className="glass card">
-        <div className="h1">Статистика платформы</div>
+        <div className="h1">Платформа статистикасы / Статистика платформы</div>
         <p className="p">
-          Общий обзор. Диапазон: <b>{mode === "365d" ? "год" : "14 дней"}</b>. Для «Год» графики агрегируются по месяцам.
+          Жалпы шолу / Общий обзор. Диапазон: <b>{mode === "365d" ? "жыл / год" : "14 күн / дней"}</b>.
         </p>
         <Controls />
 
         <div className="sep"></div>
 
         {!hasAny ? (
-          <p className="p">Общие данные ещё не загружены. Нажми <b>Обновить</b>.</p>
+          <p className="p">Жалпы деректер жүктелмеді / Общие данные ещё не загружены. <b>Жаңарту / Обновить</b>.</p>
         ) : null}
 
         <div className="grid2">
-          <div className="kpi"><div><div className="muted tiny">Teachers</div><b>{teachers.length}</b></div><Pill kind="approved">users</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">Submissions</div><b>{subs.length}</b></div><Pill kind="pending">range</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">Pending</div><b>{pending.length}</b></div><Pill kind="pending">pending</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">Approved pts</div><b>{fmtPoints(totalApprovedPts)}</b></div><Pill kind="approved">points</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Мұғалімдер / Педагоги</div><b>{teachers.length}</b></div><Pill kind="approved">users</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Өтінімдер / Заявки (диапазон)</div><b>{subs.length}</b></div><Pill kind="pending">range</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Күтуде / В ожидании</div><b>{pending.length}</b></div><Pill kind="pending">pending</Pill></div>
+          <div className="kpi">
+            <div>
+              <div className="muted tiny">Мақұлданды / Одобрено (балл)</div>
+              <b>{fmtPoints(totalApprovedPts)}</b>
+              <TrendBadge curr={recentPts} prev={olderPts} />
+            </div>
+            <Pill kind="approved">points</Pill>
+          </div>
         </div>
 
         <div className="sep"></div>
 
         <div className="grid2">
           <div className="glass card">
-            <div className="h2">График: баллы по {mode === "365d" ? "месяцам" : "дням"}</div>
+            <div className="h2">Балл динамикасы / Динамика баллов ({mode === "365d" ? "ай / мес." : "күн / дни"})</div>
             <div className="sep"></div>
             <LineChart values={bySeries} labels={bins.map(x => x.label)} />
           </div>
 
           <div className="glass card">
-            <div className="h2">Кольцевая: статусы заявок</div>
+            <div className="h2">Мәртебелер / Статусы заявок</div>
             <div className="sep"></div>
             <DonutChart
               segments={[
@@ -3386,37 +3736,53 @@ function PageStats() {
           </div>
 
           <div className="glass card">
-            <div className="h2">Топ-10 учителей</div>
+            <div className="h2">Топ-10 мұғалім / Топ-10 учителей</div>
             <div className="sep"></div>
             {topTeachers.length ? (
-              <BarChart values={topTeachers.map(x => x.pts)} labels={topTeachers.map(x => (x.user?.displayName || x.user?.email || "—").slice(0, 10) + "…")} />
-            ) : <p className="p">Нет данных</p>}
+              <BarChart
+                values={topTeachers.map(x => x.pts)}
+                labels={topTeachers.map(x => (x.user?.displayName || x.user?.email || "—").slice(0, 10) + "…")}
+              />
+            ) : <p className="p">Деректер жоқ / Нет данных</p>}
           </div>
 
           <div className="glass card">
-            <div className="h2">Лепестковая: баллы по разделам</div>
+            <div className="h2">Лепестковая / Радар: разделы</div>
             <div className="sep"></div>
             <RadarChart labels={topSections.map(x => x[0])} values={topSections.map(x => x[1])} />
-            {!topSections.length ? <p className="p">Нет данных</p> : null}
+            {!topSections.length ? <p className="p">Деректер жоқ / Нет данных</p> : null}
           </div>
         </div>
 
         <div className="sep"></div>
 
         <div className="glass card">
-          <div className="h2">Тепловая карта: teacher × {mode === "365d" ? "месяц" : "день"}</div>
-          <p className="p">Показывает <b>одобренные</b> баллы. Для компактности — только топ-10 по баллам за диапазон.</p>
+          <div className="h2">Уақыт бойынша / По периодам: approved / pending / rejected</div>
+          <p className="p muted" style={{ fontSize: 12 }}>
+            <span style={{ color: "rgba(135,188,46,.9)" }}>▇</span> Мақұлданды балл &nbsp;
+            <span style={{ color: "rgba(251,191,36,.9)" }}>▇</span> Күтуде ×5 &nbsp;
+            <span style={{ color: "rgba(239,68,68,.9)" }}>▇</span> Қабылданбады ×3
+          </p>
+          <div className="sep"></div>
+          <StackedBarChart data={stackedData} labels={bins.map(x => x.label)} />
+        </div>
+
+        <div className="sep"></div>
+
+        <div className="glass card">
+          <div className="h2">Жылу картасы / Тепловая карта: мұғалім × {mode === "365d" ? "ай / месяц" : "күн / день"}</div>
+          <p className="p">Тек <b>мақұлданған</b> балдар / Только <b>одобренные</b> баллы. Топ-10 по диапазону.</p>
           <div className="sep"></div>
 
           {!hmTeachers.length
-            ? <p className="p">Нет данных</p>
+            ? <p className="p">Деректер жоқ / Нет данных</p>
             : (
               <div className="heatmap-wrap">
                 <div className="heatmap-scroll">
                   <table className="table heatmap-table">
                     <thead>
                       <tr>
-                        <th className="heatmap-name-col">Учитель</th>
+                        <th className="heatmap-name-col">Мұғалім / Учитель</th>
                         {bins.map(b => <th key={mode === "365d" ? b.key : b.ymd} className="heatmap-bin-col">{b.label}</th>)}
                       </tr>
                     </thead>
@@ -3439,7 +3805,7 @@ function PageStats() {
                     </tbody>
                   </table>
                 </div>
-                <p className="help" style={{ marginTop: 8 }}>← Прокрутите горизонтально для просмотра всей карты</p>
+                <p className="help" style={{ marginTop: 8 }}>← Горизонталь айналдырыңыз / Прокрутите горизонтально</p>
               </div>
             )
           }
@@ -3530,12 +3896,13 @@ function PageAdminApprovals() {
 function PageAdminRequests() {
   const st = useStore();
   const u = st.userDoc;
+  const [deltas, setDeltas] = useState({}); // hook before early return
+
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
 
   const pending = st.pendingRequests || [];
   const usersMap = new Map((st.users || []).map(x => [x.uid, x]));
-  const [deltas, setDeltas] = useState({});
 
   const getDelta = (id) => {
     const v = deltas[id];
@@ -3641,13 +4008,350 @@ function PageAdminRequests() {
   );
 }
 
-function PageAdminTypes() {
+/** ---------- PageDocuments (teacher inbox) ---------- */
+function PageDocuments() {
   const st = useStore();
+  // All hooks before any conditional returns
+  const canvasRef = useRef(null);
+  const [drawing, setDrawing] = useState(false);
+  const [signed, setSigned] = useState(false);
+  const [signingDoc, setSigningDoc] = useState(null);
+  const [viewDoc, setViewDoc] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const u = st.userDoc;
+  if (!u) return <Guard />;
+  if (!canAccess("documents", u)) return <Guard />;
+
+  const docs = st.myDocuments || [];
+
+  const getPos = (e) => {
+    const c = canvasRef.current;
+    if (!c) return [0, 0];
+    const rect = c.getBoundingClientRect();
+    const scaleX = c.width / rect.width;
+    const scaleY = c.height / rect.height;
+    const t = e.touches ? e.touches[0] : e;
+    return [(t.clientX - rect.left) * scaleX, (t.clientY - rect.top) * scaleY];
+  };
+  const onDown = (e) => {
+    e.preventDefault();
+    setDrawing(true);
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const [x, y] = getPos(e);
+    ctx.beginPath(); ctx.moveTo(x, y);
+  };
+  const onMove = (e) => {
+    if (!drawing) return;
+    e.preventDefault();
+    const ctx = canvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const [x, y] = getPos(e);
+    ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1a1d2e"; ctx.lineTo(x, y); ctx.stroke();
+    setSigned(true);
+  };
+  const onUp = () => setDrawing(false);
+  const clearSig = () => {
+    const c = canvasRef.current;
+    if (!c) return;
+    c.getContext("2d").clearRect(0, 0, c.width, c.height);
+    setSigned(false);
+  };
+
+  const openDoc = async (d) => {
+    setViewDoc(d);
+    if (d.status === "sent") {
+      try { await markDocumentViewed(d.id); } catch (e) { console.error(e); }
+    }
+  };
+
+  const submitSign = async () => {
+    if (!signed) { toast("Қол қойыңыз / Поставьте подпись", "error"); return; }
+    try {
+      setSaving(true);
+      const c = canvasRef.current;
+      const blob = await new Promise(res => c.toBlob(res, "image/png"));
+      const sigUrl = await uploadFile(
+        `doc_signatures/${u.uid}/${signingDoc.id}_${Date.now()}.png`,
+        new File([blob], "sig.png", { type: "image/png" })
+      );
+      await signDocument(signingDoc.id, sigUrl);
+      const fresh = await fetchDocumentsForTeacher(u.uid);
+      setState({ myDocuments: fresh });
+      toast("Құжатқа қол қойылды / Документ подписан", "ok");
+      setSigningDoc(null);
+      setViewDoc(null);
+    } catch (e) {
+      toast(e?.message || "Қате / Ошибка", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const statusLabel = (s) => s === "signed" ? "Қол қойылды / Подписано" : s === "viewed" ? "Қаралды / Просмотрено" : "Жаңа / Новый";
+  const statusColor = (s) => s === "signed" ? "approved" : s === "viewed" ? "pending" : "rejected";
+
+  return (
+    <>
+      {(viewDoc || signingDoc) && (
+        <div className="modal-backdrop" onClick={() => { setViewDoc(null); setSigningDoc(null); setSigned(false); }}>
+          <div className="modal glass" style={{ maxWidth: 520, width: "95vw" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div className="h2">{signingDoc ? "Қол қою / Подпись документа" : "Құжат / Документ"}</div>
+              <Btn onClick={() => { setViewDoc(null); setSigningDoc(null); setSigned(false); }}>✕</Btn>
+            </div>
+
+            {(viewDoc || signingDoc) && (() => {
+              const d = signingDoc || viewDoc;
+              const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : ymd();
+              return (
+                <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 20, background: "#fff", color: "#1a1d2e", marginBottom: 16 }}>
+                  <div style={{ textAlign: "center", marginBottom: 12 }}>
+                    <img src="/logo-nis.png" alt="NIS" style={{ width: 48, height: 48, objectFit: "contain" }} />
+                    <div style={{ fontWeight: 700, fontSize: 13, marginTop: 4 }}>Назарбаев Зияткерлік Мектебі</div>
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: 16, textAlign: "center", marginBottom: 16, borderBottom: "2px solid #87BC2E", paddingBottom: 12 }}>{d.title}</div>
+                  <p style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", margin: "0 0 16px" }}>{d.body}</p>
+                  <div style={{ fontSize: 12, color: "#64748b" }}>Алушы / Получатель: <b>{d.toName || d.toEmail}</b></div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Күні / Дата: {dateStr}</div>
+                  {d.signatureUrl && (
+                    <div style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
+                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Қолы / Подпись:</div>
+                      <img src={d.signatureUrl} alt="Подпись" style={{ maxWidth: 180, border: "1px solid #e2e8f0", borderRadius: 6, padding: 4, background: "#fff" }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {signingDoc && !signingDoc.signatureUrl && (
+              <>
+                <div className="h2" style={{ marginBottom: 8 }}>Қол қою / Поставьте подпись</div>
+                <canvas
+                  ref={canvasRef}
+                  width={800} height={200}
+                  className="signature-pad"
+                  style={{ width: "100%", height: 120, display: "block", cursor: "crosshair", marginBottom: 10 }}
+                  onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+                  onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+                />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Btn onClick={clearSig}>Тазалау / Очистить</Btn>
+                  <Btn kind="primary" onClick={submitSign} disabled={saving || !signed}>
+                    {saving ? "Сақталуда..." : "✅ Қол қою / Подписать"}
+                  </Btn>
+                </div>
+              </>
+            )}
+            {viewDoc && viewDoc.requireSignature && viewDoc.status !== "signed" && (
+              <div style={{ marginTop: 12 }}>
+                <Btn kind="primary" onClick={() => { setSigningDoc(viewDoc); setViewDoc(null); }}>Қол қою / Подписать</Btn>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="page-wrap">
+        <div className="glass card" style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
+            <div>
+              <div className="h1">Құжаттар / Документы</div>
+              <div className="muted" style={{ fontSize: 13 }}>Әкімшіден келген ресми құжаттар / Официальные документы от администратора</div>
+            </div>
+          </div>
+        </div>
+
+        {docs.length === 0 ? (
+          <div className="glass card" style={{ textAlign: "center", color: "var(--muted)", padding: 40 }}>
+            Әзірше құжат жоқ / Документов пока нет
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {docs.map(d => {
+              const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+              return (
+                <div key={d.id} className="glass card" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.title}</div>
+                    <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.body}</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill>
+                      {d.requireSignature && <Pill kind="pending">Қол қою қажет / Нужна подпись</Pill>}
+                      <span className="tiny muted">{dateStr}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                    <Btn onClick={() => openDoc(d)}>Қарау / Просмотр</Btn>
+                    {d.requireSignature && d.status !== "signed" && (
+                      <Btn kind="primary" onClick={() => { setSigningDoc(d); setSigned(false); clearSig(); }}>Қол қою / Подписать</Btn>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** ---------- PageAdminDocuments ---------- */
+function PageAdminDocuments() {
+  const st = useStore();
+  // All hooks before any conditional returns
+  const [toUid, setToUid] = useState("");
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [requireSig, setRequireSig] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [tab, setTab] = useState("send");
+  const [filterUid, setFilterUid] = useState("");
+
   const u = st.userDoc;
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
 
-  const [form, setForm] = useState({ section: "", subsection: "", name: "", defaultPoints: 5 });
+  const users = (st.users || []).filter(x => x.role !== "admin");
+  const docs = st.allDocuments || [];
+
+  const selectedUser = users.find(x => x.uid === toUid);
+
+  const send = async () => {
+    if (!toUid || !title.trim() || !body.trim()) {
+      toast("Алушыны, тақырыпты және мәтінді толтырыңыз / Заполните получателя, тему и текст", "error");
+      return;
+    }
+    try {
+      setSending(true);
+      await createDocument({
+        fromUid: u.uid,
+        toUid,
+        toEmail: selectedUser?.email || "",
+        toName: selectedUser?.displayName || selectedUser?.email || "",
+        title: title.trim(),
+        body: body.trim(),
+        requireSignature: requireSig
+      });
+      const fresh = await fetchAllDocuments();
+      setState({ allDocuments: fresh });
+      toast("Құжат жіберілді / Документ отправлен", "ok");
+      setToUid(""); setTitle(""); setBody(""); setRequireSig(false);
+    } catch (e) {
+      toast(e?.message || "Қате / Ошибка", "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const filteredDocs = filterUid ? docs.filter(d => d.toUid === filterUid) : docs;
+  const statusLabel = (s) => s === "signed" ? "Қол қойылды" : s === "viewed" ? "Қаралды" : "Жіберілді";
+  const statusColor = (s) => s === "signed" ? "approved" : s === "viewed" ? "pending" : "rejected";
+
+  return (
+    <div className="page-wrap">
+      <div className="glass card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
+          <div style={{ flex: 1 }}>
+            <div className="h1">Құжат жіберу / Отправка документов</div>
+            <div className="muted" style={{ fontSize: 13 }}>Мұғалімдерге ресми құжаттар жіберіңіз / Отправляйте официальные документы педагогам</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <Btn kind={tab === "send" ? "primary" : "ghost"} onClick={() => setTab("send")}>Жіберу / Отправить</Btn>
+          <Btn kind={tab === "list" ? "primary" : "ghost"} onClick={() => setTab("list")}>Тізім / Список ({docs.length})</Btn>
+        </div>
+      </div>
+
+      {tab === "send" && (
+        <div className="glass card">
+          <div className="h2" style={{ marginBottom: 16 }}>Жаңа құжат / Новый документ</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label className="label">Алушы / Получатель</label>
+              <select className="input" value={toUid} onChange={e => setToUid(e.target.value)}>
+                <option value="">— Таңдаңыз / Выберите —</option>
+                {users.map(x => (
+                  <option key={x.uid} value={x.uid}>{x.displayName || x.email} ({x.email})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Тақырып / Тема</label>
+              <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Мысалы: Ескерту / Уведомление о..." />
+            </div>
+            <div>
+              <label className="label">Мәтін / Текст документа</label>
+              <textarea className="input" rows={6} value={body} onChange={e => setBody(e.target.value)} placeholder="Ресми хат мәтіні / Текст официального письма..." style={{ resize: "vertical" }} />
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14 }}>
+              <input type="checkbox" checked={requireSig} onChange={e => setRequireSig(e.target.checked)} style={{ width: 18, height: 18, accentColor: "var(--accent)" }} />
+              <span>Қол қою талап етіледі / Требуется подпись мұғалімнен</span>
+            </label>
+            <div>
+              <Btn kind="primary" onClick={send} disabled={sending}>
+                {sending ? "Жіберілуде... / Отправка..." : "Жіберу / Отправить документ"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "list" && (
+        <div className="glass card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+            <div className="h2">Жіберілген құжаттар / Отправленные документы</div>
+            <select className="input" style={{ width: "auto", minWidth: 180 }} value={filterUid} onChange={e => setFilterUid(e.target.value)}>
+              <option value="">Барлығы / Все</option>
+              {users.map(x => <option key={x.uid} value={x.uid}>{x.displayName || x.email}</option>)}
+            </select>
+          </div>
+          {filteredDocs.length === 0 ? (
+            <div style={{ textAlign: "center", color: "var(--muted)", padding: 24 }}>Жіберілген құжаттар жоқ / Нет отправленных документов</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {filteredDocs.map(d => {
+                const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+                const recipient = users.find(x => x.uid === d.toUid);
+                return (
+                  <div key={d.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 2 }}>{d.title}</div>
+                      <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 6 }}>
+                        {recipient?.displayName || d.toName || d.toEmail}
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                        <Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill>
+                        {d.requireSignature && <Pill kind="pending">Қол қою / Подпись</Pill>}
+                        <span className="tiny muted">{dateStr}</span>
+                      </div>
+                    </div>
+                    {d.signatureUrl && (
+                      <img src={d.signatureUrl} alt="Подпись" style={{ width: 80, height: 40, objectFit: "contain", border: "1px solid var(--border)", borderRadius: 6, padding: 2, background: "#fff" }} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PageAdminTypes() {
+  const st = useStore();
+  const u = st.userDoc;
+  const [form, setForm] = useState({ section: "", subsection: "", name: "", defaultPoints: 5 }); // hook before early return
+
+  if (!u) return <Guard />;
+  if (u.role !== "admin") return <Guard />;
 
   async function refresh() {
     const t = await fetchTypesAll();
@@ -3735,13 +4439,16 @@ function PageAdminTypes() {
 
 function PageAdminUsers() {
   const st = useStore();
+  // hooks before early returns
+  const [q, setQ] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(null); // uid to delete
+  const [deleting, setDeleting] = useState(false);
+
   const u = st.userDoc;
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
 
-  const [q, setQ] = useState("");
   const qn = q.trim().toLowerCase();
-
   const filtered = st.users.filter(x => {
     const hay = `${x.displayName || ""} ${x.email || ""} ${x.school || ""} ${x.subject || ""}`.toLowerCase();
     return hay.includes(qn);
@@ -3760,52 +4467,108 @@ function PageAdminUsers() {
     } finally { setState({ loading: false }); }
   }
 
+  async function doDelete(uid) {
+    try {
+      setDeleting(true);
+      await deleteUserAndData(uid);
+      const users = await fetchUsersAll();
+      setState({ users });
+      toast("Аккаунт удалён / Аккаунт жойылды", "ok");
+      setConfirmDelete(null);
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || "Ошибка удаления", "error");
+    } finally { setDeleting(false); }
+  }
+
+  const onlineCount = filtered.filter(x => x.online === true).length;
+  const totalCount = filtered.length;
+
+  const delUser = confirmDelete ? st.users.find(x => x.uid === confirmDelete) : null;
+
   return (
-    <div className="glass card">
-      <div className="h1">Users</div>
-      <p className="p">Поиск и смена ролей. Можно открыть карточку учителя.</p>
-      <div className="sep"></div>
-
-      <div className="grid2">
-        <div>
-          <div className="label">Поиск</div>
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ФИО / email / school / subject" />
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
-          <Btn onClick={async () => { const users = await fetchUsersAll(); setState({ users }); toast("Обновлено", "ok"); }}>Обновить</Btn>
-        </div>
-      </div>
-
-      <div className="sep"></div>
-
-      {!filtered.length && <p className="p muted" style={{ padding: "12px 0" }}>Нет результатов</p>}
-      <div className="mobile-cards">
-        {filtered.map(x => (
-          <div key={x.uid} className="mobile-card glass">
-            <div className="mobile-card__row">
-              <span className="mobile-card__label">ФИО / Email</span>
-              <span className="mobile-card__val">
-                <b>{x.displayName || "—"}</b>
-                <div className="muted tiny">{x.email}</div>
-              </span>
-            </div>
-            <div className="mobile-card__row">
-              <span className="mobile-card__label">Школа / Предмет</span>
-              <span className="mobile-card__val">{x.school || "—"} · <span className="muted">{x.subject || "—"}</span></span>
-            </div>
-            <div className="mobile-card__row">
-              <span className="mobile-card__label">Баллы / Роль</span>
-              <span className="mobile-card__val"><b>{fmtPoints(x.totalPoints)}</b> pts · <Pill kind={x.role === "admin" ? "pending" : "approved"}>{x.role}</Pill></span>
-            </div>
-            <div className="mobile-card__actions">
-              <Btn onClick={() => setR(x.uid, "teacher")} disabled={st.loading}>teacher</Btn>
-              <Btn onClick={() => setR(x.uid, "admin")} disabled={st.loading}>admin</Btn>
-              <Btn kind="primary" onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })}>Профиль</Btn>
+    <>
+      {confirmDelete && (
+        <div className="modal-backdrop" onClick={() => setConfirmDelete(null)}>
+          <div className="modal glass" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+            <div className="h2" style={{ marginBottom: 12 }}>Аккаунтты жою / Удалить аккаунт</div>
+            <p className="p" style={{ marginBottom: 16 }}>
+              <b>{delUser?.displayName || delUser?.email || confirmDelete}</b> аккаунтын жоясыз ба?<br />
+              <span className="muted" style={{ fontSize: 13 }}>Барлық деректер жойылады: KPI, өтініштер, құжаттар / Удалит все данные: KPI, заявления, документы.</span>
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn onClick={() => setConfirmDelete(null)}>Болдырмау / Отмена</Btn>
+              <Btn kind="primary" style={{ background: "var(--red, #ef4444)" }} onClick={() => doDelete(confirmDelete)} disabled={deleting}>
+                {deleting ? "Жойылуда..." : "✕ Жою / Удалить"}
+              </Btn>
             </div>
           </div>
-        ))}
+        </div>
+      )}
+
+      <div className="glass card">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+          <div className="h1" style={{ margin: 0 }}>Сотрудники / Пользователи</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
+            <span className="online-dot" />
+            <span style={{ color: "var(--green, #22c55e)" }}>{onlineCount} online</span>
+            <span className="muted">/ {totalCount}</span>
+          </div>
+        </div>
+        <p className="p">Поиск, смена ролей, удаление, просмотр профиля.</p>
+        <div className="sep"></div>
+
+        <div className="grid2">
+          <div>
+            <div className="label">Іздеу / Поиск</div>
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ФИО / email / школа / пән" />
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+            <Btn onClick={async () => { const users = await fetchUsersAll(); setState({ users }); toast("Жаңартылды / Обновлено", "ok"); }}>Жаңарту / Обновить</Btn>
+          </div>
+        </div>
+
+        <div className="sep"></div>
+
+        {!filtered.length && <p className="p muted" style={{ padding: "12px 0" }}>Нәтиже жоқ / Нет результатов</p>}
+        <div className="mobile-cards">
+          {filtered.map(x => (
+            <div key={x.uid} className="mobile-card glass">
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">ФИО / Email</span>
+                <span className="mobile-card__val">
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {x.online && <span className="online-dot" title="Онлайн" />}
+                    <b>{x.displayName || "—"}</b>
+                  </div>
+                  <div className="muted tiny">{x.email}</div>
+                </span>
+              </div>
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">Мектеп / Пән</span>
+                <span className="mobile-card__val">{x.school || "—"} · <span className="muted">{x.subject || "—"}</span></span>
+              </div>
+              <div className="mobile-card__row">
+                <span className="mobile-card__label">Балл / Роль / Отгул</span>
+                <span className="mobile-card__val">
+                  <b>{fmtPoints(x.totalPoints)}</b> pts ·{" "}
+                  <Pill kind={x.role === "admin" ? "pending" : "approved"}>{x.role}</Pill>
+                  {(x.compDays || 0) > 0 && <span className="muted tiny" style={{ marginLeft: 6 }}>🏖 {x.compDays} отг.</span>}
+                </span>
+              </div>
+              <div className="mobile-card__actions">
+                <Btn onClick={() => setR(x.uid, "teacher")} disabled={st.loading}>teacher</Btn>
+                <Btn onClick={() => setR(x.uid, "admin")} disabled={st.loading}>admin</Btn>
+                <Btn kind="primary" onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })}>Профиль</Btn>
+                {x.uid !== u.uid && (
+                  <Btn style={{ background: "rgba(239,68,68,.12)", color: "var(--red,#ef4444)", border: "1px solid rgba(239,68,68,.3)" }} onClick={() => setConfirmDelete(x.uid || x.id)}>✕ Жою</Btn>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -4028,9 +4791,26 @@ function PageAdminTeacher() {
         <div className="sep"></div>
 
         <div className="grid3">
-          <div className="kpi"><div><div className="muted tiny">users.totalPoints</div><b>{fmtPoints(teacherDoc?.totalPoints || 0)}</b></div><Pill kind="approved">total</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">Approved sum</div><b>{fmtPoints(approvedPts)}</b></div><Pill kind="approved">approved</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">Pending</div><b>{fmtPoints(pending.length)}</b></div><Pill kind="pending">pending</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Жалпы балл / Итого баллов</div><b>{fmtPoints(teacherDoc?.totalPoints || 0)}</b></div><Pill kind="approved">total</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Мақұлданды / Одобрено</div><b>{fmtPoints(approvedPts)}</b></div><Pill kind="approved">approved</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Күтуде / Ожидает</div><b>{fmtPoints(pending.length)}</b></div><Pill kind="pending">pending</Pill></div>
+          <div className="kpi">
+            <div>
+              <div className="muted tiny">Отгулы / Компенсация күн</div>
+              <b style={{ color: (teacherDoc?.compDays || 0) > 0 ? "var(--green, #22c55e)" : "var(--text)" }}>
+                {Number(teacherDoc?.compDays || 0)} күн / дн.
+              </b>
+            </div>
+            <Pill kind={(teacherDoc?.compDays || 0) > 0 ? "approved" : "pending"}>отгулы</Pill>
+          </div>
+          <div className="kpi">
+            <div>
+              <div className="muted tiny">Танысу / Онбординг</div>
+              <b>{teacherDoc?.onboarded ? "✓ Аяқталды" : "⏳ Күтуде"}</b>
+            </div>
+            <Pill kind={teacherDoc?.onboarded ? "approved" : "rejected"}>onboarding</Pill>
+          </div>
+          <div className="kpi"><div><div className="muted tiny">Қабылданбады / Отклонено</div><b>{fmtPoints(rejected.length)}</b></div><Pill kind="rejected">rejected</Pill></div>
         </div>
 
         <div className="sep"></div>
@@ -4166,13 +4946,14 @@ async function hydrateForUser(userDoc) {
   if (!userDoc) return;
   try {
     if (userDoc.role === "admin") {
-      const [types, users, pend, recent, pendReq, recentReq] = await Promise.all([
+      const [types, users, pend, recent, pendReq, recentReq, allDocs] = await Promise.all([
         fetchTypesAll(),
         fetchUsersAll(),
         fetchPendingSubmissions(),
         fetchAdminRecentSubs(),
         fetchPendingRequests(),
-        fetchAdminRecentRequests()
+        fetchAdminRecentRequests(),
+        fetchAllDocuments()
       ]);
       setState({
         types,
@@ -4181,15 +4962,18 @@ async function hydrateForUser(userDoc) {
         adminRecentSubs: recent,
         pendingRequests: pendReq,
         adminRecentRequests: recentReq,
+        allDocuments: allDocs,
         mySubmissions: [],
-        myRequests: []
+        myRequests: [],
+        myDocuments: []
       });
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
-      const [types, my, myReq, users, recent] = await Promise.all([
+      const [types, my, myReq, myDocs, users, recent] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
+        fetchDocumentsForTeacher(userDoc.uid),
         fetchUsersAll(),
         fetchAdminRecentSubs()
       ]);
@@ -4197,11 +4981,13 @@ async function hydrateForUser(userDoc) {
         types,
         mySubmissions: my,
         myRequests: myReq,
+        myDocuments: myDocs,
         users,
         adminRecentSubs: recent,
         pendingSubmissions: [],
         pendingRequests: [],
-        adminRecentRequests: []
+        adminRecentRequests: [],
+        allDocuments: []
       });
     }
   } catch (e) {
@@ -4229,6 +5015,8 @@ async function bootstrap() {
       setState({ booting: true, authUser: user || null });
 
       if (!user) {
+        // Clear heartbeat
+        if (window.__kpiHeartbeat) { clearInterval(window.__kpiHeartbeat); window.__kpiHeartbeat = null; }
         setState({
           userDoc: null,
           types: [],
@@ -4238,7 +5026,9 @@ async function bootstrap() {
           adminRecentSubs: [],
           myRequests: [],
           pendingRequests: [],
-          adminRecentRequests: []
+          adminRecentRequests: [],
+          myDocuments: [],
+          allDocuments: []
         });
         setState({ booting: false });
         render();
@@ -4248,6 +5038,18 @@ async function bootstrap() {
       const userDoc = await ensureUserDoc(user.uid, user.email || "");
       setState({ userDoc });
       await hydrateForUser(userDoc);
+
+      // Mark user online + start heartbeat
+      await setUserOnline(user.uid, true);
+      if (window.__kpiHeartbeat) clearInterval(window.__kpiHeartbeat);
+      window.__kpiHeartbeat = setInterval(() => {
+        if (auth.currentUser) setUserOnline(auth.currentUser.uid, true);
+      }, 60000);
+
+      // Auto-redirect new employees to onboarding
+      if (userDoc.onboarded !== true && userDoc.role !== "admin") {
+        navigate("onboarding");
+      }
 
       setState({ booting: false });
       render();
@@ -4259,6 +5061,15 @@ async function bootstrap() {
     }
   });
 
+  // Presence: mark offline on tab close / hide
+  document.addEventListener("visibilitychange", () => {
+    const cu = auth.currentUser;
+    if (cu) setUserOnline(cu.uid, document.visibilityState === "visible");
+  });
+  window.addEventListener("beforeunload", () => {
+    const cu = auth.currentUser;
+    if (cu) setUserOnline(cu.uid, false);
+  });
 
   // v11: ensure default hash route
   try { if (!location.hash || location.hash === "#" || location.hash === "#/") { location.hash = "#/login"; } } catch (e) { }

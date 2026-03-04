@@ -1240,3 +1240,51 @@ body::before {
   .topbar__titleSmall { display: none; }
   .topbar__titleBig { font-size: 13px; }
 }
+
+/* ---- Notification badge on nav items ---- */
+.navlink { position: relative; }
+.nav-badge {
+  position: absolute;
+  top: 6px; right: 10px;
+  min-width: 18px; height: 18px;
+  background: var(--red, #ef4444);
+  color: #fff;
+  font-size: 10px; font-weight: 800;
+  border-radius: 99px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(239,68,68,.4);
+  animation: badgePop .2s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes badgePop { from { transform: scale(0); } to { transform: scale(1); } }
+
+/* ---- Online dot ---- */
+.online-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  background: #22c55e;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(34,197,94,.3);
+  animation: onlinePulse 2s ease-in-out infinite;
+}
+@keyframes onlinePulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(34,197,94,.3); }
+  50% { box-shadow: 0 0 0 5px rgba(34,197,94,.1); }
+}
+
+/* ---- Online counter in topbar ---- */
+.online-counter {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--hover-bg);
+  font-size: 12px; font-weight: 600;
+  color: var(--text);
+  transition: background .15s;
+  white-space: nowrap;
+}
+.online-counter:hover { background: var(--accent); color: #fff; }
+.online-counter:hover .online-dot { box-shadow: 0 0 0 2px rgba(255,255,255,.4); }
