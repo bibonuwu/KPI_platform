@@ -517,16 +517,29 @@ async function ensureUserDoc(uid, email) {
     }
     return { id: snap.id, ...data, ...patch, uid: (data.uid || patch.uid || snap.id) };
   }
+  // Check preUsers for pre-populated name/position
+  let preDisplayName = "";
+  let prePosition = "";
+  if (email) {
+    try {
+      const preSnap = await getDoc(doc(db, "preUsers", email.toLowerCase()));
+      if (preSnap.exists()) {
+        preDisplayName = preSnap.data().displayName || "";
+        prePosition = preSnap.data().position || "";
+      }
+    } catch (_) {}
+  }
+
   const base = {
     uid, email: email || "",
-    displayName: "",
+    displayName: preDisplayName,
     role: "teacher",
     school: "",
     subject: "",
     experienceYears: 0,
     phone: "",
     city: "",
-    position: "",
+    position: prePosition,
     avatarUrl: "",
     totalPoints: 0,
     compDays: 0,
@@ -3041,102 +3054,98 @@ function PageAdd() {
     } finally { setState({ loading: false }); }
   }
 
-  if (selectedBook && quizOpen) {
-    return (
-      <div className="quiz-fullpage route-section">
-        <div className="quiz-fullpage__header">
-          <button className="quiz-back-btn" type="button" onClick={closeQuiz}>
-            ← Кітаптар · Назад
-          </button>
-          <div className="quiz-fullpage__book-info">
-            <span className="quiz-fullpage__month">{selectedBook.month}</span>
-            <span className="quiz-fullpage__title">{selectedBook.author} · «{selectedBook.shortTitle}»</span>
-            <span className="tiny muted">Порог: {selectedBook.thresholdPercent || 70}% · +{selectedBook.points || 20} балл</span>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {selectedStatus?.state === "sent" ? <Pill kind="pending">Баллы отправлены</Pill> : null}
-            {selectedStatus?.state === "cooldown" ? <Pill kind="rejected">Повтор позже</Pill> : null}
-          </div>
+  return (selectedBook && quizOpen) ? (
+    <div className="quiz-fullpage route-section">
+      <div className="quiz-fullpage__header">
+        <button className="quiz-back-btn" type="button" onClick={closeQuiz}>
+          ← Кітаптар · Назад
+        </button>
+        <div className="quiz-fullpage__book-info">
+          <span className="quiz-fullpage__month">{selectedBook.month}</span>
+          <span className="quiz-fullpage__title">{selectedBook.author} · «{selectedBook.shortTitle}»</span>
+          <span className="tiny muted">Порог: {selectedBook.thresholdPercent || 70}% · +{selectedBook.points || 20} балл</span>
         </div>
-
-        {selectedBook.questions?.length ? (
-          quizResult ? (
-            <div className="quiz-result-screen">
-              <div className={`quiz-result-screen__icon`}>{quizResult.passed ? "🎉" : "😔"}</div>
-              <div className="quiz-result-screen__score">
-                {quizResult.correct}<span className="quiz-result-screen__score-total">/{quizResult.total}</span>
-              </div>
-              <div className="quiz-result-screen__percent">{quizResult.percent}%</div>
-              {quizResult.passed ? (
-                <>
-                  <div className="quiz-result-screen__title ok">Құттықтаймыз! · Поздравляем!</div>
-                  <div className="quiz-result-screen__desc">
-                    Тест сәтті өтілді · Тест успешно пройден<br />
-                    +{selectedBook.points || 20} балл тексеруге жіберілді · баллов отправлены на проверку
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="quiz-result-screen__title fail">Өкінішке орай · К сожалению</div>
-                  <div className="quiz-result-screen__desc">
-                    Өту шегі {selectedBook.thresholdPercent || 70}% · Порог прохождения {selectedBook.thresholdPercent || 70}%<br />
-                    24 сағаттан кейін қайталауға болады · Повтор доступен через 24 часа
-                  </div>
-                </>
-              )}
-              <Btn type="button" onClick={closeQuiz} kind="primary" style={{ marginTop: 28 }}>← Кітаптарға оралу · Вернуться к книгам</Btn>
-            </div>
-          ) : (
-            <form onSubmit={submitBookQuiz} className="quiz-fullpage__form">
-              <div className="quiz-questions">
-                {selectedBook.questions.map((q, idx) => {
-                  const picked = quizAnswers[q.id] || "";
-                  return (
-                    <div key={q.id} className="quiz-question-card">
-                      <div className="quiz-question-card__title">{idx + 1}. {q.text}</div>
-                      <div className="quiz-options">
-                        {q.options.map(opt => {
-                          const checked = picked === opt.key;
-                          return (
-                            <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""}`}>
-                              <input
-                                type="radio"
-                                name={`quiz_${selectedBook.id}_${q.id}`}
-                                value={opt.key}
-                                checked={checked}
-                                onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
-                                disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
-                              />
-                              <span className="quiz-option__key">{opt.key}</span>
-                              <span>{opt.text}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="quiz-fullpage__actions">
-                <Btn kind="primary" type="submit" disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}>
-                  {quizSubmitting ? "Сохраняем..." : "Тестті аяқтау · Завершить тест"}
-                </Btn>
-                <Btn type="button" onClick={() => setQuizAnswers({})} disabled={quizSubmitting}>Сбросить ответы</Btn>
-                <Btn type="button" onClick={closeQuiz}>← Назад</Btn>
-              </div>
-            </form>
-          )
-        ) : (
-          <div className="glass card" style={{ maxWidth: 560, margin: "0 auto" }}>
-            <p className="p">Для этой книги тест ещё не добавлен. Можете прислать вопросы — я встрою их по аналогии.</p>
-            <Btn type="button" onClick={closeQuiz} style={{ marginTop: 12 }}>← Назад</Btn>
-          </div>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {selectedStatus?.state === "sent" ? <Pill kind="pending">Баллы отправлены</Pill> : null}
+          {selectedStatus?.state === "cooldown" ? <Pill kind="rejected">Повтор позже</Pill> : null}
+        </div>
       </div>
-    );
-  }
 
-  return (
+      {selectedBook.questions?.length ? (
+        quizResult ? (
+          <div className="quiz-result-screen">
+            <div className="quiz-result-screen__icon">{quizResult.passed ? "🎉" : "😔"}</div>
+            <div className="quiz-result-screen__score">
+              {quizResult.correct}<span className="quiz-result-screen__score-total">/{quizResult.total}</span>
+            </div>
+            <div className="quiz-result-screen__percent">{quizResult.percent}%</div>
+            {quizResult.passed ? (
+              <>
+                <div className="quiz-result-screen__title ok">Құттықтаймыз! · Поздравляем!</div>
+                <div className="quiz-result-screen__desc">
+                  Тест сәтті өтілді · Тест успешно пройден<br />
+                  +{selectedBook.points || 20} балл тексеруге жіберілді · баллов отправлены на проверку
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="quiz-result-screen__title fail">Өкінішке орай · К сожалению</div>
+                <div className="quiz-result-screen__desc">
+                  Өту шегі {selectedBook.thresholdPercent || 70}% · Порог прохождения {selectedBook.thresholdPercent || 70}%<br />
+                  24 сағаттан кейін қайталауға болады · Повтор доступен через 24 часа
+                </div>
+              </>
+            )}
+            <Btn type="button" onClick={closeQuiz} kind="primary" style={{ marginTop: 28 }}>← Кітаптарға оралу · Вернуться к книгам</Btn>
+          </div>
+        ) : (
+          <form onSubmit={submitBookQuiz} className="quiz-fullpage__form">
+            <div className="quiz-questions">
+              {selectedBook.questions.map((q, idx) => {
+                const picked = quizAnswers[q.id] || "";
+                return (
+                  <div key={q.id} className="quiz-question-card">
+                    <div className="quiz-question-card__title">{idx + 1}. {q.text}</div>
+                    <div className="quiz-options">
+                      {q.options.map(opt => {
+                        const checked = picked === opt.key;
+                        return (
+                          <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""}`}>
+                            <input
+                              type="radio"
+                              name={`quiz_${selectedBook.id}_${q.id}`}
+                              value={opt.key}
+                              checked={checked}
+                              onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
+                              disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
+                            />
+                            <span className="quiz-option__key">{opt.key}</span>
+                            <span>{opt.text}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="quiz-fullpage__actions">
+              <Btn kind="primary" type="submit" disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}>
+                {quizSubmitting ? "Сохраняем..." : "Тестті аяқтау · Завершить тест"}
+              </Btn>
+              <Btn type="button" onClick={() => setQuizAnswers({})} disabled={quizSubmitting}>Сбросить ответы</Btn>
+              <Btn type="button" onClick={closeQuiz}>← Назад</Btn>
+            </div>
+          </form>
+        )
+      ) : (
+        <div className="glass card" style={{ maxWidth: 560, margin: "0 auto" }}>
+          <p className="p">Для этой книги тест ещё не добавлен. Можете прислать вопросы — я встрою их по аналогии.</p>
+          <Btn type="button" onClick={closeQuiz} style={{ marginTop: 12 }}>← Назад</Btn>
+        </div>
+      )}
+    </div>
+  ) : (
     <div className="grid2">
       <div className="glass card">
         <div className="h1">Добавить KPI</div>
@@ -3255,7 +3264,6 @@ function PageAdd() {
           <div className="help" style={{ marginTop: 8 }}>⚠️ Для теста «Ауыл шетіндегі үй» ответы добавлены как рабочий ключ. Перед запуском в школе проверьте ключи у методиста.</div>
         )}
       </div>
-
     </div>
   );
 }
