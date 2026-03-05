@@ -36,7 +36,9 @@ import {
   limit,
   serverTimestamp,
   runTransaction,
-  increment
+  increment,
+  arrayUnion,
+  arrayRemove
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import {
   getStorage,
@@ -272,6 +274,9 @@ const store = {
     myDocuments: [],
     allDocuments: [],
 
+    // news feed
+    news: [],
+
     // ui
     statsRangeMode: "14d",
     statsView: "mine",
@@ -306,7 +311,7 @@ function toggleTheme() {
 /** ---------- router ---------- */
 const ROUTES = [
   "login", "onboarding", "profile", "rating", "stats", "add",
-  "requests", "documents",
+  "requests", "documents", "news",
   "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents"
 ];
 
@@ -337,11 +342,11 @@ function canAccess(path, userDoc) {
   if (role === "teacher") {
     if (userDoc.onboarded !== true) return false; // block all pages until onboarding done
     if (path.startsWith("admin/")) return false;
-    return ["profile", "rating", "stats", "add", "requests", "documents"].includes(path);
+    return ["profile", "rating", "stats", "add", "requests", "documents", "news"].includes(path);
   }
   if (role === "admin") {
     if (path === "add") return false;
-    return ["profile", "rating", "stats", "documents"].includes(path) || path.startsWith("admin/");
+    return ["profile", "rating", "stats", "documents", "news"].includes(path) || path.startsWith("admin/");
   }
   return false;
 }
@@ -404,6 +409,7 @@ async function render() {
   mount("mount-add", show("add") ? <ErrorBoundary name="add">{booting ? <LoadingScreen /> : <PageAdd />}</ErrorBoundary> : null);
   mount("mount-requests", show("requests") ? <ErrorBoundary name="requests">{booting ? <LoadingScreen /> : <PageRequests />}</ErrorBoundary> : null);
   mount("mount-documents", show("documents") ? <ErrorBoundary name="documents">{booting ? <LoadingScreen /> : <PageDocuments />}</ErrorBoundary> : null);
+  mount("mount-news", show("news") ? <ErrorBoundary name="news">{booting ? <LoadingScreen /> : <PageNews />}</ErrorBoundary> : null);
 
   mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary> : null);
   mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary> : null);
@@ -849,6 +855,68 @@ async function uploadAvatar(uid, blob) {
   return uploadFile(`avatars/${uid}/${ts}_avatar.png`, f);
 }
 
+/** ---------- news api ---------- */
+const NEWS_CATEGORIES = [
+  { key: "science", label: "Ғылыми / Научные" },
+  { key: "school", label: "Мектеп / Школьные" },
+  { key: "event", label: "Іс-шара / Мероприятие" },
+  { key: "sport", label: "Спорт" },
+  { key: "achievement", label: "Жетістік / Достижение" },
+  { key: "other", label: "Басқа / Другое" },
+];
+
+async function fetchNewsAll() {
+  const qy = query(collection(db, "news"), orderBy("createdAt", "desc"), limit(300));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function createNewsPost({ uid, authorName, authorRole, avatarUrl, category, title, description, photoUrl, coverUrl, link }) {
+  await addDoc(collection(db, "news"), {
+    uid,
+    authorName: safeText(authorName),
+    authorRole: safeText(authorRole),
+    avatarUrl: safeText(avatarUrl),
+    category: safeText(category),
+    title: safeText(title),
+    description: safeText(description),
+    photoUrl: safeText(photoUrl),
+    coverUrl: safeText(coverUrl),
+    link: safeText(link),
+    likes: [],
+    createdAt: serverTimestamp()
+  });
+}
+
+async function toggleNewsLike(newsId, uid, currentLikes) {
+  const hasLiked = (currentLikes || []).includes(uid);
+  if (hasLiked) {
+    await updateDoc(doc(db, "news", newsId), { likes: arrayRemove(uid) });
+  } else {
+    await updateDoc(doc(db, "news", newsId), { likes: arrayUnion(uid) });
+  }
+}
+
+async function fetchNewsComments(newsId) {
+  const qy = query(collection(db, "news", newsId, "comments"), orderBy("createdAt", "asc"));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function addNewsComment(newsId, { uid, authorName, avatarUrl, text }) {
+  await addDoc(collection(db, "news", newsId, "comments"), {
+    uid,
+    authorName: safeText(authorName),
+    avatarUrl: safeText(avatarUrl),
+    text: safeText(text),
+    createdAt: serverTimestamp()
+  });
+}
+
+async function deleteNewsPost(newsId) {
+  await deleteDoc(doc(db, "news", newsId));
+}
+
 /** ---------- ui components ---------- */
 function Icon({ name }) {
   const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none" };
@@ -865,6 +933,7 @@ function Icon({ name }) {
     case "shield": return <svg {...common}><path {...s} d="M12 22s8-4 8-10V6l-8-3-8 3v6c0 6 8 10 8 10z" /></svg>;
     case "sun": return <svg {...common}><circle {...s} cx="12" cy="12" r="4" /><path {...s} d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>;
     case "moon": return <svg {...common}><path {...s} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>;
+    case "news": return <svg {...common}><path {...s} d="M4 22h14a2 2 0 002-2V7.5L14.5 2H6a2 2 0 00-2 2v4"/><path {...s} d="M14 2v6h6"/><path {...s} d="M2 15h10M2 19h6"/></svg>;
     default: return null;
   }
 }
@@ -982,6 +1051,7 @@ function SidebarNav() {
     { p: "profile", t: "Профиль", i: "user" },
     { p: "rating", t: "Рейтинг", i: "rank" },
     { p: "stats", t: "Статистика", i: "chart" },
+    { p: "news", t: "Жаңалықтар", i: "news" },
     { p: "requests", t: "Заявления", i: "file" },
     { p: "documents", t: "Документы", i: "shield" },
     { p: "add", t: "Добавить KPI", i: "plus" },
@@ -991,6 +1061,7 @@ function SidebarNav() {
     { p: "profile", t: "Профиль", i: "user" },
     { p: "rating", t: "Рейтинг", i: "rank" },
     { p: "stats", t: "Статистика", i: "chart" },
+    { p: "news", t: "Жаңалықтар", i: "news" },
   ];
   const admin = [
     { p: "admin/approvals", t: "Одобрения", i: "check" },
@@ -1169,6 +1240,7 @@ function BottomNav() {
   ] : [
     { p: "rating", t: "Рейтинг", i: "rank" },
     { p: "stats", t: "Статс", i: "chart" },
+    { p: "news", t: "Жаңалық", i: "news" },
     { p: "profile", t: "Профиль", i: "user" },
   ];
   return (
@@ -5184,18 +5256,351 @@ function PageAdminTeacher() {
 }
 
 
+/** ---------- PageNews ---------- */
+function NewsCard({ item, user, index }) {
+  const [liked, setLiked] = useState((item.likes || []).includes(user?.uid));
+  const [likesCount, setLikesCount] = useState((item.likes || []).length);
+  const [likeAnim, setLikeAnim] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [commentText, setCommentText] = useState("");
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [addingComment, setAddingComment] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const catLabel = NEWS_CATEGORIES.find(c => c.key === item.category)?.label?.split(" / ")[0] || item.category;
+  const dateStr = item.createdAt?.seconds
+    ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "numeric" })
+    : "";
+
+  const handleLike = async () => {
+    if (!user) return;
+    const newLiked = !liked;
+    setLiked(newLiked);
+    setLikesCount(c => c + (newLiked ? 1 : -1));
+    if (newLiked) { setLikeAnim(true); setTimeout(() => setLikeAnim(false), 700); }
+    try {
+      await toggleNewsLike(item.id, user.uid, item.likes || []);
+    } catch (e) {
+      setLiked(!newLiked);
+      setLikesCount(c => c + (newLiked ? -1 : 1));
+    }
+  };
+
+  const handleToggleComments = async () => {
+    const next = !showComments;
+    setShowComments(next);
+    if (next && comments.length === 0) {
+      setLoadingComments(true);
+      try { setComments(await fetchNewsComments(item.id)); }
+      finally { setLoadingComments(false); }
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!commentText.trim() || !user) return;
+    setAddingComment(true);
+    try {
+      await addNewsComment(item.id, {
+        uid: user.uid,
+        authorName: user.displayName || user.email || "Аноним",
+        avatarUrl: user.avatarUrl || "",
+        text: commentText.trim(),
+      });
+      setCommentText("");
+      setComments(await fetchNewsComments(item.id));
+    } catch (e) {
+      toast(e?.message || "Ошибка", "error");
+    } finally {
+      setAddingComment(false);
+    }
+  };
+
+  const isOwner = user?.uid === item.uid || user?.role === "admin";
+  const desc = item.description || "";
+  const descLong = desc.length > 200;
+
+  return (
+    <div className="news-card glass" style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}>
+      {item.coverUrl && (
+        <div className="news-card__cover-wrap">
+          <img className="news-card__cover" src={item.coverUrl} alt="cover" loading="lazy" />
+        </div>
+      )}
+      <div className="news-card__body">
+        <div className="news-card__meta">
+          {item.avatarUrl
+            ? <img className="news-card__avatar" src={item.avatarUrl} alt="" />
+            : <div className="news-card__avatar news-card__avatar--ph">{(item.authorName || "А")[0].toUpperCase()}</div>
+          }
+          <div style={{ flex: 1 }}>
+            <div className="news-card__author">{item.authorName || "Аноним"}</div>
+            <div className="tiny muted">{dateStr}</div>
+          </div>
+          <span className={`news-pill news-pill--${item.category}`}>{catLabel}</span>
+          {isOwner && (
+            <button className="news-del-btn" title="Жою / Удалить" onClick={async () => {
+              if (!window.confirm("Жаңалықты жою? / Удалить новость?")) return;
+              await deleteNewsPost(item.id);
+              const updated = await fetchNewsAll();
+              setState({ news: updated });
+              toast("Жойылды / Удалено", "ok");
+            }}>✕</button>
+          )}
+        </div>
+
+        <div className="news-card__title">{item.title}</div>
+
+        {desc && (
+          <div className="news-card__desc">
+            {descLong && !expanded ? desc.slice(0, 200) + "…" : desc}
+            {descLong && (
+              <button className="news-expand-btn" onClick={() => setExpanded(e => !e)}>
+                {expanded ? " Жабу / Свернуть" : " Толығырақ / Читать"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {item.photoUrl && (
+          <div className="news-card__photo-wrap">
+            <img className="news-card__photo" src={item.photoUrl} alt="news" loading="lazy" />
+          </div>
+        )}
+
+        {item.link && (
+          <a className="news-card__link" href={item.link} target="_blank" rel="noopener noreferrer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            {item.link}
+          </a>
+        )}
+
+        <div className="news-card__actions">
+          <button className={`news-like-btn${liked ? " liked" : ""}${likeAnim ? " pop" : ""}`} onClick={handleLike}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill={liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+            </svg>
+            <span>{likesCount > 0 ? likesCount : ""}</span>
+          </button>
+          <button className={`news-comment-btn${showComments ? " active" : ""}`} onClick={handleToggleComments}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+            <span>Пікір / Комментарии</span>
+          </button>
+        </div>
+
+        {showComments && (
+          <div className="news-comments">
+            {loadingComments ? (
+              <div className="tiny muted" style={{ padding: "8px 0" }}>Жүктелуде...</div>
+            ) : comments.length === 0 ? (
+              <div className="tiny muted" style={{ padding: "8px 0" }}>Пікір жоқ / Нет комментариев</div>
+            ) : (
+              <div className="news-comments__list">
+                {comments.map(c => (
+                  <div key={c.id} className="news-comment">
+                    {c.avatarUrl
+                      ? <img className="news-comment__av" src={c.avatarUrl} alt="" />
+                      : <div className="news-comment__av news-comment__av--ph">{(c.authorName || "А")[0].toUpperCase()}</div>
+                    }
+                    <div>
+                      <div className="news-comment__author">{c.authorName}</div>
+                      <div className="news-comment__text">{c.text}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {user && (
+              <div className="news-comment-form">
+                <input
+                  className="input"
+                  placeholder="Пікір жазу / Написать комментарий…"
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !addingComment) { e.preventDefault(); handleAddComment(); } }}
+                  style={{ flex: 1 }}
+                />
+                <Btn kind="primary" disabled={addingComment || !commentText.trim()} onClick={handleAddComment}>
+                  {addingComment ? "…" : "Жіберу"}
+                </Btn>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PageNews() {
+  const st = useStore();
+  const u = st.userDoc;
+  const [localNews, setLocalNews] = useState(st.news || []);
+  const [filter, setFilter] = useState("all");
+  const [showForm, setShowForm] = useState(false);
+  const [category, setCategory] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [link, setLink] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const [cover, setCover] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => { setLocalNews(st.news || []); }, [st.news]);
+
+  const doRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const data = await fetchNewsAll();
+      setState({ news: data });
+    } finally { setRefreshing(false); }
+  };
+
+  // auto-load if empty
+  useEffect(() => {
+    if ((st.news || []).length === 0) doRefresh();
+  }, []);
+
+  const validateFile = (file, label) => {
+    if (file && file.size > 10 * 1024 * 1024) {
+      toast(`${label} — макс. 10 МБ`, "error");
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!title.trim()) return toast("Тақырыпты енгізіңіз / Введите заголовок", "error");
+    if (!category) return toast("Категорияны таңдаңыз / Выберите категорию", "error");
+    if (!validateFile(photo, "Фото") || !validateFile(cover, "Обложка")) return;
+    setSubmitting(true);
+    try {
+      let photoUrl = "";
+      let coverUrl = "";
+      if (photo) photoUrl = await uploadFile(`news/${u.uid}/${Date.now()}_photo`, photo);
+      if (cover) coverUrl = await uploadFile(`news/${u.uid}/${Date.now()}_cover`, cover);
+      await createNewsPost({
+        uid: u.uid,
+        authorName: u.displayName || u.email || "Аноним",
+        authorRole: u.role,
+        avatarUrl: u.avatarUrl || "",
+        category, title: title.trim(), description: description.trim(),
+        photoUrl, coverUrl, link: link.trim(),
+      });
+      toast("Жаңалық жарияланды / Новость опубликована", "ok");
+      setShowForm(false);
+      setTitle(""); setDescription(""); setLink(""); setCategory(""); setPhoto(null); setCover(null);
+      const updated = await fetchNewsAll();
+      setState({ news: updated });
+    } catch (e) {
+      toast(e?.message || "Ошибка публикации", "error");
+    } finally { setSubmitting(false); }
+  };
+
+  const filtered = filter === "all" ? localNews : localNews.filter(n => n.category === filter);
+
+  return (
+    <div className="page-news">
+      <div className="page-head" style={{ marginBottom: 20 }}>
+        <div>
+          <div className="h1">Жаңалықтар / Новости</div>
+          <div className="muted tiny">Ортақ лента • {localNews.length} жарияланым</div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button className={`iconbtn${refreshing ? " spin" : ""}`} onClick={doRefresh} title="Обновить" disabled={refreshing}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+          </button>
+          {u && (
+            <Btn kind="primary" onClick={() => setShowForm(v => !v)}>
+              {showForm ? "✕ Жабу" : "+ Жариялау"}
+            </Btn>
+          )}
+        </div>
+      </div>
+
+      {showForm && (
+        <div className="news-form-card card">
+          <div className="h2" style={{ marginBottom: 16 }}>Жаңалық жариялау / Опубликовать новость</div>
+          <div className="news-form-grid">
+            <div className="field">
+              <label className="label">Категория *</label>
+              <select className="select" value={category} onChange={e => setCategory(e.target.value)}>
+                <option value="">— таңдаңыз / выберите —</option>
+                {NEWS_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label className="label">Тақырып / Заголовок *</label>
+              <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Жаңалық тақырыбы…" />
+            </div>
+            <div className="field" style={{ gridColumn: "1/-1" }}>
+              <label className="label">Сипаттама / Описание</label>
+              <textarea className="textarea" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder="Жаңалық мазмұны…" />
+            </div>
+            <div className="field">
+              <label className="label">Сілтеме / Ссылка</label>
+              <input className="input" value={link} onChange={e => setLink(e.target.value)} placeholder="https://…" />
+            </div>
+            <div className="field">
+              <label className="label">Фото (макс. 10 МБ)</label>
+              <input type="file" accept="image/*" className="input" onChange={e => setPhoto(e.target.files[0] || null)} />
+              {photo && <div className="tiny muted" style={{ marginTop: 4 }}>✓ {photo.name} ({(photo.size / 1024 / 1024).toFixed(1)} МБ)</div>}
+            </div>
+            <div className="field">
+              <label className="label">Обложка (макс. 10 МБ)</label>
+              <input type="file" accept="image/*" className="input" onChange={e => setCover(e.target.files[0] || null)} />
+              {cover && <div className="tiny muted" style={{ marginTop: 4 }}>✓ {cover.name} ({(cover.size / 1024 / 1024).toFixed(1)} МБ)</div>}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+            <Btn kind="ghost" onClick={() => setShowForm(false)}>Болдырмау / Отмена</Btn>
+            <Btn kind="primary" disabled={submitting} onClick={handleSubmit}>
+              {submitting ? "Жариялануда…" : "Жариялау / Опубликовать"}
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      <div className="news-filter" role="tablist">
+        <button role="tab" className={`news-filter__btn${filter === "all" ? " active" : ""}`} onClick={() => setFilter("all")}>Барлығы / Все</button>
+        {NEWS_CATEGORIES.map(c => (
+          <button role="tab" key={c.key} className={`news-filter__btn${filter === c.key ? " active" : ""}`} onClick={() => setFilter(c.key)}>
+            {c.label.split(" / ")[0]}
+          </button>
+        ))}
+      </div>
+
+      <div className="news-list">
+        {filtered.length === 0 ? (
+          <div className="card" style={{ textAlign: "center", padding: "40px 20px", color: "var(--muted)" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📰</div>
+            <div className="h2">Жаңалық жоқ</div>
+            <div className="tiny muted">Нет новостей в этой категории</div>
+          </div>
+        ) : (
+          filtered.map((n, i) => <NewsCard key={n.id} item={n} user={u} index={i} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
 async function hydrateForUser(userDoc) {
   if (!userDoc) return;
   try {
     if (userDoc.role === "admin") {
-      const [types, users, pend, recent, pendReq, recentReq, allDocs] = await Promise.all([
+      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData] = await Promise.all([
         fetchTypesAll(),
         fetchUsersAll(),
         fetchPendingSubmissions(),
         fetchAdminRecentSubs(),
         fetchPendingRequests(),
         fetchAdminRecentRequests(),
-        fetchAllDocuments()
+        fetchAllDocuments(),
+        fetchNewsAll()
       ]);
       setState({
         types,
@@ -5205,19 +5610,21 @@ async function hydrateForUser(userDoc) {
         pendingRequests: pendReq,
         adminRecentRequests: recentReq,
         allDocuments: allDocs,
+        news: newsData,
         mySubmissions: [],
         myRequests: [],
         myDocuments: []
       });
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
-      const [types, my, myReq, myDocs, users, recent] = await Promise.all([
+      const [types, my, myReq, myDocs, users, recent, newsData] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
         fetchDocumentsForTeacher(userDoc.uid),
         fetchUsersAll(),
-        fetchAdminRecentSubs()
+        fetchAdminRecentSubs(),
+        fetchNewsAll()
       ]);
       setState({
         types,
@@ -5226,6 +5633,7 @@ async function hydrateForUser(userDoc) {
         myDocuments: myDocs,
         users,
         adminRecentSubs: recent,
+        news: newsData,
         pendingSubmissions: [],
         pendingRequests: [],
         adminRecentRequests: [],
@@ -5270,7 +5678,8 @@ async function bootstrap() {
           pendingRequests: [],
           adminRecentRequests: [],
           myDocuments: [],
-          allDocuments: []
+          allDocuments: [],
+          news: []
         });
         setState({ booting: false });
         render();
