@@ -2291,7 +2291,7 @@ function PageLogin() {
             </Btn>
           </form>
 
-          <div className="login-form-footer">© 2025 Назарбаев Зияткерлік Мектептері</div>
+          <div className="login-form-footer">© 2026 Назарбаев Зияткерлік Мектебі</div>
         </div>
       </div>
     </div>
@@ -3041,6 +3041,101 @@ function PageAdd() {
     } finally { setState({ loading: false }); }
   }
 
+  if (selectedBook && quizOpen) {
+    return (
+      <div className="quiz-fullpage route-section">
+        <div className="quiz-fullpage__header">
+          <button className="quiz-back-btn" type="button" onClick={closeQuiz}>
+            ← Кітаптар · Назад
+          </button>
+          <div className="quiz-fullpage__book-info">
+            <span className="quiz-fullpage__month">{selectedBook.month}</span>
+            <span className="quiz-fullpage__title">{selectedBook.author} · «{selectedBook.shortTitle}»</span>
+            <span className="tiny muted">Порог: {selectedBook.thresholdPercent || 70}% · +{selectedBook.points || 20} балл</span>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {selectedStatus?.state === "sent" ? <Pill kind="pending">Баллы отправлены</Pill> : null}
+            {selectedStatus?.state === "cooldown" ? <Pill kind="rejected">Повтор позже</Pill> : null}
+          </div>
+        </div>
+
+        {selectedBook.questions?.length ? (
+          quizResult ? (
+            <div className="quiz-result-screen">
+              <div className={`quiz-result-screen__icon`}>{quizResult.passed ? "🎉" : "😔"}</div>
+              <div className="quiz-result-screen__score">
+                {quizResult.correct}<span className="quiz-result-screen__score-total">/{quizResult.total}</span>
+              </div>
+              <div className="quiz-result-screen__percent">{quizResult.percent}%</div>
+              {quizResult.passed ? (
+                <>
+                  <div className="quiz-result-screen__title ok">Құттықтаймыз! · Поздравляем!</div>
+                  <div className="quiz-result-screen__desc">
+                    Тест сәтті өтілді · Тест успешно пройден<br />
+                    +{selectedBook.points || 20} балл тексеруге жіберілді · баллов отправлены на проверку
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="quiz-result-screen__title fail">Өкінішке орай · К сожалению</div>
+                  <div className="quiz-result-screen__desc">
+                    Өту шегі {selectedBook.thresholdPercent || 70}% · Порог прохождения {selectedBook.thresholdPercent || 70}%<br />
+                    24 сағаттан кейін қайталауға болады · Повтор доступен через 24 часа
+                  </div>
+                </>
+              )}
+              <Btn type="button" onClick={closeQuiz} kind="primary" style={{ marginTop: 28 }}>← Кітаптарға оралу · Вернуться к книгам</Btn>
+            </div>
+          ) : (
+            <form onSubmit={submitBookQuiz} className="quiz-fullpage__form">
+              <div className="quiz-questions">
+                {selectedBook.questions.map((q, idx) => {
+                  const picked = quizAnswers[q.id] || "";
+                  return (
+                    <div key={q.id} className="quiz-question-card">
+                      <div className="quiz-question-card__title">{idx + 1}. {q.text}</div>
+                      <div className="quiz-options">
+                        {q.options.map(opt => {
+                          const checked = picked === opt.key;
+                          return (
+                            <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""}`}>
+                              <input
+                                type="radio"
+                                name={`quiz_${selectedBook.id}_${q.id}`}
+                                value={opt.key}
+                                checked={checked}
+                                onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
+                                disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
+                              />
+                              <span className="quiz-option__key">{opt.key}</span>
+                              <span>{opt.text}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="quiz-fullpage__actions">
+                <Btn kind="primary" type="submit" disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}>
+                  {quizSubmitting ? "Сохраняем..." : "Тестті аяқтау · Завершить тест"}
+                </Btn>
+                <Btn type="button" onClick={() => setQuizAnswers({})} disabled={quizSubmitting}>Сбросить ответы</Btn>
+                <Btn type="button" onClick={closeQuiz}>← Назад</Btn>
+              </div>
+            </form>
+          )
+        ) : (
+          <div className="glass card" style={{ maxWidth: 560, margin: "0 auto" }}>
+            <p className="p">Для этой книги тест ещё не добавлен. Можете прислать вопросы — я встрою их по аналогии.</p>
+            <Btn type="button" onClick={closeQuiz} style={{ marginTop: 12 }}>← Назад</Btn>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="grid2">
       <div className="glass card">
@@ -3161,92 +3256,6 @@ function PageAdd() {
         )}
       </div>
 
-      {selectedBook && quizOpen && (
-        <div className="glass card" style={{ gridColumn: "1/-1" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <div>
-              <div className="h2" style={{ marginBottom: 4 }}>Книжный тест · {selectedBook.title}</div>
-              <div className="tiny muted">Порог прохождения: {selectedBook.thresholdPercent || 70}% · За прохождение: +{selectedBook.points || 20} баллов (на проверку)</div>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {selectedStatus?.state === "sent" ? <Pill kind="pending">Баллы уже отправлены</Pill> : null}
-              {selectedStatus?.state === "cooldown" ? <Pill kind="rejected">Повтор позже</Pill> : null}
-              <Btn type="button" onClick={closeQuiz}>Скрыть</Btn>
-            </div>
-          </div>
-
-          {selectedBook.questions?.length ? (
-            <>
-              <div className="sep"></div>
-              <form onSubmit={submitBookQuiz}>
-                <div className="quiz-questions">
-                  {selectedBook.questions.map((q, idx) => {
-                    const picked = quizAnswers[q.id] || "";
-                    return (
-                      <div key={q.id} className="quiz-question-card">
-                        <div className="quiz-question-card__title">{idx + 1}. {q.text}</div>
-                        <div className="quiz-options">
-                          {q.options.map(opt => {
-                            const checked = picked === opt.key;
-                            const showResult = !!quizResult;
-                            const isCorrect = q.correct === opt.key;
-                            const isWrongPicked = showResult && checked && !isCorrect;
-                            return (
-                              <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""} ${showResult && isCorrect ? "correct" : ""} ${isWrongPicked ? "wrong" : ""}`}>
-                                <input
-                                  type="radio"
-                                  name={`quiz_${selectedBook.id}_${q.id}`}
-                                  value={opt.key}
-                                  checked={checked}
-                                  onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
-                                  disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
-                                />
-                                <span className="quiz-option__key">{opt.key}</span>
-                                <span>{opt.text}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {quizResult && (
-                  <div className={`quiz-result ${quizResult.passed ? "ok" : "fail"}`}>
-                    <div style={{ fontWeight: 800 }}>
-                      {quizResult.passed ? "Тест пройден ✅" : "Тест не пройден ❌"}
-                    </div>
-                    <div className="tiny" style={{ marginTop: 4 }}>
-                      Правильно: {quizResult.correct} из {quizResult.total} · {quizResult.percent}%
-                      {quizResult.passed
-                        ? ` · +${selectedBook.points || 20} баллов отправлены на проверку`
-                        : ` · Повторная попытка будет доступна через 24 часа`}
-                    </div>
-                  </div>
-                )}
-
-                <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-                  <Btn
-                    kind="primary"
-                    type="submit"
-                    disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
-                  >
-                    {quizSubmitting ? "Сохраняем..." : "Завершить тест"}
-                  </Btn>
-                  <Btn type="button" onClick={() => { setQuizAnswers({}); setQuizResult(null); }} disabled={quizSubmitting}>Сбросить ответы</Btn>
-                </div>
-              </form>
-            </>
-          ) : (
-            <div className="sep"></div>
-          )}
-
-          {!selectedBook.questions?.length && (
-            <p className="p">Для этой книги тест ещё не добавлен. Можете прислать вопросы — я встрою их по аналогии.</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }
