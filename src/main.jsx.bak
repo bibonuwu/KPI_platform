@@ -858,7 +858,6 @@ async function uploadAvatar(uid, blob) {
 }
 
 /** ---------- news api ---------- */
-const NEWS_CAT_ICONS = { science: "\u{1F52C}", school: "\u{1F3EB}", event: "\u{1F389}", sport: "\u26BD", achievement: "\u{1F3C6}", other: "\u{1F4CC}" };
 const NEWS_CATEGORIES = [
   { key: "science", tKey: "catScience" },
   { key: "school", tKey: "catSchool" },
@@ -2089,7 +2088,7 @@ function PageOnboarding() {
       <div className="glass card onb-docs-card">
         <div className="onb-docs-header">
           <div style={{ fontSize: 20, fontWeight: 800 }}>{`📄 ${t("onbOfficialDocs")}`}</div>
-          {isOnboarded && <span className="pill approved">{t("onbAllRead")} ✓</span>}
+          {isOnboarded && <span className="pill approved">Барлығы оқылды ✓</span>}
         </div>
 
         <div className="onb-docs-list">
@@ -2112,16 +2111,16 @@ function PageOnboarding() {
                 </div>
                 {isOpen && (
                   <div className="onb-doc__body">
-                    <div className="onb-doc__lang-label">🇰🇿 {t("onbLangKz")}</div>
+                    <div className="onb-doc__lang-label">🇰🇿 Қазақша</div>
                     <p className="onb-doc__text">{d.kz}</p>
-                    <div className="onb-doc__lang-label">🇷🇺 {t("onbLangRu")}</div>
+                    <div className="onb-doc__lang-label">🇷🇺 Русский</div>
                     <p className="onb-doc__text">{d.ru}</p>
                     {!isOnboarded && (
                       <button
                         className={`onb-doc__confirm${checks[i] ? " onb-doc__confirm--done" : ""}`}
                         onClick={() => { if (!checks[i]) toggleCheck(i); setExpanded(null); }}
                       >
-                        {checks[i] ? `✓ ${t("onbReadDone")}` : t("onbAgree")}
+                        {checks[i] ? "✓ Оқыдым / Прочитано" : "Оқыдым және келісемін / Прочитал(а) и согласен(а) →"}
                       </button>
                     )}
                   </div>
@@ -2138,9 +2137,10 @@ function PageOnboarding() {
           {!allChecked ? (
             <div className="onb-sig-locked">
               <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{t("onbSignSection")}</div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>Қол қою бөлімі / Раздел подписи</div>
               <p className="p" style={{ textAlign: "center" }}>
-                {checkedCount} / {docs.length}
+                Барлық {docs.length} құжатты оқығаннан кейін қол қою мүмкін болады.<br />
+                <span style={{ fontSize: 13 }}>Раздел подписи откроется после прочтения всех {docs.length} документов.</span>
               </p>
               <div className="onb-sig-locked__progress">
                 <div className="onb-sig-locked__fill" style={{ width: `${(checkedCount / docs.length) * 100}%` }} />
@@ -2151,20 +2151,20 @@ function PageOnboarding() {
             <>
               <div className="onb-sig-ready-banner">
                 <div className="onb-sig-ready-banner__icon">🎊</div>
-                <div className="onb-sig-ready-banner__title">{t("onbAllDocsRead")}</div>
-                <div className="onb-sig-ready-banner__sub">{t("onbFinalStep")}</div>
+                <div className="onb-sig-ready-banner__title">Барлық құжаттар оқылды! / Все документы прочитаны!</div>
+                <div className="onb-sig-ready-banner__sub">Соңғы қадам — қолтаңба / Последний шаг — поставьте подпись</div>
               </div>
 
               <div className="onb-sig-wrap">
                 <div className="onb-sig-wrap__head">
                   <div>
-                    <div className="h2" style={{ marginBottom: 4 }}>✍ {t("onbDrawSign")}</div>
+                    <div className="h2" style={{ marginBottom: 4 }}>✍ Қол қою / Поставьте подпись</div>
                     <p className="p" style={{ margin: 0, fontSize: 13 }}>
-                      {t("onbDrawHint")}
+                      Ақ жолаққа қолыңызды сызыңыз / Нарисуйте подпись мышкой или пальцем
                     </p>
                   </div>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("onbThickness")}</span>
+                    <span style={{ fontSize: 12, color: "var(--muted)" }}>Толщина:</span>
                     {[1, 2, 4].map(sz => (
                       <button key={sz} onClick={() => setBrushSize(sz)} style={{
                         width: 32, height: 32, borderRadius: 8,
@@ -2193,16 +2193,16 @@ function PageOnboarding() {
                     onTouchEnd={onUp}
                   />
                   {!signed && (
-                    <div className="onb-sig-hint">✍ {t("onbSignHere")}</div>
+                    <div className="onb-sig-hint">✍ Здесь поставьте подпись / Мұнда қол қойыңыз</div>
                   )}
                 </div>
 
                 <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
-                  <Btn onClick={clearSig}>↺ {t("onbClear")}</Btn>
+                  <Btn onClick={clearSig}>↺ Тазалау / Очистить</Btn>
                   <Btn kind="primary" onClick={submit} disabled={saving || !signed}>
-                    {saving ? t("loading") : `✅ ${t("onbConfirmSign")}`}
+                    {saving ? "Сақталуда..." : "✅ Растау және қол қою / Подтвердить и подписать"}
                   </Btn>
-                  {signed && <span style={{ fontSize: 13, color: "var(--green)", fontWeight: 700 }}>✓ {t("onbSignReady")}</span>}
+                  {signed && <span style={{ fontSize: 13, color: "var(--green)", fontWeight: 700 }}>✓ Қол қойылды / Подпись готова</span>}
                 </div>
               </div>
             </>
@@ -2214,19 +2214,19 @@ function PageOnboarding() {
       {isOnboarded && (
         <div className="glass card onb-done-card">
           <div className="onb-done-card__icon">🏆</div>
-          <div className="onb-done-card__title">{t("onbSuccess")}</div>
+          <div className="onb-done-card__title">Ознакомление пройдено успешно!</div>
           <div className="onb-done-card__checks">
-            <div className="onb-done-check"><span>✓</span> {t("onbDocsRead")}</div>
-            <div className="onb-done-check"><span>✓</span> {t("onbSignDone")}</div>
+            <div className="onb-done-check"><span>✓</span> Барлық құжаттар оқылды / Все документы прочитаны</div>
+            <div className="onb-done-check"><span>✓</span> Қол қойылды / Подпись поставлена</div>
             {u.onboardedAt && (
               <div className="onb-done-check">
-                <span>📅</span> {t("date")}: {new Date(u.onboardedAt.seconds * 1000).toLocaleDateString("ru-RU")}
+                <span>📅</span> Күні / Дата: {new Date(u.onboardedAt.seconds * 1000).toLocaleDateString("ru-RU")}
               </div>
             )}
           </div>
           {u.signatureUrl && (
             <div style={{ marginTop: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--muted)", marginBottom: 8, textTransform: "uppercase", letterSpacing: .4 }}>{t("onbYourSign")}</div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--muted)", marginBottom: 8, textTransform: "uppercase", letterSpacing: .4 }}>Сіздің қолыңыз / Ваша подпись</div>
               <img src={u.signatureUrl} alt="Подпись" className="onb-done-card__sig" />
             </div>
           )}
@@ -2252,9 +2252,30 @@ function PageLogin() {
   }, []);
 
   const slides = [
-    { icon: "📊", tTitle: "loginTitle1", tDesc: "loginDesc", accent: "#87BC2E" },
-    { icon: "🏆", tTitle: "loginSlide1Title", tDesc: "loginSlide1Desc", accent: "#4f9cf9" },
-    { icon: "✨", tTitle: "loginSlide2Title", tDesc: "loginSlide2Desc", accent: "#a78bfa" },
+    {
+      icon: "📊",
+      title: "Платформа KPI",
+      titleKz: "KPI Платформасы",
+      desc: "Автоматический учёт и рейтингование профессиональных достижений педагогов Назарбаев Интеллектуальных Школ.",
+      descKz: "НИШ мұғалімдерінің кәсіби жетістіктерін автоматты есепке алу және рейтингілеу.",
+      accent: "#87BC2E",
+    },
+    {
+      icon: "🏆",
+      title: "Рейтинг в реальном времени",
+      titleKz: "Нақты уақыттағы рейтинг",
+      desc: "Видите своё место среди коллег, динамику роста баллов и достижения лучших педагогов школы.",
+      descKz: "Әріптестер арасындағы орыныңызды, балл өсу динамикасы мен үздік мұғалімдердің жетістіктерін көріңіз.",
+      accent: "#4f9cf9",
+    },
+    {
+      icon: "✨",
+      title: "Просто и удобно",
+      titleKz: "Қарапайым және ыңғайлы",
+      desc: "Добавляйте KPI через форму, прикладывайте документы, подтверждайте подписью — всё в одном месте.",
+      descKz: "Форма арқылы KPI қосыңыз, құжаттар тіркеңіз, қолтаңбамен растаңыз — бәрі бір жерде.",
+      accent: "#a78bfa",
+    },
   ];
 
   async function submit(e) {
@@ -2262,10 +2283,10 @@ function PageLogin() {
     try {
       setState({ loading: true });
       await signInWithEmailAndPassword(auth, email, pass);
-      toast(t("loginWelcome"), "ok");
+      toast("Добро пожаловать!", "ok");
     } catch (err) {
       console.error(err);
-      toast(err?.message || t("loginError"), "error");
+      toast(err?.message || "Ошибка входа", "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -2303,16 +2324,18 @@ function PageLogin() {
           <div className="login-slider__brand">
             <img src="/logo-nis.png" alt="NIS" className="login-slider__logo" />
             <div>
-              <div className="login-slider__brandname">{t("appName")}</div>
-              <div className="login-slider__brandsub">{t("loginNisName")}</div>
+              <div className="login-slider__brandname">NIS KPI Platform</div>
+              <div className="login-slider__brandsub">Назарбаев Зияткерлік Мектептері</div>
             </div>
           </div>
 
           {/* Slide */}
           <div className="login-slide" key={slide}>
             <div className="login-slide__icon" style={{ "--accent": s.accent }}>{s.icon}</div>
-            <div className="login-slide__title">{t(s.tTitle)}</div>
-            <div className="login-slide__desc">{t(s.tDesc)}</div>
+            <div className="login-slide__title">{s.title}</div>
+            <div className="login-slide__title-kz">{s.titleKz}</div>
+            <div className="login-slide__desc">{s.desc}</div>
+            <div className="login-slide__desc-kz">{s.descKz}</div>
           </div>
 
           {/* Dots */}
@@ -2330,9 +2353,9 @@ function PageLogin() {
 
           {/* Bottom strip */}
           <div className="login-slider__footer">
-            <div className="login-slider__stat"><span>📈</span> {t("loginMotivation1")}</div>
-            <div className="login-slider__stat"><span>🎯</span> {t("loginMotivation2")}</div>
-            <div className="login-slider__stat"><span>🏅</span> {t("loginMotivation3")}</div>
+            <div className="login-slider__stat"><span>📈</span> Жетістіктерді бақылаңыз</div>
+            <div className="login-slider__stat"><span>🎯</span> Мақсатқа жетіңіз</div>
+            <div className="login-slider__stat"><span>🏅</span> Рейтингте көтеріліңіз</div>
           </div>
         </div>
       </div>
@@ -2344,8 +2367,8 @@ function PageLogin() {
             <div className="login-form-logo">
               <img src="/logo-nis.png" alt="NIS" />
             </div>
-            <div className="login-form-title">{t("loginHeading")}</div>
-            <div className="login-form-sub">{t("loginSubtext")}</div>
+            <div className="login-form-title">Кіру / Войти</div>
+            <div className="login-form-sub">Платформаға кіру үшін аккаунтыңызды пайдаланыңыз</div>
           </div>
 
           {/* Microsoft btn — primary CTA */}
@@ -2361,27 +2384,27 @@ function PageLogin() {
               <path d="M1 11h9v9H1z" fill="#00a4ef" />
               <path d="M11 11h9v9h-9z" fill="#ffb900" />
             </svg>
-            {st.loading ? t("loading") : t("msSignIn")}
+            {st.loading ? "Жүктелуде..." : "Microsoft арқылы кіру / Войти через Microsoft"}
           </button>
 
-          <div className="login-divider"><span>{t("or")}</span></div>
+          <div className="login-divider"><span>немесе / или</span></div>
 
           <form onSubmit={submit}>
             <div className="login-field">
-              <label className="login-label">{t("email")}</label>
+              <label className="login-label">Email</label>
               <Input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="name@nis.edu.kz" required />
             </div>
             <div className="login-field" style={{ marginTop: 10 }}>
-              <label className="login-label">{t("password")}</label>
+              <label className="login-label">Пароль / Құпиясөз</label>
               <Input value={pass} onChange={e => setPass(e.target.value)} type="password" placeholder="••••••••" required />
             </div>
             <Btn kind="primary" type="submit" disabled={st.loading}
               style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: "12px 20px", fontSize: 15 }}>
-              {st.loading ? t("signingIn") : t("signIn")}
+              {st.loading ? "Кіру..." : "Кіру / Войти →"}
             </Btn>
           </form>
 
-          <div className="login-form-footer">{t("copyright")}</div>
+          <div className="login-form-footer">© 2026 Назарбаев Зияткерлік Мектебі</div>
         </div>
       </div>
     </div>
@@ -2502,16 +2525,16 @@ function PageProfile() {
             {u.avatarUrl ? <img src={u.avatarUrl} alt="avatar" /> : <span style={{ fontWeight: 900 }}>{(u.displayName || u.email || "?").slice(0, 1).toUpperCase()}</span>}
           </div>
           <div style={{ minWidth: 0 }}>
-            <div className="h2" style={{ margin: 0 }}>{u.displayName || t("unnamed")}</div>
-            <div className="tiny muted">{u.email} · {t("role")}: <b>{u.role}</b></div>
+            <div className="h2" style={{ margin: 0 }}>{u.displayName || "Без имени"}</div>
+            <div className="tiny muted">{u.email} · роль: <b>{u.role}</b></div>
             <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
               <label className="btn">
-                <Icon name="file" /> {t("photo")}
+                <Icon name="file" /> Фото
                 <input hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
               </label>
-              {u.role !== "admin" && <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> {t("addKpi")}</Btn>}
-              <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast(t("loggedOut"), "ok"); navigate("login"); }}>
-                <Icon name="logout" /> {t("navLogout")}
+              {u.role !== "admin" && <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> Добавить KPI</Btn>}
+              <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast("Вы вышли", "ok"); navigate("login"); }}>
+                <Icon name="logout" /> Выйти
               </Btn>
             </div>
           </div>
@@ -2521,20 +2544,20 @@ function PageProfile() {
 
         <div className="grid3">
           <div className="kpi">
-            <div><div className="muted tiny">{t("totalPoints")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.totalPoints)}</div></div>
+            <div><div className="muted tiny">Всего баллов</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.totalPoints)}</div></div>
             <Pill kind="approved">{lvl.name}</Pill>
           </div>
           <div className="kpi">
-            <div><div className="muted tiny">{t("submissions")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(subs.length)}</div></div>
+            <div><div className="muted tiny">Заявок</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(subs.length)}</div></div>
             <span className="tiny muted">APR {subs.length ? Math.round((approved.length / subs.length) * 100) : 0}%</span>
           </div>
           <div className="kpi">
-            <div><div className="muted tiny">{t("approvedPts")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(sum(approved, s => s.points))}</div></div>
+            <div><div className="muted tiny">Одобрено баллов</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(sum(approved, s => s.points))}</div></div>
             <span className="tiny muted">{approved.length} шт</span>
           </div>
           <div className="kpi">
-            <div><div className="muted tiny">{t("compDays")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.compDays || 0)}</div></div>
-            <Btn kind="ghost" onClick={() => navigate("requests")}>{t("requests")}</Btn>
+            <div><div className="muted tiny">Отгулы</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.compDays || 0)}</div></div>
+            <Btn kind="ghost" onClick={() => navigate("requests")}>Заявления</Btn>
           </div>
         </div>
 
@@ -2545,55 +2568,55 @@ function PageProfile() {
         </div>
 
         <div className="sep"></div>
-        <Btn onClick={() => setOpen(v => !v)}>{open ? t("closeSettings") : t("settings")}</Btn>
+        <Btn onClick={() => setOpen(v => !v)}>{open ? "Закрыть настройки" : "Настройки"}</Btn>
 
         {open && (
           <div style={{ marginTop: 12 }}>
             <div className="grid2">
-              <div><div className="label">{t("fullName")}</div><Input value={form.displayName} onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))} /></div>
-              <div><div className="label">{t("position")}</div><Input value={form.position} onChange={(e) => setForm(f => ({ ...f, position: e.target.value }))} /></div>
-              <div><div className="label">{t("school")}</div><Input value={form.school} onChange={(e) => setForm(f => ({ ...f, school: e.target.value }))} /></div>
-              <div><div className="label">{t("subject")}</div><Input value={form.subject} onChange={(e) => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
-              <div><div className="label">{t("experience")}</div><Input type="number" min="0" max="60" value={form.experienceYears} onChange={(e) => setForm(f => ({ ...f, experienceYears: e.target.value }))} /></div>
-              <div><div className="label">{t("phone")}</div><Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
-              <div><div className="label">{t("city")}</div><Input value={form.city} onChange={(e) => setForm(f => ({ ...f, city: e.target.value }))} /></div>
+              <div><div className="label">ФИО</div><Input value={form.displayName} onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))} /></div>
+              <div><div className="label">Должность</div><Input value={form.position} onChange={(e) => setForm(f => ({ ...f, position: e.target.value }))} /></div>
+              <div><div className="label">Школа</div><Input value={form.school} onChange={(e) => setForm(f => ({ ...f, school: e.target.value }))} /></div>
+              <div><div className="label">Предмет</div><Input value={form.subject} onChange={(e) => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
+              <div><div className="label">Стаж</div><Input type="number" min="0" max="60" value={form.experienceYears} onChange={(e) => setForm(f => ({ ...f, experienceYears: e.target.value }))} /></div>
+              <div><div className="label">Телефон</div><Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
+              <div><div className="label">Город</div><Input value={form.city} onChange={(e) => setForm(f => ({ ...f, city: e.target.value }))} /></div>
               <div />
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              <Btn kind="primary" onClick={save} disabled={st.loading}>{t("save")}</Btn>
-              <Btn onClick={() => setOpen(false)}>{t("cancel")}</Btn>
+              <Btn kind="primary" onClick={save} disabled={st.loading}>Сохранить</Btn>
+              <Btn onClick={() => setOpen(false)}>Отмена</Btn>
             </div>
 
             <div className="sep"></div>
-            <div className="h2" style={{ fontSize: 18 }}>{t("security")}</div>
+            <div className="h2" style={{ fontSize: 18 }}>Безопасность</div>
             <div className="help">
               {isPasswordProvider
-                ? t("securityHelp")
-                : t("securityNote")}
+                ? "Введите текущий пароль, затем новый."
+                : "Если вы входите через Google/другой провайдер, может потребоваться повторный вход для смены пароля."}
             </div>
             <div className="grid2" style={{ marginTop: 10 }}>
               {isPasswordProvider && (
                 <div>
-                  <div className="label">{t("currentPwd")}</div>
+                  <div className="label">Текущий пароль</div>
                   <Input type="password" autoComplete="current-password" value={pw.current}
                     onChange={(e) => setPw(p => ({ ...p, current: e.target.value }))} />
                 </div>
               )}
               <div>
-                <div className="label">{t("newPwd")}</div>
+                <div className="label">Новый пароль</div>
                 <Input type="password" autoComplete="new-password" value={pw.next}
                   onChange={(e) => setPw(p => ({ ...p, next: e.target.value }))} />
               </div>
               <div>
-                <div className="label">{t("repeatNewPwd")}</div>
+                <div className="label">Повторите новый пароль</div>
                 <Input type="password" autoComplete="new-password" value={pw.next2}
                   onChange={(e) => setPw(p => ({ ...p, next2: e.target.value }))} />
               </div>
               <div />
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              <Btn kind="primary" onClick={changePassword} disabled={st.loading}>{t("changePwd")}</Btn>
-              <Btn kind="ghost" onClick={resetPasswordEmail} disabled={st.loading}>{t("resetByEmail")}</Btn>
+              <Btn kind="primary" onClick={changePassword} disabled={st.loading}>Изменить пароль</Btn>
+              <Btn kind="ghost" onClick={resetPasswordEmail} disabled={st.loading}>Сбросить по email</Btn>
             </div>
           </div>
         )}
@@ -2602,16 +2625,16 @@ function PageProfile() {
       </div>
 
       <div className="glass card">
-        <div className="h2">{t("recentSubs")}</div>
+        <div className="h2">Последние заявки</div>
         <div className="sep"></div>
         <DataCards
-          emptyText={t("noSubsYet")}
+          emptyText="Пока нет заявок"
           columns={[
-            { key: "eventDate", label: t("date") },
-            { key: "typeName", label: t("type") },
-            { key: "title", label: t("title") },
-            { key: "points", label: t("points"), render: s => <b>{fmtPoints(s.points)}</b> },
-            { key: "status", label: t("status"), render: s => <Pill kind={s.status}>{s.status}</Pill> }
+            { key: "eventDate", label: "Дата" },
+            { key: "typeName", label: "Тип" },
+            { key: "title", label: "Название" },
+            { key: "points", label: "Баллы", render: s => <b>{fmtPoints(s.points)}</b> },
+            { key: "status", label: "Статус", render: s => <Pill kind={s.status}>{s.status}</Pill> }
           ]}
           rows={subs.slice(0, 8).map(s => ({ ...s, __key: s.id }))}
         />
@@ -3378,10 +3401,10 @@ function PageRequests() {
         ensureUserDoc(u.uid, u.email)
       ]);
       setState({ myRequests: myReq, userDoc: fresh });
-      toast(t("dataUpdated"), "ok");
+      toast("Жаңартылды / Обновлено", "ok");
     } catch (e) {
       console.error(e);
-      toast(e?.message || t("updateFailed"), "error");
+      toast(e?.message || "Ошибка обновления", "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -3389,26 +3412,26 @@ function PageRequests() {
     e.preventDefault();
     try {
       const f = safeText(dateFrom);
-      const to = safeText(dateTo) || f;
+      const t = safeText(dateTo) || f;
       const df = new Date(`${f}T00:00:00`);
-      const dt = new Date(`${to}T00:00:00`);
-      if (Number.isNaN(df.getTime()) || Number.isNaN(dt.getTime())) { toast(t("invalidDateRange"), "error"); return; }
-      if (dt.getTime() < df.getTime()) { toast(t("invalidDateRange"), "error"); return; }
+      const dt = new Date(`${t}T00:00:00`);
+      if (Number.isNaN(df.getTime()) || Number.isNaN(dt.getTime())) { toast("Күндерді тексеріңіз / Проверьте даты", "error"); return; }
+      if (dt.getTime() < df.getTime()) { toast("'Дейін' күні 'бастап' күнінен ерте бола алмайды", "error"); return; }
 
       setState({ loading: true });
       let evidenceUrl = "";
       if (evidenceFile) {
         evidenceUrl = await uploadEvidence(u.uid, evidenceFile);
       }
-      await createTeacherRequest({ uid: u.uid, kind, dateFrom: f, dateTo: to, note, evidenceFileUrl: evidenceUrl });
-      toast(t("requestSent"), "ok");
+      await createTeacherRequest({ uid: u.uid, kind, dateFrom: f, dateTo: t, note, evidenceFileUrl: evidenceUrl });
+      toast("Өтініш әкімшіге жіберілді / Заявление отправлено", "ok");
       const myReq = await fetchMyRequests(u.uid);
       setState({ myRequests: myReq });
       setNote("");
       setEvidenceFile(null);
     } catch (err) {
       console.error(err);
-      toast(err?.message || t("sendError"), "error");
+      toast(err?.message || "Жіберу қатесі / Ошибка отправки", "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -3431,7 +3454,7 @@ function PageRequests() {
         <div className="modalback" onClick={() => setViewReq(null)}>
           <div className="modal glass" onClick={e => e.stopPropagation()} style={{ maxHeight: "-webkit-fill-available", overflowY: "auto" }}>
             <div className="modal__head">
-              <div className="h2">{t("document")}</div>
+              <div className="h2">Құжат / Документ</div>
               <button className="iconbtn" onClick={() => setViewReq(null)}><Icon name="x" /></button>
             </div>
             <DocumentPreview
@@ -3446,89 +3469,89 @@ function PageRequests() {
 
       <div className="grid2">
         <div className="glass card">
-          <div className="h1">{t("requestsTitle")}</div>
-          <p className="p">{t("requestsDesc")}</p>
+          <div className="h1">Өтініштер / Заявления</div>
+          <p className="p">Өтініш жасаңыз — әкімші мақұлдайды немесе қабылдамайды.</p>
           <div className="sep"></div>
 
           <form onSubmit={submit}>
-            <div className="label">{t("requestType")}</div>
+            <div className="label">Өтініш түрі / Тип заявления</div>
             <Select value={kind} onChange={(e) => setKind(e.target.value)}>
               {REQUEST_KINDS.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
             </Select>
 
             <div className="grid2">
               <div>
-                <div className="label">{t("dateFrom")}</div>
+                <div className="label">Бастап / С какого числа</div>
                 <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} required />
               </div>
               <div>
-                <div className="label">{t("dateTo")}</div>
+                <div className="label">Дейін / До какого числа</div>
                 <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} required />
               </div>
             </div>
 
-            <div className="label">{t("reason")}</div>
-            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("reasonPlaceholder")} />
+            <div className="label">Себебі / Причина</div>
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Себебін жазыңыз / Причина, детали..." />
 
-            <div className="label">{t("attachment")}</div>
+            <div className="label">Қосымша файл / Вложение (необязательно)</div>
             <Input type="file" onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
-            {evidenceFile && <div className="help">{t("file")}: {evidenceFile.name}</div>}
+            {evidenceFile && <div className="help">Файл: {evidenceFile.name}</div>}
 
             <div className="help" style={{ marginTop: 8 }}>
-              Кезеңдегі күндер: <b>{days}</b>. {k.compMode === "earn" && <>{t("earnedDays")}: <b>+{days}</b>.</>}
-              {k.compMode === "use" && <>{t("usedDays")}: <b>-{days}</b>.</>}
+              Кезеңдегі күндер: <b>{days}</b>. {k.compMode === "earn" && <>Мақұлданғаннан кейін демалыс қосылады: <b>+{days}</b>.</>}
+              {k.compMode === "use" && <>Мақұлданғаннан кейін демалыс есептен шығарылады: <b>-{days}</b>.</>}
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              <Btn kind="primary" type="submit" disabled={st.loading}><Icon name="check" /> {t("send")}</Btn>
-              <Btn type="button" onClick={() => setShowPreview(!showPreview)}><Icon name="file" /> {showPreview ? t("hide") : t("preview")}</Btn>
-              <Btn type="button" onClick={refresh} disabled={st.loading}>{t("refresh")}</Btn>
+              <Btn kind="primary" type="submit" disabled={st.loading}><Icon name="check" /> Жіберу / Отправить</Btn>
+              <Btn type="button" onClick={() => setShowPreview(!showPreview)}><Icon name="file" /> {showPreview ? "Жасыру" : "Алдын-ала қарау"}</Btn>
+              <Btn type="button" onClick={refresh} disabled={st.loading}>Жаңарту / Обновить</Btn>
             </div>
           </form>
 
           {showPreview && (
             <>
               <div className="sep" />
-              <div className="h2">{t("preview")}</div>
+              <div className="h2">Алдын-ала қарау / Предпросмотр</div>
               <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} />
             </>
           )}
         </div>
 
         <div className="glass card">
-          <div className="h2">{t("myRequests")}</div>
+          <div className="h2">Менің өтініштерім / Мои заявления</div>
           <div className="sep"></div>
 
           <div className="grid3">
             <div className="kpi">
-              <div><div className="muted tiny">{t("compBalance")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.compDays || 0)}</div></div>
-              <Pill kind="approved">{t("compDaysPill")}</Pill>
+              <div><div className="muted tiny">Демалыс (баланс)</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.compDays || 0)}</div></div>
+              <Pill kind="approved">демалыс</Pill>
             </div>
             <div className="kpi">
-              <div><div className="muted tiny">{t("requests")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(reqs.length)}</div></div>
-              <span className="tiny muted">{t("reqPending")} {pending.length}</span>
+              <div><div className="muted tiny">Өтініштер</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(reqs.length)}</div></div>
+              <span className="tiny muted">күтуде {pending.length}</span>
             </div>
             <div className="kpi">
-              <div><div className="muted tiny">{t("compForecast")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{compPreview ? signNum(compPreview) : "0"}</div></div>
-              <span className="tiny muted">{t("forNew")}</span>
+              <div><div className="muted tiny">Демалыс болжамы</div><div style={{ fontWeight: 900, fontSize: 22 }}>{compPreview ? signNum(compPreview) : "0"}</div></div>
+              <span className="tiny muted">жаңа үшін</span>
             </div>
           </div>
 
           <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Pill kind="approved">{t("reqApproved")}: {approved.length}</Pill>
-            <Pill kind="pending">{t("reqPending")}: {pending.length}</Pill>
-            <Pill kind="rejected">{t("reqRejected")}: {rejected.length}</Pill>
+            <Pill kind="approved">мақұлданды: {approved.length}</Pill>
+            <Pill kind="pending">күтуде: {pending.length}</Pill>
+            <Pill kind="rejected">қабылданбады: {rejected.length}</Pill>
           </div>
 
           <div className="sep"></div>
 
           <DataCards
-            emptyText={t("noRequests")}
+            emptyText="Өтініш жоқ / Пока нет заявлений"
             columns={[
               { key: "period", label: "Кезең", render: r => `${r.dateFrom}${r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}` },
               { key: "kind", label: "Түрі", render: r => <><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny">{r.note}</div> : null}</> },
-              { key: "status", label: t("status"), render: r => <Pill kind={r.status}>{r.status === "approved" ? t("reqApproved") : r.status === "rejected" ? t("reqRejected") : t("reqPending")}</Pill> },
-              { key: "pts", label: t("pointsDelta"), render: r => r.status === "approved" ? <b>{signNum(Number(r.pointsDelta) || 0)}</b> : <span className="muted">—</span> },
+              { key: "status", label: "Мәртебе", render: r => <Pill kind={r.status}>{r.status === "approved" ? "мақұлданды" : r.status === "rejected" ? "қабылданбады" : "күтуде"}</Pill> },
+              { key: "pts", label: "Δ баллы", render: r => r.status === "approved" ? <b>{signNum(Number(r.pointsDelta) || 0)}</b> : <span className="muted">—</span> },
               { key: "actions", label: "", render: r => <Btn kind="ghost" onClick={() => setViewReq(r)}><Icon name="file" /></Btn> }
             ]}
             rows={reqs.slice(0, 20).map(r => ({ ...r, __key: r.id }))}
@@ -3581,46 +3604,46 @@ function PageRating() {
 
   return (
     <div className="glass card">
-      <div className="h1">{t("ratingTitle")}</div>
-      <p className="p">{t("ratingDesc")}</p>
+      <div className="h1">Рейтинг преподавателей</div>
+      <p className="p">Сортировка по <b>totalPoints</b>. Динамика — сравнение с прошлым снимком из localStorage.</p>
       <div className="sep"></div>
 
       <div className="podium">
         {[1, 0, 2].map((idx, i) => {
-          const tc = top3[idx];
+          const t = top3[idx];
           const isChamp = idx === 0;
-          if (!tc) {
+          if (!t) {
             return (
               <div key={i} className="podium__item glass">
                 <div className="podium__inner">
                   <div className="podium__rank">—</div>
-                  <div className="podium__name">{t("emptySlot")}</div>
-                  <div className="podium__meta muted">{t("noData")}</div>
+                  <div className="podium__name">Пусто</div>
+                  <div className="podium__meta muted">Нет данных</div>
                 </div>
               </div>
             );
           }
           if (isChamp) {
             return (
-              <div key={tc.uid} className="podium__item podium__item--champ glass first">
+              <div key={t.uid} className="podium__item podium__item--champ glass first">
                 {/* Decorative shimmer strips */}
                 <div className="champ-shimmer" aria-hidden="true" />
                 <div className="podium__inner">
                   <div className="champ-crown">👑</div>
                   <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                     <div className="podiumAvatar podiumAvatar--champ">
-                      {tc.avatarUrl
-                        ? <img src={tc.avatarUrl} alt="" />
-                        : <span style={{ fontWeight: 900, fontSize: 22 }}>{(tc.displayName || tc.email || "?").slice(0, 1).toUpperCase()}</span>}
+                      {t.avatarUrl
+                        ? <img src={t.avatarUrl} alt="" />
+                        : <span style={{ fontWeight: 900, fontSize: 22 }}>{(t.displayName || t.email || "?").slice(0, 1).toUpperCase()}</span>}
                     </div>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div className="champ-rank-badge">#1 {t("champion")} · {trend.get(tc.uid)}</div>
-                      <div className="champ-name">{tc.displayName || tc.email}</div>
-                      <div className="podium__meta">{tc.school || "—"} · {tc.subject || "—"}</div>
+                      <div className="champ-rank-badge">#1 Чемпион · {trend.get(t.uid)}</div>
+                      <div className="champ-name">{t.displayName || t.email}</div>
+                      <div className="podium__meta">{t.school || "—"} · {t.subject || "—"}</div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div className="champ-points">{fmtPoints(tc.totalPoints)}</div>
-                      <div className="tiny" style={{ color: "#d4a800", fontWeight: 700 }}>{t("pts")}</div>
+                      <div className="champ-points">{fmtPoints(t.totalPoints)}</div>
+                      <div className="tiny" style={{ color: "#d4a800", fontWeight: 700 }}>pts</div>
                     </div>
                   </div>
                   <div className="champ-stars" aria-hidden="true">★ ★ ★ ★ ★</div>
@@ -3629,21 +3652,21 @@ function PageRating() {
             );
           }
           return (
-            <div key={tc.uid} className="podium__item glass">
+            <div key={t.uid} className="podium__item glass">
               <div className="podium__inner" style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <div className="podiumAvatar">
-                  {tc.avatarUrl
-                    ? <img src={tc.avatarUrl} alt="" />
-                    : <span style={{ fontWeight: 900 }}>{(tc.displayName || tc.email || "?").slice(0, 1).toUpperCase()}</span>}
+                  {t.avatarUrl
+                    ? <img src={t.avatarUrl} alt="" />
+                    : <span style={{ fontWeight: 900 }}>{(t.displayName || t.email || "?").slice(0, 1).toUpperCase()}</span>}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div className="podium__rank">#{idx + 1} · {trend.get(tc.uid)}</div>
-                  <div className="podium__name">{tc.displayName || tc.email}</div>
-                  <div className="podium__meta">{tc.school || "—"} · {tc.subject || "—"}</div>
+                  <div className="podium__rank">#{idx + 1} · {trend.get(t.uid)}</div>
+                  <div className="podium__name">{t.displayName || t.email}</div>
+                  <div className="podium__meta">{t.school || "—"} · {t.subject || "—"}</div>
                 </div>
                 <div style={{ marginLeft: "auto", textAlign: "right" }}>
-                  <div className="podium__points">{fmtPoints(tc.totalPoints)}</div>
-                  <div className="tiny muted">{t("pts")}</div>
+                  <div className="podium__points">{fmtPoints(t.totalPoints)}</div>
+                  <div className="tiny muted">pts</div>
                 </div>
               </div>
             </div>
@@ -3653,22 +3676,22 @@ function PageRating() {
 
       <div className="sep"></div>
 
-      <div className="h2">{t("top100")}</div>
+      <div className="h2">Топ-100</div>
       <div className="ratinglist" style={{ marginTop: 10 }}>
-        {rest.map((tc, i) => (
-          <div key={tc.uid} className="ratingrow">
+        {rest.map((t, i) => (
+          <div key={t.uid} className="ratingrow">
             <div className="ratingrank">{i + 4}</div>
-            <Avatar user={tc} />
+            <Avatar user={t} />
             <div className="ratingmeta">
-              <div className="ratingname">{tc.displayName || t("unnamed")}</div>
-              <div className="ratingsub">{tc.school || "—"} · {tc.subject || "—"} · {tc.email}</div>
+              <div className="ratingname">{t.displayName || "Без имени"}</div>
+              <div className="ratingsub">{t.school || "—"} · {t.subject || "—"} · {t.email}</div>
             </div>
-            <div className="ratingpts">{fmtPoints(tc.totalPoints)}</div>
-            <div className="ratingtrend">{trend.get(tc.uid)}</div>
+            <div className="ratingpts">{fmtPoints(t.totalPoints)}</div>
+            <div className="ratingtrend">{trend.get(t.uid)}</div>
           </div>
         ))}
         {!sorted.length && (
-          <div className="ratingrow"><div className="muted tiny">{t("noData")}</div></div>
+          <div className="ratingrow"><div className="muted tiny">Нет данных</div></div>
         )}
       </div>
     </div>
@@ -3718,10 +3741,10 @@ function PageStats() {
     try {
       setState({ loading: true });
       await hydrateForUser(u);
-      toast(t("dataUpdated"), "ok");
+      toast("Данные обновлены", "ok");
     } catch (e) {
       console.error(e);
-      toast(e?.message || t("updateFailed"), "error");
+      toast(e?.message || "Не удалось обновить", "error");
     } finally {
       setState({ loading: false });
     }
@@ -3731,19 +3754,19 @@ function PageStats() {
     <div className="stats-controls">
       {u.role === "teacher" ? (
         <div className="stats-controls__group">
-          <Btn kind={view === "mine" ? "primary" : ""} onClick={() => setState({ statsView: "mine" })}><Icon name="user" /> {t("mine")}</Btn>
-          <Btn kind={view === "platform" ? "primary" : ""} onClick={() => setState({ statsView: "platform" })}><Icon name="chart" /> {t("platform")}</Btn>
+          <Btn kind={view === "mine" ? "primary" : ""} onClick={() => setState({ statsView: "mine" })}><Icon name="user" /> Мои</Btn>
+          <Btn kind={view === "platform" ? "primary" : ""} onClick={() => setState({ statsView: "platform" })}><Icon name="chart" /> Платформа</Btn>
         </div>
       ) : null}
       <div className="stats-controls__group">
-        <Btn kind={mode === "14d" ? "primary" : ""} onClick={() => setState({ statsRangeMode: "14d" })}>{t("range14d")}</Btn>
-        <Btn kind={mode === "365d" ? "primary" : ""} onClick={() => setState({ statsRangeMode: "365d" })}>{t("rangeYear")}</Btn>
+        <Btn kind={mode === "14d" ? "primary" : ""} onClick={() => setState({ statsRangeMode: "14d" })}>14 дней</Btn>
+        <Btn kind={mode === "365d" ? "primary" : ""} onClick={() => setState({ statsRangeMode: "365d" })}>Год</Btn>
       </div>
       <div className="stats-controls__group">
         {u.role === "teacher" && view === "mine" ? <Btn onClick={() => navigate("add")}><Icon name="plus" /> KPI</Btn> : null}
-        {view === "platform" ? <Btn onClick={() => navigate("rating")}>{t("navRating")}</Btn> : null}
-        {u.role === "admin" ? <Btn onClick={() => navigate("admin/approvals")}>{t("navApprovals")}</Btn> : null}
-        <Btn onClick={refresh} disabled={st.loading}>{t("refresh")}</Btn>
+        {view === "platform" ? <Btn onClick={() => navigate("rating")}>Рейтинг</Btn> : null}
+        {u.role === "admin" ? <Btn onClick={() => navigate("admin/approvals")}>Approvals</Btn> : null}
+        <Btn onClick={refresh} disabled={st.loading}>Обновить</Btn>
       </div>
     </div>
   );
@@ -3797,7 +3820,7 @@ function PageStats() {
 
     const sectionMap = new Map();
     approved.forEach(s => {
-      const key = s.typeSection || t("other");
+      const key = s.typeSection || "Басқа / Прочее";
       sectionMap.set(key, (sectionMap.get(key) || 0) + (Number(s.points) || 0));
     });
     const topSections = Array.from(sectionMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -3809,8 +3832,8 @@ function PageStats() {
 
     return (
       <div className="glass card">
-        <div className="h1">{t("myStats")}</div>
-        <p className="p">Диапазон: <b>{mode === "365d" ? t("rangeYear") : t("range14d")}</b>.</p>
+        <div className="h1">Менің статистикам / Моя статистика</div>
+        <p className="p">Диапазон: <b>{mode === "365d" ? "жыл / год" : "14 күн / дней"}</b>.</p>
         <Controls />
 
         <div className="sep"></div>
@@ -3818,19 +3841,19 @@ function PageStats() {
         <div className="grid3">
           <div className="kpi">
             <div>
-              <div className="muted tiny">{t("approved")}</div>
+              <div className="muted tiny">Мақұлданды / Одобрено (балл)</div>
               <b>{fmtPoints(totalPts)}</b>
               <TrendBadge curr={recentPts} prev={olderPts} />
             </div>
-            <Pill kind="approved">{t("approved")}</Pill>
+            <Pill kind="approved">approved</Pill>
           </div>
           <div className="kpi">
-            <div><div className="muted tiny">{t("pending")}</div><b>{pending.length}</b></div>
-            <Pill kind="pending">{t("pending")}</Pill>
+            <div><div className="muted tiny">Күтуде / В ожидании</div><b>{pending.length}</b></div>
+            <Pill kind="pending">pending</Pill>
           </div>
           <div className="kpi">
-            <div><div className="muted tiny">{t("rejected")}</div><b>{rejected.length}</b></div>
-            <Pill kind="rejected">{t("rejected")}</Pill>
+            <div><div className="muted tiny">Қабылданбады / Отклонено</div><b>{rejected.length}</b></div>
+            <Pill kind="rejected">rejected</Pill>
           </div>
         </div>
 
@@ -3838,22 +3861,22 @@ function PageStats() {
 
         <div className="grid2">
           <div className="glass card">
-            <div className="h2">{t("pointsDynamic")}</div>
+            <div className="h2">Балл динамикасы / Динамика баллов ({mode === "365d" ? "ай / мес." : "күн / дни"})</div>
             <div className="sep"></div>
             <AreaLineChart values={bySeries} labels={bins.map(x => x.label)} />
           </div>
 
           <div className="glass card" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div className="h2" style={{ alignSelf: "flex-start" }}>{t("goalProgress")} ({GOAL} {t("pts")})</div>
+            <div className="h2" style={{ alignSelf: "flex-start" }}>Мақсат прогресі / Прогресс к цели ({GOAL} балл)</div>
             <div className="sep" style={{ alignSelf: "stretch" }}></div>
-            <GaugeChart value={Math.min(allTimeTotal, GOAL)} max={GOAL} label={`${fmtPoints(allTimeTotal)} / ${GOAL}`} sublabel={t("total")} />
+            <GaugeChart value={Math.min(allTimeTotal, GOAL)} max={GOAL} label={`${fmtPoints(allTimeTotal)} / ${GOAL}`} sublabel="жалпы / всего баллов" />
             <p className="help" style={{ marginTop: 8, textAlign: "center" }}>
-              {allTimeTotal >= GOAL ? `🎉 ${t("goalReached")}` : `${fmtPoints(GOAL - allTimeTotal)} ${t("ptsRemaining")}`}
+              {allTimeTotal >= GOAL ? "🎉 Мақсатқа жеттіңіз! / Цель достигнута!" : `${fmtPoints(GOAL - allTimeTotal)} балл қалды / осталось`}
             </p>
           </div>
 
           <div className="glass card">
-            <div className="h2">{t("statusSubs")}</div>
+            <div className="h2">Мәртебе / Статусы өтінімдер</div>
             <div className="sep"></div>
             <DonutChart
               segments={[
@@ -3866,7 +3889,7 @@ function PageStats() {
           </div>
 
           <div className="glass card">
-            <div className="h2">{t("byCategories")}</div>
+            <div className="h2">Санат бойынша / По разделам</div>
             <div className="sep"></div>
             {topSections.length ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -3885,7 +3908,7 @@ function PageStats() {
                   );
                 })}
               </div>
-            ) : <p className="p">{t("noData")}</p>}
+            ) : <p className="p">Деректер жоқ / Нет данных</p>}
           </div>
         </div>
 
@@ -3893,23 +3916,23 @@ function PageStats() {
 
         <div className="grid2">
           <div className="glass card">
-            <div className="h2">{t("histogram")}</div>
+            <div className="h2">Гистограмма / Гистограмма: баллов за KPI</div>
             <div className="sep"></div>
             <HistogramChart data={approved.map(s => Number(s.points) || 0)} />
           </div>
 
           <div className="glass card">
-            <div className="h2">{t("radarTopCat")}</div>
+            <div className="h2">Лепестковая / Радар: топ-категорий</div>
             <div className="sep"></div>
             <RadarChart labels={radar.map(x => x[0])} values={radar.map(x => x[1])} />
-            {!radar.length ? <p className="p">{t("noKpiInRange")}</p> : null}
+            {!radar.length ? <p className="p">Диапазондағы KPI жоқ / Нет одобренных KPI в диапазоне.</p> : null}
           </div>
         </div>
 
         <div className="sep"></div>
 
         <div className="glass card">
-          <div className="h2">{t("topTypes")}</div>
+          <div className="h2">Топ типтері / Топ типов (кесте / таблица)</div>
           <div className="sep"></div>
           {topType.length ? (
             <div className="stats-toplist">
@@ -3929,7 +3952,7 @@ function PageStats() {
                 );
               })}
             </div>
-          ) : <p className="p">{t("noData")}</p>}
+          ) : <p className="p">Деректер жоқ / Нет данных.</p>}
         </div>
       </div>
     );
@@ -4006,25 +4029,25 @@ function PageStats() {
 
     return (
       <div className="glass card">
-        <div className="h1">{t("platformStats")}</div>
+        <div className="h1">Платформа статистикасы / Статистика платформы</div>
         <p className="p">
-          {t("overallView")} <b>{mode === "365d" ? t("rangeYear") : t("range14d")}</b>.
+          Жалпы шолу / Общий обзор. Диапазон: <b>{mode === "365d" ? "жыл / год" : "14 күн / дней"}</b>.
         </p>
         <Controls />
 
         <div className="sep"></div>
 
         {!hasAny ? (
-          <p className="p">{t("generalNotLoaded")} <b>{t("refresh")}</b>.</p>
+          <p className="p">Жалпы деректер жүктелмеді / Общие данные ещё не загружены. <b>Жаңарту / Обновить</b>.</p>
         ) : null}
 
         <div className="grid2">
-          <div className="kpi"><div><div className="muted tiny">{t("teachers")}</div><b>{teachers.length}</b></div><Pill kind="approved">users</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">{t("subsInRange")}</div><b>{subs.length}</b></div><Pill kind="pending">range</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">{t("pending")}</div><b>{pending.length}</b></div><Pill kind="pending">{t("pending")}</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Мұғалімдер / Педагоги</div><b>{teachers.length}</b></div><Pill kind="approved">users</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Өтінімдер / Заявки (диапазон)</div><b>{subs.length}</b></div><Pill kind="pending">range</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Күтуде / В ожидании</div><b>{pending.length}</b></div><Pill kind="pending">pending</Pill></div>
           <div className="kpi">
             <div>
-              <div className="muted tiny">{t("approved")}</div>
+              <div className="muted tiny">Мақұлданды / Одобрено (балл)</div>
               <b>{fmtPoints(totalApprovedPts)}</b>
               <TrendBadge curr={recentPts} prev={olderPts} />
             </div>
@@ -4036,13 +4059,13 @@ function PageStats() {
 
         <div className="grid2">
           <div className="glass card">
-            <div className="h2">{t("pointsDynamic")}</div>
+            <div className="h2">Балл динамикасы / Динамика баллов ({mode === "365d" ? "ай / мес." : "күн / дни"})</div>
             <div className="sep"></div>
             <LineChart values={bySeries} labels={bins.map(x => x.label)} />
           </div>
 
           <div className="glass card">
-            <div className="h2">{t("statusSubs")}</div>
+            <div className="h2">Мәртебелер / Статусы заявок</div>
             <div className="sep"></div>
             <DonutChart
               segments={[
@@ -4055,28 +4078,28 @@ function PageStats() {
           </div>
 
           <div className="glass card">
-            <div className="h2">{t("top10Teachers")}</div>
+            <div className="h2">Топ-10 мұғалім / Топ-10 учителей</div>
             <div className="sep"></div>
             {topTeachers.length ? (
               <BarChart
                 values={topTeachers.map(x => x.pts)}
                 labels={topTeachers.map(x => (x.user?.displayName || x.user?.email || "—").slice(0, 10) + "…")}
               />
-            ) : <p className="p">{t("noData")}</p>}
+            ) : <p className="p">Деректер жоқ / Нет данных</p>}
           </div>
 
           <div className="glass card">
-            <div className="h2">{t("radarSections")}</div>
+            <div className="h2">Лепестковая / Радар: разделы</div>
             <div className="sep"></div>
             <RadarChart labels={topSections.map(x => x[0])} values={topSections.map(x => x[1])} />
-            {!topSections.length ? <p className="p">{t("noData")}</p> : null}
+            {!topSections.length ? <p className="p">Деректер жоқ / Нет данных</p> : null}
           </div>
         </div>
 
         <div className="sep"></div>
 
         <div className="glass card">
-          <div className="h2">{t("byPeriods")}: approved / pending / rejected</div>
+          <div className="h2">Уақыт бойынша / По периодам: approved / pending / rejected</div>
           <p className="p muted" style={{ fontSize: 12 }}>
             <span style={{ color: "rgba(135,188,46,.9)" }}>▇</span> Мақұлданды балл &nbsp;
             <span style={{ color: "rgba(251,191,36,.9)" }}>▇</span> Күтуде ×5 &nbsp;
@@ -4089,19 +4112,19 @@ function PageStats() {
         <div className="sep"></div>
 
         <div className="glass card">
-          <div className="h2">{t("heatmap")}</div>
+          <div className="h2">Жылу картасы / Тепловая карта: мұғалім × {mode === "365d" ? "ай / месяц" : "күн / день"}</div>
           <p className="p">Тек <b>мақұлданған</b> балдар / Только <b>одобренные</b> баллы. Топ-10 по диапазону.</p>
           <div className="sep"></div>
 
           {!hmTeachers.length
-            ? <p className="p">{t("noData")}</p>
+            ? <p className="p">Деректер жоқ / Нет данных</p>
             : (
               <div className="heatmap-wrap">
                 <div className="heatmap-scroll">
                   <table className="table heatmap-table">
                     <thead>
                       <tr>
-                        <th className="heatmap-name-col">{t("teacher")}</th>
+                        <th className="heatmap-name-col">Мұғалім / Учитель</th>
                         {bins.map(b => <th key={mode === "365d" ? b.key : b.ymd} className="heatmap-bin-col">{b.label}</th>)}
                       </tr>
                     </thead>
@@ -4124,7 +4147,7 @@ function PageStats() {
                     </tbody>
                   </table>
                 </div>
-                <p className="help" style={{ marginTop: 8 }}>← {t("scrollH")}</p>
+                <p className="help" style={{ marginTop: 8 }}>← Горизонталь айналдырыңыз / Прокрутите горизонтально</p>
               </div>
             )
           }
@@ -4157,52 +4180,52 @@ function PageAdminApprovals() {
       if (action === "approve") await approveSubmission(id, u.uid);
       else await rejectSubmission(id, u.uid);
 
-      toast(action === "approve" ? t("approvedToast") : t("rejectedToast"), "ok");
+      toast(action === "approve" ? "Одобрено" : "Отклонено", "ok");
 
       const [p, users] = await Promise.all([fetchPendingSubmissions(), fetchUsersAll()]);
       setState({ pendingSubmissions: p, users });
     } catch (e) {
       console.error(e);
-      toast(e?.message || t("error"), "error");
+      toast(e?.message || "Ошибка", "error");
     } finally { setState({ loading: false }); }
   }
 
   return (
     <div className="glass card">
-      <div className="h1">{t("approvalsTitle")}</div>
-      <p className="p">{t("approvalsDesc")}</p>
+      <div className="h1">Approvals</div>
+      <p className="p">Pending-заявки. Approve добавляет баллы в totalPoints.</p>
       <div className="sep"></div>
 
-      {!pending.length && <p className="p muted" style={{ padding: "12px 0" }}>{t("noSubsToReview")}</p>}
+      {!pending.length && <p className="p muted" style={{ padding: "12px 0" }}>Нет заявок на проверке</p>}
       <div className="mobile-cards">
         {pending.map(s => {
           const tu = usersMap.get(s.uid);
           return (
             <div key={s.id} className="mobile-card glass">
               <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("teacher")}</span>
+                <span className="mobile-card__label">Учитель</span>
                 <span className="mobile-card__val"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || s.uid}</div></span>
               </div>
               <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("typeAndTitle")}</span>
+                <span className="mobile-card__label">Тип / Название</span>
                 <span className="mobile-card__val"><b>{s.typeName}</b><div className="muted tiny">{s.title}</div>{s.description ? <div className="muted tiny">{s.description}</div> : null}</span>
               </div>
               <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("dateAndPts")}</span>
+                <span className="mobile-card__label">Дата / Баллы</span>
                 <span className="mobile-card__val">{s.eventDate} · <b>{fmtPoints(s.points)} pts</b></span>
               </div>
               {(s.evidenceLink || s.evidenceFileUrl) && (
                 <div className="mobile-card__row">
-                  <span className="mobile-card__label">{t("evidence")}</span>
+                  <span className="mobile-card__label">Evidence</span>
                   <span className="mobile-card__val" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">{t("link")}</a> : null}
-                    {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">{t("file")}</a> : null}
+                    {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">Ссылка</a> : null}
+                    {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">Файл</a> : null}
                   </span>
                 </div>
               )}
               <div className="mobile-card__actions">
-                <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /> {t("approve")}</Btn>
-                <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /> {t("reject")}</Btn>
+                <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /> Approve</Btn>
+                <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /> Reject</Btn>
               </div>
             </div>
           );
@@ -4244,7 +4267,7 @@ function PageAdminRequests() {
       setState({ loading: true });
       const delta = getDelta(id);
       await decideTeacherRequest(id, u.uid, action, delta);
-      toast(action === "approve" ? t("approvedToast") : t("rejectedToast"), "ok");
+      toast(action === "approve" ? "Одобрено" : "Отклонено", "ok");
       const [pendReq, recentReq, users] = await Promise.all([
         fetchPendingRequests(),
         fetchAdminRecentRequests(),
@@ -4253,7 +4276,7 @@ function PageAdminRequests() {
       setState({ pendingRequests: pendReq, adminRecentRequests: recentReq, users });
     } catch (e) {
       console.error(e);
-      toast(e?.message || t("error"), "error");
+      toast(e?.message || "Ошибка", "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -4262,11 +4285,11 @@ function PageAdminRequests() {
   return (
     <div className="grid2">
       <div className="glass card">
-        <div className="h1">{t("adminReqTitle")}</div>
-        <p className="p">{t("adminReqDesc")}</p>
+        <div className="h1">Заявления</div>
+        <p className="p">Проверьте заявления от учителей. На одобрении можно указать, сколько баллов добавить/снять (шаблоны: -2, +2).</p>
         <div className="sep"></div>
 
-        {!pending.length && <p className="p muted" style={{ padding: "12px 0" }}>{t("noReqToReview")}</p>}
+        {!pending.length && <p className="p muted" style={{ padding: "12px 0" }}>Нет заявлений на проверке</p>}
         <div className="mobile-cards">
           {pending.map(r => {
             const tu = usersMap.get(r.uid);
@@ -4275,19 +4298,19 @@ function PageAdminRequests() {
             return (
               <div key={r.id} className="mobile-card glass">
                 <div className="mobile-card__row">
-                  <span className="mobile-card__label">{t("teacher")}</span>
+                  <span className="mobile-card__label">Учитель</span>
                   <span className="mobile-card__val"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></span>
                 </div>
                 <div className="mobile-card__row">
-                  <span className="mobile-card__label">{t("typeAndPeriod")}</span>
+                  <span className="mobile-card__label">Тип / Период</span>
                   <span className="mobile-card__val"><b>{r.kindLabel || requestKindLabel(r.kind)}</b><div className="muted tiny">{r.dateFrom}{r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""} · дней: {Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo)}</div>{r.note ? <div className="muted tiny">{r.note}</div> : null}</span>
                 </div>
                 <div className="mobile-card__row">
                   <span className="mobile-card__label">Баланс отгулов / Δ</span>
-                  <span className="mobile-card__val"><b>{fmtPoints(tu?.compDays || 0)}</b> {t("compDaysShort")} · {t("compDeltaLabel")} <b>{signNum(cd)}</b></span>
+                  <span className="mobile-card__val"><b>{fmtPoints(tu?.compDays || 0)}</b> отгулов · Δ отгулы: <b>{signNum(cd)}</b></span>
                 </div>
                 <div className="mobile-card__row">
-                  <span className="mobile-card__label">{t("pointsDelta")}</span>
+                  <span className="mobile-card__label">Δ баллы</span>
                   <span className="mobile-card__val" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <Input type="number" value={delta} onChange={(e) => setDelta(r.id, e.target.value)} style={{ maxWidth: 100 }} />
                     <Btn type="button" onClick={() => setDelta(r.id, -2)}>-2</Btn>
@@ -4295,8 +4318,8 @@ function PageAdminRequests() {
                   </span>
                 </div>
                 <div className="mobile-card__actions">
-                  <Btn kind="ok" onClick={() => decide(r.id, "approve")} disabled={st.loading}><Icon name="check" /> {t("ok")}</Btn>
-                  <Btn kind="danger" onClick={() => decide(r.id, "reject")} disabled={st.loading}><Icon name="x" /> {t("no")}</Btn>
+                  <Btn kind="ok" onClick={() => decide(r.id, "approve")} disabled={st.loading}><Icon name="check" /> OK</Btn>
+                  <Btn kind="danger" onClick={() => decide(r.id, "reject")} disabled={st.loading}><Icon name="x" /> Нет</Btn>
                 </div>
               </div>
             );
@@ -4305,23 +4328,23 @@ function PageAdminRequests() {
       </div>
 
       <div className="glass card">
-        <div className="h2">{t("recentDecisions")}</div>
+        <div className="h2">Последние решения</div>
         <div className="sep"></div>
         <DataCards
-          emptyText={t("noHistory")}
+          emptyText="Пока нет истории"
           columns={[
-            { key: "teacher", label: t("teacher"), render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
-            { key: "kind", label: t("type"), render: r => r.kindLabel || requestKindLabel(r.kind) },
-            { key: "period", label: t("period"), render: r => `${r.dateFrom}${r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}` },
-            { key: "status", label: t("status"), render: r => <Pill kind={r.status}>{r.status}</Pill> },
-            { key: "pts", label: t("pointsDelta"), render: r => <b>{signNum(r.pointsDelta || 0)}</b> },
-            { key: "cd", label: t("compDaysDeltaCol"), render: r => <b>{signNum(r.compDaysDelta || 0)}</b> }
+            { key: "teacher", label: "Учитель", render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
+            { key: "kind", label: "Тип", render: r => r.kindLabel || requestKindLabel(r.kind) },
+            { key: "period", label: "Период", render: r => `${r.dateFrom}${r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}` },
+            { key: "status", label: "Статус", render: r => <Pill kind={r.status}>{r.status}</Pill> },
+            { key: "pts", label: "Δ баллы", render: r => <b>{signNum(r.pointsDelta || 0)}</b> },
+            { key: "cd", label: "Δ отгулы", render: r => <b>{signNum(r.compDaysDelta || 0)}</b> }
           ]}
           rows={recent.map(r => ({ ...r, __key: r.id }))}
         />
 
         <div className="sep"></div>
-        <div className="help">{t("compRules")}</div>
+        <div className="help">Правило отгулов: «Приход в не будний день» добавляет +1 отгул за каждый день в периоде. «Отдых / отгул в будний день» списывает отгулы.</div>
       </div>
     </div>
   );
@@ -4387,7 +4410,7 @@ function PageDocuments() {
   };
 
   const submitSign = async () => {
-    if (!signed) { toast(t("putSignature"), "error"); return; }
+    if (!signed) { toast("Қол қойыңыз / Поставьте подпись", "error"); return; }
     try {
       setSaving(true);
       const c = canvasRef.current;
@@ -4399,17 +4422,17 @@ function PageDocuments() {
       await signDocument(signingDoc.id, sigUrl);
       const fresh = await fetchDocumentsForTeacher(u.uid);
       setState({ myDocuments: fresh });
-      toast(t("docSigned"), "ok");
+      toast("Құжатқа қол қойылды / Документ подписан", "ok");
       setSigningDoc(null);
       setViewDoc(null);
     } catch (e) {
-      toast(e?.message || t("error"), "error");
+      toast(e?.message || "Қате / Ошибка", "error");
     } finally {
       setSaving(false);
     }
   };
 
-  const statusLabel = (s) => s === "signed" ? t("statusSigned") : s === "viewed" ? t("statusViewed") : t("statusNew");
+  const statusLabel = (s) => s === "signed" ? "Қол қойылды / Подписано" : s === "viewed" ? "Қаралды / Просмотрено" : "Жаңа / Новый";
   const statusColor = (s) => s === "signed" ? "approved" : s === "viewed" ? "pending" : "rejected";
 
   return (
@@ -4418,7 +4441,7 @@ function PageDocuments() {
         <div className="modal-backdrop" onClick={() => { setViewDoc(null); setSigningDoc(null); setSigned(false); }}>
           <div className="modal glass" style={{ maxWidth: 520, width: "95vw" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div className="h2">{signingDoc ? t("signDocTitle") : t("document")}</div>
+              <div className="h2">{signingDoc ? "Қол қою / Подпись документа" : "Құжат / Документ"}</div>
               <Btn onClick={() => { setViewDoc(null); setSigningDoc(null); setSigned(false); }}>✕</Btn>
             </div>
 
@@ -4429,15 +4452,15 @@ function PageDocuments() {
                 <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 20, background: "#fff", color: "#1a1d2e", marginBottom: 16 }}>
                   <div style={{ textAlign: "center", marginBottom: 12 }}>
                     <img src="/logo-nis.png" alt="NIS" style={{ width: 48, height: 48, objectFit: "contain" }} />
-                    <div style={{ fontWeight: 700, fontSize: 13, marginTop: 4 }}>{t("nisOrg")}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, marginTop: 4 }}>Назарбаев Зияткерлік Мектебі</div>
                   </div>
                   <div style={{ fontWeight: 800, fontSize: 16, textAlign: "center", marginBottom: 16, borderBottom: "2px solid #87BC2E", paddingBottom: 12 }}>{d.title}</div>
                   <p style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", margin: "0 0 16px" }}>{d.body}</p>
-                  <div style={{ fontSize: 12, color: "#64748b" }}>{t("recipient")}: <b>{d.toName || d.toEmail}</b></div>
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>{t("date")}: {dateStr}</div>
+                  <div style={{ fontSize: 12, color: "#64748b" }}>Алушы / Получатель: <b>{d.toName || d.toEmail}</b></div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Күні / Дата: {dateStr}</div>
                   {d.signatureUrl && (
                     <div style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
-                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>{t("signature")}:</div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Қолы / Подпись:</div>
                       <img src={d.signatureUrl} alt="Подпись" style={{ maxWidth: 180, border: "1px solid #e2e8f0", borderRadius: 6, padding: 4, background: "#fff" }} />
                     </div>
                   )}
@@ -4447,7 +4470,7 @@ function PageDocuments() {
 
             {signingDoc && !signingDoc.signatureUrl && (
               <>
-                <div className="h2" style={{ marginBottom: 8 }}>{t("putSignature")}</div>
+                <div className="h2" style={{ marginBottom: 8 }}>Қол қою / Поставьте подпись</div>
                 <canvas
                   ref={canvasRef}
                   width={800} height={200}
@@ -4457,16 +4480,16 @@ function PageDocuments() {
                   onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
                 />
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Btn onClick={clearSig}>{t("clear")}</Btn>
+                  <Btn onClick={clearSig}>Тазалау / Очистить</Btn>
                   <Btn kind="primary" onClick={submitSign} disabled={saving || !signed}>
-                    {saving ? t("loading") : t("signBtn")}
+                    {saving ? "Сақталуда..." : "✅ Қол қою / Подписать"}
                   </Btn>
                 </div>
               </>
             )}
             {viewDoc && viewDoc.requireSignature && viewDoc.status !== "signed" && (
               <div style={{ marginTop: 12 }}>
-                <Btn kind="primary" onClick={() => { setSigningDoc(viewDoc); setViewDoc(null); }}>{t("signDoc")}</Btn>
+                <Btn kind="primary" onClick={() => { setSigningDoc(viewDoc); setViewDoc(null); }}>Қол қою / Подписать</Btn>
               </div>
             )}
           </div>
@@ -4478,15 +4501,15 @@ function PageDocuments() {
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
             <div>
-              <div className="h1">{t("documentsTitle")}</div>
-              <div className="muted" style={{ fontSize: 13 }}>{t("documentsDesc")}</div>
+              <div className="h1">Құжаттар / Документы</div>
+              <div className="muted" style={{ fontSize: 13 }}>Әкімшіден келген ресми құжаттар / Официальные документы от администратора</div>
             </div>
           </div>
         </div>
 
         {docs.length === 0 ? (
           <div className="glass card" style={{ textAlign: "center", color: "var(--muted)", padding: 40 }}>
-            {t("noDocuments")}
+            Әзірше құжат жоқ / Документов пока нет
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -4499,14 +4522,14 @@ function PageDocuments() {
                     <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.body}</div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                       <Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill>
-                      {d.requireSignature && d.status !== "signed" && <Pill kind="pending">{t("needsSignature")}</Pill>}
+                      {d.requireSignature && d.status !== "signed" && <Pill kind="pending">Қол қою қажет / Нужна подпись</Pill>}
                       <span className="tiny muted">{dateStr}</span>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                    <Btn onClick={() => openDoc(d)}>{t("view")}</Btn>
+                    <Btn onClick={() => openDoc(d)}>Қарау / Просмотр</Btn>
                     {d.requireSignature && d.status !== "signed" && (
-                      <Btn kind="primary" onClick={() => { setSigningDoc(d); setSigned(false); clearSig(); }}>{t("signDoc")}</Btn>
+                      <Btn kind="primary" onClick={() => { setSigningDoc(d); setSigned(false); clearSig(); }}>Қол қою / Подписать</Btn>
                     )}
                   </div>
                 </div>
@@ -4542,7 +4565,7 @@ function PageAdminDocuments() {
 
   const send = async () => {
     if (!toUid || !title.trim() || !body.trim()) {
-      toast(t("fillFields"), "error");
+      toast("Алушыны, тақырыпты және мәтінді толтырыңыз / Заполните получателя, тему и текст", "error");
       return;
     }
     try {
@@ -4558,17 +4581,17 @@ function PageAdminDocuments() {
       });
       const fresh = await fetchAllDocuments();
       setState({ allDocuments: fresh });
-      toast(t("docSent"), "ok");
+      toast("Құжат жіберілді / Документ отправлен", "ok");
       setToUid(""); setTitle(""); setBody(""); setRequireSig(false);
     } catch (e) {
-      toast(e?.message || t("error"), "error");
+      toast(e?.message || "Қате / Ошибка", "error");
     } finally {
       setSending(false);
     }
   };
 
   const filteredDocs = filterUid ? docs.filter(d => d.toUid === filterUid) : docs;
-  const statusLabel = (s) => s === "signed" ? t("statusSigned") : s === "viewed" ? t("statusViewed") : t("sendTab");
+  const statusLabel = (s) => s === "signed" ? "Қол қойылды" : s === "viewed" ? "Қаралды" : "Жіберілді";
   const statusColor = (s) => s === "signed" ? "approved" : s === "viewed" ? "pending" : "rejected";
 
   return (
@@ -4577,44 +4600,44 @@ function PageAdminDocuments() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
           <div style={{ flex: 1 }}>
-            <div className="h1">{t("adminDocTitle")}</div>
-            <div className="muted" style={{ fontSize: 13 }}>{t("adminDocDesc")}</div>
+            <div className="h1">Құжат жіберу / Отправка документов</div>
+            <div className="muted" style={{ fontSize: 13 }}>Мұғалімдерге ресми құжаттар жіберіңіз / Отправляйте официальные документы педагогам</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-          <Btn kind={tab === "send" ? "primary" : "ghost"} onClick={() => setTab("send")}>{t("sendTab")}</Btn>
-          <Btn kind={tab === "list" ? "primary" : "ghost"} onClick={() => setTab("list")}>{t("listTab")} ({docs.length})</Btn>
+          <Btn kind={tab === "send" ? "primary" : "ghost"} onClick={() => setTab("send")}>Жіберу / Отправить</Btn>
+          <Btn kind={tab === "list" ? "primary" : "ghost"} onClick={() => setTab("list")}>Тізім / Список ({docs.length})</Btn>
         </div>
       </div>
 
       {tab === "send" && (
         <div className="glass card">
-          <div className="h2" style={{ marginBottom: 16 }}>{t("newDocument")}</div>
+          <div className="h2" style={{ marginBottom: 16 }}>Жаңа құжат / Новый документ</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
-              <label className="label">{t("recipient")}</label>
+              <label className="label">Алушы / Получатель</label>
               <select className="input" value={toUid} onChange={e => setToUid(e.target.value)}>
-                <option value="">{t("selectRecipient")}</option>
+                <option value="">— Таңдаңыз / Выберите —</option>
                 {users.map(x => (
                   <option key={x.uid} value={x.uid}>{x.displayName || x.email} ({x.email})</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="label">{t("subjectLabel2")}</label>
-              <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder={t("subjectPlaceholder")} />
+              <label className="label">Тақырып / Тема</label>
+              <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Мысалы: Ескерту / Уведомление о..." />
             </div>
             <div>
-              <label className="label">{t("docText")}</label>
-              <textarea className="input" rows={6} value={body} onChange={e => setBody(e.target.value)} placeholder={t("docTextPlaceholder")} style={{ resize: "vertical" }} />
+              <label className="label">Мәтін / Текст документа</label>
+              <textarea className="input" rows={6} value={body} onChange={e => setBody(e.target.value)} placeholder="Ресми хат мәтіні / Текст официального письма..." style={{ resize: "vertical" }} />
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14 }}>
               <input type="checkbox" checked={requireSig} onChange={e => setRequireSig(e.target.checked)} style={{ width: 18, height: 18, accentColor: "var(--accent)" }} />
-              <span>{t("requireSignature")}</span>
+              <span>Қол қою талап етіледі / Требуется подпись мұғалімнен</span>
             </label>
             <div>
               <Btn kind="primary" onClick={send} disabled={sending}>
-                {sending ? t("sending") : t("sendDocument")}
+                {sending ? "Жіберілуде... / Отправка..." : "Жіберу / Отправить документ"}
               </Btn>
             </div>
           </div>
@@ -4624,14 +4647,14 @@ function PageAdminDocuments() {
       {tab === "list" && (
         <div className="glass card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-            <div className="h2">{t("sentDocuments")}</div>
+            <div className="h2">Жіберілген құжаттар / Отправленные документы</div>
             <select className="input" style={{ width: "auto", minWidth: 180 }} value={filterUid} onChange={e => setFilterUid(e.target.value)}>
-              <option value="">{t("all")}</option>
+              <option value="">Барлығы / Все</option>
               {users.map(x => <option key={x.uid} value={x.uid}>{x.displayName || x.email}</option>)}
             </select>
           </div>
           {filteredDocs.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--muted)", padding: 24 }}>{t("noSentDocs")}</div>
+            <div style={{ textAlign: "center", color: "var(--muted)", padding: 24 }}>Жіберілген құжаттар жоқ / Нет отправленных документов</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {filteredDocs.map(d => {
@@ -4646,7 +4669,7 @@ function PageAdminDocuments() {
                       </div>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                         <Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill>
-                        {d.requireSignature && <Pill kind="pending">{t("signaturePill")}</Pill>}
+                        {d.requireSignature && <Pill kind="pending">Қол қою / Подпись</Pill>}
                         <span className="tiny muted">{dateStr}</span>
                       </div>
                     </div>
@@ -4690,11 +4713,11 @@ function PageAdminTypes() {
   async function add() {
     try {
       if (!safeText(form.section) || !safeText(form.subsection) || !safeText(form.name)) {
-        toast(t("fillFields"), "error"); return;
+        toast("Заполните section/subsection/name", "error"); return;
       }
       setState({ loading: true });
       await addType(form);
-      toast(t("typeAdded"), "ok");
+      toast("Тип добавлен", "ok");
       setForm({ section: "", subsection: "", name: "", defaultPoints: 5 });
       await refresh();
     } catch (e) {
@@ -4705,27 +4728,27 @@ function PageAdminTypes() {
   async function toggle(id, active) {
     try {
       await toggleType(id, active);
-      toast(t("updated"), "ok");
+      toast("Обновлено", "ok");
       await refresh();
     } catch (e) {
       console.error(e);
-      toast(e?.message || t("error"), "error");
+      toast(e?.message || "Ошибка", "error");
     }
   }
 
   return (
     <div className="grid2">
       <div className="glass card">
-        <div className="h1">{t("typesTitle")}</div>
-        <p className="p">{t("typesDesc")}</p>
+        <div className="h1">Types</div>
+        <p className="p">Список KPI-типов. Active управляет доступностью для учителей.</p>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
           <Btn kind="primary" onClick={seed} disabled={st.loading}>Seed default types</Btn>
-          <Btn onClick={refresh}>{t("refresh")}</Btn>
+          <Btn onClick={refresh}>Обновить</Btn>
         </div>
         <div className="sep"></div>
 
         <DataCards
-          emptyText={t("noTypes")}
+          emptyText="Нет типов"
           columns={[
             { key: "section", label: "Section" },
             { key: "subsection", label: "Subsection" },
@@ -4738,7 +4761,7 @@ function PageAdminTypes() {
       </div>
 
       <div className="glass card">
-        <div className="h2">{t("addTypeTitle")}</div>
+        <div className="h2">Добавить тип</div>
         <div className="sep"></div>
         <div className="label">Section</div>
         <Input value={form.section} onChange={(e) => setForm(f => ({ ...f, section: e.target.value }))} />
@@ -4777,7 +4800,7 @@ function PageAdminUsers() {
     try {
       setState({ loading: true });
       await setRole(uid, role);
-      toast(t("roleUpdated"), "ok");
+      toast("Роль обновлена", "ok");
       const users = await fetchUsersAll();
       setState({ users });
     } catch (e) {
@@ -4792,11 +4815,11 @@ function PageAdminUsers() {
       await deleteUserAndData(uid);
       const users = await fetchUsersAll();
       setState({ users });
-      toast(t("accountDeleted"), "ok");
+      toast("Аккаунт удалён / Аккаунт жойылды", "ok");
       setConfirmDelete(null);
     } catch (e) {
       console.error(e);
-      toast(e?.message || t("deleteError"), "error");
+      toast(e?.message || "Ошибка удаления", "error");
     } finally { setDeleting(false); }
   }
 
@@ -4810,15 +4833,15 @@ function PageAdminUsers() {
       {confirmDelete && (
         <div className="modal-backdrop" onClick={() => setConfirmDelete(null)}>
           <div className="modal glass" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
-            <div className="h2" style={{ marginBottom: 12 }}>{t("deleteAccount")}</div>
+            <div className="h2" style={{ marginBottom: 12 }}>Аккаунтты жою / Удалить аккаунт</div>
             <p className="p" style={{ marginBottom: 16 }}>
-              <b>{delUser?.displayName || delUser?.email || confirmDelete}</b> {t("deleteConfirm")}<br />
-              <span className="muted" style={{ fontSize: 13 }}>{t("deleteWarning")}</span>
+              <b>{delUser?.displayName || delUser?.email || confirmDelete}</b> аккаунтын жоясыз ба?<br />
+              <span className="muted" style={{ fontSize: 13 }}>Барлық деректер жойылады: KPI, өтініштер, құжаттар / Удалит все данные: KPI, заявления, документы.</span>
             </p>
             <div style={{ display: "flex", gap: 8 }}>
-              <Btn onClick={() => setConfirmDelete(null)}>{t("cancel")}</Btn>
+              <Btn onClick={() => setConfirmDelete(null)}>Болдырмау / Отмена</Btn>
               <Btn kind="primary" style={{ background: "var(--red, #ef4444)" }} onClick={() => doDelete(confirmDelete)} disabled={deleting}>
-                {deleting ? t("deleting") : `✕ ${t("delete")}`}
+                {deleting ? "Жойылуда..." : "✕ Жою / Удалить"}
               </Btn>
             </div>
           </div>
@@ -4827,34 +4850,34 @@ function PageAdminUsers() {
 
       <div className="glass card">
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-          <div className="h1" style={{ margin: 0 }}>{t("usersTitle")}</div>
+          <div className="h1" style={{ margin: 0 }}>Сотрудники / Пользователи</div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
             <span className="online-dot" />
             <span style={{ color: "var(--green, #22c55e)" }}>{onlineCount} online</span>
             <span className="muted">/ {totalCount}</span>
           </div>
         </div>
-        <p className="p">{t("usersDesc")}</p>
+        <p className="p">Поиск, смена ролей, удаление, просмотр профиля.</p>
         <div className="sep"></div>
 
         <div className="grid2">
           <div>
-            <div className="label">{t("search")}</div>
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("searchPlaceholder")} />
+            <div className="label">Іздеу / Поиск</div>
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ФИО / email / школа / пән" />
           </div>
           <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
-            <Btn onClick={async () => { const users = await fetchUsersAll(); setState({ users }); toast(t("updated"), "ok"); }}>{t("refresh")}</Btn>
+            <Btn onClick={async () => { const users = await fetchUsersAll(); setState({ users }); toast("Жаңартылды / Обновлено", "ok"); }}>Жаңарту / Обновить</Btn>
           </div>
         </div>
 
         <div className="sep"></div>
 
-        {!filtered.length && <p className="p muted" style={{ padding: "12px 0" }}>{t("noResults")}</p>}
+        {!filtered.length && <p className="p muted" style={{ padding: "12px 0" }}>Нәтиже жоқ / Нет результатов</p>}
         <div className="mobile-cards">
           {filtered.map(x => (
             <div key={x.uid} className="mobile-card glass">
               <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("nameEmail")}</span>
+                <span className="mobile-card__label">ФИО / Email</span>
                 <span className="mobile-card__val">
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     {x.online && <span className="online-dot" title="Онлайн" />}
@@ -4864,23 +4887,23 @@ function PageAdminUsers() {
                 </span>
               </div>
               <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("schoolSubject")}</span>
+                <span className="mobile-card__label">Мектеп / Пән</span>
                 <span className="mobile-card__val">{x.school || "—"} · <span className="muted">{x.subject || "—"}</span></span>
               </div>
               <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("ptsRoleComp")}</span>
+                <span className="mobile-card__label">Балл / Роль / Отгул</span>
                 <span className="mobile-card__val">
                   <b>{fmtPoints(x.totalPoints)}</b> pts ·{" "}
                   <Pill kind={x.role === "admin" ? "pending" : "approved"}>{x.role}</Pill>
-                  {(x.compDays || 0) > 0 && <span className="muted tiny" style={{ marginLeft: 6 }}>🏖 {x.compDays} {t("compShort")}</span>}
+                  {(x.compDays || 0) > 0 && <span className="muted tiny" style={{ marginLeft: 6 }}>🏖 {x.compDays} отг.</span>}
                 </span>
               </div>
               <div className="mobile-card__actions">
                 <Btn onClick={() => setR(x.uid, "teacher")} disabled={st.loading}>teacher</Btn>
                 <Btn onClick={() => setR(x.uid, "admin")} disabled={st.loading}>admin</Btn>
-                <Btn kind="primary" onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })}>{t("profileBtn")}</Btn>
+                <Btn kind="primary" onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })}>Профиль</Btn>
                 {x.uid !== u.uid && (
-                  <Btn style={{ background: "rgba(239,68,68,.12)", color: "var(--red,#ef4444)", border: "1px solid rgba(239,68,68,.3)" }} onClick={() => setConfirmDelete(x.uid || x.id)}>✕ {t("delete")}</Btn>
+                  <Btn style={{ background: "rgba(239,68,68,.12)", color: "var(--red,#ef4444)", border: "1px solid rgba(239,68,68,.3)" }} onClick={() => setConfirmDelete(x.uid || x.id)}>✕ Жою</Btn>
                 )}
               </div>
             </div>
@@ -5007,10 +5030,10 @@ function PageAdminTeacher() {
   if (!uid) {
     return (
       <div className="glass card">
-        <div className="h2">{t("teacherNotSelected")}</div>
-        <p className="p">{t("openFromUsers")}</p>
+        <div className="h2">Учитель не выбран</div>
+        <p className="p">Открой карточку из Users.</p>
         <div className="sep"></div>
-        <Btn kind="primary" onClick={() => navigate("admin/users")}>{t("goToUsers")}</Btn>
+        <Btn kind="primary" onClick={() => navigate("admin/users")}>Перейти в Users</Btn>
       </div>
     );
   }
@@ -5018,7 +5041,7 @@ function PageAdminTeacher() {
   if (!teacherDoc) {
     return (
       <div className="glass card">
-        <div className="h2">{teacherErr ? t("profileLoadError") : t("loadingProfile")}</div>
+        <div className="h2">{teacherErr ? "Ошибка загрузки профиля" : "Загружаю профиль…"}</div>
         <p className="p">UID: <b>{uid}</b></p>
         <p className="tiny muted">Route: {st.route?.path} · me: {u.uid}</p>
         {teacherErr ? (
@@ -5027,7 +5050,7 @@ function PageAdminTeacher() {
             <div className="tiny"><b>{String(teacherErr?.name || "Error")}</b>: {String(teacherErr?.message || teacherErr)}</div>
             <div className="help">Открой DevTools → Console, там будет stacktrace.</div>
             <div className="sep"></div>
-            <Btn onClick={() => setReloadNonce(x => x + 1)}>{t("retry")}</Btn>
+            <Btn onClick={() => setReloadNonce(x => x + 1)}>Повторить</Btn>
           </>
         ) : null}
       </div>
@@ -5056,7 +5079,7 @@ function PageAdminTeacher() {
       });
       const users = await fetchUsersAll();
       setState({ users });
-      toast(t("save"), "ok");
+      toast("Сохранено", "ok");
       setReloadNonce(x => x + 1);
     } catch (e) {
       console.error(e);
@@ -5071,14 +5094,14 @@ function PageAdminTeacher() {
       setState({ loading: true });
       if (action === "approve") await approveSubmission(id, u.uid);
       else await rejectSubmission(id, u.uid);
-      toast(action === "approve" ? t("approvedToast") : t("rejectedToast"), "ok");
+      toast(action === "approve" ? "Одобрено" : "Отклонено", "ok");
 
       const users = await fetchUsersAll();
       setState({ users });
       setReloadNonce(x => x + 1);
     } catch (e) {
       console.error(e);
-      toast(e?.message || t("error"), "error");
+      toast(e?.message || "Ошибка", "error");
     } finally {
       setState({ loading: false });
     }
@@ -5087,8 +5110,8 @@ function PageAdminTeacher() {
   return (
     <div className="grid2">
       <div className="glass card">
-        <div className="h1">{t("teacherDetail")}</div>
-        <p className="p">{t("teacherDetailDesc")}</p>
+        <div className="h1">Teacher detail</div>
+        <p className="p">Полный просмотр и редактирование профиля учителя + управление его заявками.</p>
 
         <div className="sep"></div>
 
@@ -5104,44 +5127,44 @@ function PageAdminTeacher() {
               <div className="muted tiny">{teacherDoc?.email || uid}</div>
             </div>
           </div>
-          <Btn onClick={() => navigate("admin/users")}>{t("back")}</Btn>
+          <Btn onClick={() => navigate("admin/users")}>Назад</Btn>
         </div>
 
         <div className="sep"></div>
 
         <div className="grid3">
-          <div className="kpi"><div><div className="muted tiny">{t("totalPoints")}</div><b>{fmtPoints(teacherDoc?.totalPoints || 0)}</b></div><Pill kind="approved">{t("totalPill")}</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">{t("approved")}</div><b>{fmtPoints(approvedPts)}</b></div><Pill kind="approved">{t("approvedPill2")}</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">{t("pending")}</div><b>{fmtPoints(pending.length)}</b></div><Pill kind="pending">{t("pendingPill")}</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Жалпы балл / Итого баллов</div><b>{fmtPoints(teacherDoc?.totalPoints || 0)}</b></div><Pill kind="approved">total</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Мақұлданды / Одобрено</div><b>{fmtPoints(approvedPts)}</b></div><Pill kind="approved">approved</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Күтуде / Ожидает</div><b>{fmtPoints(pending.length)}</b></div><Pill kind="pending">pending</Pill></div>
           <div className="kpi">
             <div>
-              <div className="muted tiny">{t("compDays")}</div>
+              <div className="muted tiny">Отгулы / Компенсация күн</div>
               <b style={{ color: (teacherDoc?.compDays || 0) > 0 ? "var(--green, #22c55e)" : "var(--text)" }}>
-                {Number(teacherDoc?.compDays || 0)} {t("dayShort")}
+                {Number(teacherDoc?.compDays || 0)} күн / дн.
               </b>
             </div>
-            <Pill kind={(teacherDoc?.compDays || 0) > 0 ? "approved" : "pending"}>{t("compDaysPill")}</Pill>
+            <Pill kind={(teacherDoc?.compDays || 0) > 0 ? "approved" : "pending"}>отгулы</Pill>
           </div>
           <div className="kpi">
             <div>
-              <div className="muted tiny">{t("onboarding")}</div>
-              <b>{teacherDoc?.onboarded ? `✓ ${t("completed")}` : `⏳ ${t("pending")}`}</b>
+              <div className="muted tiny">Танысу / Онбординг</div>
+              <b>{teacherDoc?.onboarded ? "✓ Аяқталды" : "⏳ Күтуде"}</b>
             </div>
             <Pill kind={teacherDoc?.onboarded ? "approved" : "rejected"}>onboarding</Pill>
           </div>
-          <div className="kpi"><div><div className="muted tiny">{t("rejected")}</div><b>{fmtPoints(rejected.length)}</b></div><Pill kind="rejected">{t("rejected")}</Pill></div>
+          <div className="kpi"><div><div className="muted tiny">Қабылданбады / Отклонено</div><b>{fmtPoints(rejected.length)}</b></div><Pill kind="rejected">rejected</Pill></div>
         </div>
 
         <div className="sep"></div>
 
-        <div className="h2">{t("editSection")}</div>
+        <div className="h2">Редактирование</div>
         <div className="grid2">
           <div>
-            <div className="label">{t("fullName")}</div>
+            <div className="label">ФИО</div>
             <Input value={edit.displayName} onChange={(e) => setEdit(v => ({ ...v, displayName: e.target.value }))} />
           </div>
           <div>
-            <div className="label">{t("roleLabel")}</div>
+            <div className="label">Роль</div>
             <Select value={edit.role} onChange={(e) => setEdit(v => ({ ...v, role: e.target.value }))}>
               <option value="teacher">teacher</option>
               <option value="admin">admin</option>
@@ -5149,57 +5172,57 @@ function PageAdminTeacher() {
           </div>
 
           <div>
-            <div className="label">{t("school")}</div>
+            <div className="label">Школа</div>
             <Input value={edit.school} onChange={(e) => setEdit(v => ({ ...v, school: e.target.value }))} />
           </div>
           <div>
-            <div className="label">{t("subject")}</div>
+            <div className="label">Предмет</div>
             <Input value={edit.subject} onChange={(e) => setEdit(v => ({ ...v, subject: e.target.value }))} />
           </div>
 
           <div>
-            <div className="label">{t("expYears")}</div>
+            <div className="label">Стаж (лет)</div>
             <Input type="number" min="0" max="80" value={edit.experienceYears} onChange={(e) => setEdit(v => ({ ...v, experienceYears: e.target.value }))} />
           </div>
           <div>
-            <div className="label">{t("phone")}</div>
+            <div className="label">Телефон</div>
             <Input value={edit.phone} onChange={(e) => setEdit(v => ({ ...v, phone: e.target.value }))} />
           </div>
 
           <div>
-            <div className="label">{t("city")}</div>
+            <div className="label">Город</div>
             <Input value={edit.city} onChange={(e) => setEdit(v => ({ ...v, city: e.target.value }))} />
           </div>
           <div>
-            <div className="label">{t("position")}</div>
+            <div className="label">Должность</div>
             <Input value={edit.position} onChange={(e) => setEdit(v => ({ ...v, position: e.target.value }))} />
           </div>
 
           <div style={{ gridColumn: "1/-1" }}>
-            <div className="label">{t("avatarUrl")}</div>
+            <div className="label">Avatar URL</div>
             <Input value={edit.avatarUrl} onChange={(e) => setEdit(v => ({ ...v, avatarUrl: e.target.value }))} placeholder="https://..." />
             <div className="help">Админ может вставить URL вручную. (Upload в Storage — у владельца аккаунта.)</div>
           </div>
 
           <div>
-            <div className="label">{t("totalPoints")}</div>
+            <div className="label">Total Points</div>
             <Input type="number" min="0" max="9999999" value={edit.totalPoints} onChange={(e) => setEdit(v => ({ ...v, totalPoints: e.target.value }))} />
           </div>
           <div />
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-          <Btn kind="primary" onClick={saveTeacher} disabled={st.loading}>{t("save")}</Btn>
-          <Btn onClick={() => setEdit(v => ({ ...v, avatarUrl: "" }))}>{t("clearAvatar")}</Btn>
-          <Btn onClick={() => setReloadNonce(x => x + 1)}>{t("refresh")}</Btn>
+          <Btn kind="primary" onClick={saveTeacher} disabled={st.loading}>Сохранить</Btn>
+          <Btn onClick={() => setEdit(v => ({ ...v, avatarUrl: "" }))}>Очистить аватар</Btn>
+          <Btn onClick={() => setReloadNonce(x => x + 1)}>Обновить</Btn>
         </div>
 
         {loadingLocal && <div className="sep"></div>}
-        {loadingLocal && <p className="p">{t("loadingSubs")}</p>}
+        {loadingLocal && <p className="p">Загрузка заявок…</p>}
       </div>
 
       <div className="glass card">
-        <div className="h2">{t("teacherSubs")}</div>
+        <div className="h2">Заявки учителя</div>
         <div className="sep"></div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -5220,7 +5243,7 @@ function PageAdminTeacher() {
                 <th>Pts</th>
                 <th>Status</th>
                 <th>Evidence</th>
-                <th>{t("action")}</th>
+                <th>Действие</th>
               </tr>
             </thead>
             <tbody>
@@ -5236,22 +5259,22 @@ function PageAdminTeacher() {
                   <td className="tiny"><Pill kind={s.status}>{s.status}</Pill></td>
                   <td className="tiny">
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">{t("link")}</a> : null}
-                      {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">{t("file")}</a> : null}
+                      {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">Ссылка</a> : null}
+                      {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">Файл</a> : null}
                       {!s.evidenceLink && !s.evidenceFileUrl ? <span className="muted tiny">—</span> : null}
                     </div>
                   </td>
                   <td className="tiny">
                     {s.status === "pending" ? (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /> {t("approve")}</Btn>
-                        <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /> {t("reject")}</Btn>
+                        <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /> Approve</Btn>
+                        <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /> Reject</Btn>
                       </div>
                     ) : <span className="muted tiny">—</span>}
                   </td>
                 </tr>
               ))}
-              {!subs.length && <tr><td colSpan="7" className="tiny muted">{t("noSubs")}</td></tr>}
+              {!subs.length && <tr><td colSpan="7" className="tiny muted">Нет заявок</td></tr>}
             </tbody>
           </table>
         </div>
@@ -5273,7 +5296,7 @@ function NewsCard({ item, user, index }) {
   const [addingComment, setAddingComment] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  const catLabel = (() => { const c = NEWS_CATEGORIES.find(c => c.key === item.category); return c ? t(c.tKey) : item.category; })();
+  const catLabel = NEWS_CATEGORIES.find(c => c.key === item.category)?.label?.split(" / ")[0] || item.category;
   const dateStr = item.createdAt?.seconds
     ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "numeric" })
     : "";
@@ -5308,7 +5331,7 @@ function NewsCard({ item, user, index }) {
     try {
       await addNewsComment(item.id, {
         uid: user.uid,
-        authorName: user.displayName || user.email || t("anonymous"),
+        authorName: user.displayName || user.email || "Аноним",
         avatarUrl: user.avatarUrl || "",
         text: commentText.trim(),
       });
@@ -5325,46 +5348,26 @@ function NewsCard({ item, user, index }) {
   const desc = item.description || "";
   const descLong = desc.length > 200;
 
-  const timeAgo = (() => {
-    if (!item.createdAt?.seconds) return dateStr;
-    const diff = Math.floor((Date.now() / 1000) - item.createdAt.seconds);
-    if (diff < 60) return t("justNow");
-    if (diff < 3600) return `${Math.floor(diff / 60)} ${t("minAgo")}`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} ${t("hAgo")}`;
-    if (diff < 604800) return `${Math.floor(diff / 86400)} ${t("dAgo")}`;
-    return dateStr;
-  })();
-
-  const handleShare = async () => {
-    const url = window.location.origin + "/#news";
-    if (navigator.share) {
-      try { await navigator.share({ title: item.title, url }); } catch {}
-    } else {
-      await navigator.clipboard.writeText(`${item.title} — ${url}`);
-      toast(t("linkCopied"), "ok");
-    }
-  };
-
   return (
-    <div className="news-card" style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}>
+    <div className="news-card glass" style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}>
       <div className="news-card__body">
         <div className="news-card__meta">
           {item.avatarUrl
             ? <img className="news-card__avatar" src={item.avatarUrl} alt="" />
-            : <div className="news-card__avatar news-card__avatar--ph">{(item.authorName || "A")[0].toUpperCase()}</div>
+            : <div className="news-card__avatar news-card__avatar--ph">{(item.authorName || "А")[0].toUpperCase()}</div>
           }
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="news-card__author">{item.authorName || t("anonymous")}</div>
-            <div className="tiny muted">{timeAgo}</div>
+          <div style={{ flex: 1 }}>
+            <div className="news-card__author">{item.authorName || "Аноним"}</div>
+            <div className="tiny muted">{dateStr}</div>
           </div>
           <span className={`news-pill news-pill--${item.category}`}>{catLabel}</span>
           {isOwner && (
-            <button className="news-del-btn" title={t("delete")} onClick={async () => {
-              if (!window.confirm(t("deleteNewsConfirm"))) return;
+            <button className="news-del-btn" title="Жою / Удалить" onClick={async () => {
+              if (!window.confirm("Жаңалықты жою? / Удалить новость?")) return;
               await deleteNewsPost(item.id);
               const updated = await fetchNewsAll();
               setState({ news: updated });
-              toast(t("deleted"), "ok");
+              toast("Жойылды / Удалено", "ok");
             }}>✕</button>
           )}
         </div>
@@ -5376,7 +5379,7 @@ function NewsCard({ item, user, index }) {
             {descLong && !expanded ? desc.slice(0, 200) + "…" : desc}
             {descLong && (
               <button className="news-expand-btn" onClick={() => setExpanded(e => !e)}>
-                {expanded ? ` ${t("collapse")}` : ` ${t("readMore")}`}
+                {expanded ? " Жабу / Свернуть" : " Толығырақ / Читать"}
               </button>
             )}
           </div>
@@ -5391,7 +5394,7 @@ function NewsCard({ item, user, index }) {
         {item.link && (
           <a className="news-card__link" href={item.link} target="_blank" rel="noopener noreferrer">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            {item.link.replace(/^https?:\/\//, "").slice(0, 40)}{item.link.length > 48 ? "…" : ""}
+            {item.link}
           </a>
         )}
 
@@ -5406,31 +5409,25 @@ function NewsCard({ item, user, index }) {
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
             </svg>
-            <span>{t("comments")}</span>
-          </button>
-          <button className="news-share-btn" onClick={handleShare}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
+            <span>Пікір / Комментарии</span>
           </button>
         </div>
 
         {showComments && (
           <div className="news-comments">
             {loadingComments ? (
-              <div className="tiny muted" style={{ padding: "8px 0" }}>{t("loadingComments")}</div>
+              <div className="tiny muted" style={{ padding: "8px 0" }}>Жүктелуде...</div>
             ) : comments.length === 0 ? (
-              <div className="tiny muted" style={{ padding: "8px 0" }}>{t("noComments")}</div>
+              <div className="tiny muted" style={{ padding: "8px 0" }}>Пікір жоқ / Нет комментариев</div>
             ) : (
               <div className="news-comments__list">
                 {comments.map(c => (
                   <div key={c.id} className="news-comment">
                     {c.avatarUrl
                       ? <img className="news-comment__av" src={c.avatarUrl} alt="" />
-                      : <div className="news-comment__av news-comment__av--ph">{(c.authorName || "A")[0].toUpperCase()}</div>
+                      : <div className="news-comment__av news-comment__av--ph">{(c.authorName || "А")[0].toUpperCase()}</div>
                     }
-                    <div className="news-comment__bubble">
+                    <div>
                       <div className="news-comment__author">{c.authorName}</div>
                       <div className="news-comment__text">{c.text}</div>
                     </div>
@@ -5442,13 +5439,14 @@ function NewsCard({ item, user, index }) {
               <div className="news-comment-form">
                 <input
                   className="input"
-                  placeholder={t("writeComment")}
+                  placeholder="Пікір жазу / Написать комментарий…"
                   value={commentText}
                   onChange={e => setCommentText(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !addingComment) { e.preventDefault(); handleAddComment(); } }}
+                  style={{ flex: 1 }}
                 />
                 <Btn kind="primary" disabled={addingComment || !commentText.trim()} onClick={handleAddComment}>
-                  {addingComment ? "…" : t("send")}
+                  {addingComment ? "…" : "Жіберу"}
                 </Btn>
               </div>
             )}
@@ -5490,15 +5488,15 @@ function PageNews() {
 
   const validateFile = (file, label) => {
     if (file && file.size > 10 * 1024 * 1024) {
-      toast(`${label} — ${t("max10mb")}`, "error");
+      toast(`${label} — макс. 10 МБ`, "error");
       return false;
     }
     return true;
   };
 
   const handleSubmit = async () => {
-    if (!title.trim()) return toast(t("fillFields"), "error");
-    if (!category) return toast(t("fillFields"), "error");
+    if (!title.trim()) return toast("Тақырыпты енгізіңіз / Введите заголовок", "error");
+    if (!category) return toast("Категорияны таңдаңыз / Выберите категорию", "error");
     if (!validateFile(photo, "Фото")) return;
     setSubmitting(true);
     try {
@@ -5506,19 +5504,19 @@ function PageNews() {
       if (photo) photoUrl = await uploadFile(`news/${u.uid}/${Date.now()}_photo`, photo);
       await createNewsPost({
         uid: u.uid,
-        authorName: u.displayName || u.email || t("anonymous"),
+        authorName: u.displayName || u.email || "Аноним",
         authorRole: u.role,
         avatarUrl: u.avatarUrl || "",
         category, title: title.trim(), description: description.trim(),
         photoUrl, coverUrl: "", link: link.trim(),
       });
-      toast(t("newsPublished"), "ok");
+      toast("Жаңалық жарияланды / Новость опубликована", "ok");
       setShowForm(false);
       setTitle(""); setDescription(""); setLink(""); setCategory(""); setPhoto(null);
       const updated = await fetchNewsAll();
       setState({ news: updated });
     } catch (e) {
-      toast(e?.message || t("publishError"), "error");
+      toast(e?.message || "Ошибка публикации", "error");
     } finally { setSubmitting(false); }
   };
 
@@ -5528,74 +5526,74 @@ function PageNews() {
     <div className="page-news">
       <div className="page-head" style={{ marginBottom: 20 }}>
         <div>
-          <div className="h1">{t("newsTitle")}</div>
-          <div className="muted tiny">{t("sharedFeed")} · {localNews.length} {t("publication")}</div>
+          <div className="h1">Жаңалықтар / Новости</div>
+          <div className="muted tiny">Ортақ лента • {localNews.length} жарияланым</div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button className={`iconbtn${refreshing ? " spin" : ""}`} onClick={doRefresh} title={t("refresh")} disabled={refreshing}>
+          <button className={`iconbtn${refreshing ? " spin" : ""}`} onClick={doRefresh} title="Обновить" disabled={refreshing}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
           </button>
           {u && (
             <Btn kind="primary" onClick={() => setShowForm(v => !v)}>
-              {showForm ? `✕ ${t("close")}` : `+ ${t("publish")}`}
+              {showForm ? "✕ Жабу" : "+ Жариялау"}
             </Btn>
           )}
         </div>
       </div>
 
       {showForm && (
-        <div className="news-form-card">
-          <div className="h2" style={{ marginBottom: 16 }}>{t("publishNews")}</div>
+        <div className="news-form-card card">
+          <div className="h2" style={{ marginBottom: 16 }}>Жаңалық жариялау / Опубликовать новость</div>
           <div className="news-form-grid">
             <div className="field">
-              <label className="label">{t("category")} *</label>
+              <label className="label">Категория *</label>
               <select className="select" value={category} onChange={e => setCategory(e.target.value)}>
-                <option value="">{t("selectCategory")}</option>
-                {NEWS_CATEGORIES.map(c => <option key={c.key} value={c.key}>{NEWS_CAT_ICONS[c.key] || ""} {t(c.tKey)}</option>)}
+                <option value="">— таңдаңыз / выберите —</option>
+                {NEWS_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
               </select>
             </div>
             <div className="field">
-              <label className="label">{t("title")} *</label>
-              <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder={t("newsTopicPlaceholder")} />
+              <label className="label">Тақырып / Заголовок *</label>
+              <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Жаңалық тақырыбы…" />
             </div>
             <div className="field" style={{ gridColumn: "1/-1" }}>
-              <label className="label">{t("description")}</label>
-              <textarea className="textarea" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder={t("newsContentPlaceholder")} />
+              <label className="label">Сипаттама / Описание</label>
+              <textarea className="textarea" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder="Жаңалық мазмұны…" />
             </div>
             <div className="field">
-              <label className="label">{t("link")}</label>
+              <label className="label">Сілтеме / Ссылка</label>
               <input className="input" value={link} onChange={e => setLink(e.target.value)} placeholder="https://…" />
             </div>
             <div className="field">
-              <label className="label">{t("photoMax10")}</label>
+              <label className="label">Фото (макс. 10 МБ)</label>
               <input type="file" accept="image/*" className="input" onChange={e => setPhoto(e.target.files[0] || null)} />
-              {photo && <div className="tiny muted" style={{ marginTop: 4 }}>{photo.name} ({(photo.size / 1024 / 1024).toFixed(1)} MB)</div>}
+              {photo && <div className="tiny muted" style={{ marginTop: 4 }}>✓ {photo.name} ({(photo.size / 1024 / 1024).toFixed(1)} МБ)</div>}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-            <Btn kind="ghost" onClick={() => setShowForm(false)}>{t("cancel")}</Btn>
+            <Btn kind="ghost" onClick={() => setShowForm(false)}>Болдырмау / Отмена</Btn>
             <Btn kind="primary" disabled={submitting} onClick={handleSubmit}>
-              {submitting ? t("publishing") : t("publish")}
+              {submitting ? "Жариялануда…" : "Жариялау / Опубликовать"}
             </Btn>
           </div>
         </div>
       )}
 
       <div className="news-filter" role="tablist">
-        <button role="tab" className={`news-filter__btn${filter === "all" ? " active" : ""}`} onClick={() => setFilter("all")}>{t("all")}</button>
+        <button role="tab" className={`news-filter__btn${filter === "all" ? " active" : ""}`} onClick={() => setFilter("all")}>Барлығы / Все</button>
         {NEWS_CATEGORIES.map(c => (
           <button role="tab" key={c.key} className={`news-filter__btn${filter === c.key ? " active" : ""}`} onClick={() => setFilter(c.key)}>
-            {NEWS_CAT_ICONS[c.key] || ""} {t(c.tKey)}
+            {c.label.split(" / ")[0]}
           </button>
         ))}
       </div>
 
       <div className="news-list">
         {filtered.length === 0 ? (
-          <div className="news-empty">
-            <div className="news-empty__icon">{filter !== "all" ? (NEWS_CAT_ICONS[filter] || "\u{1F4F0}") : "\u{1F4F0}"}</div>
-            <div className="h2">{t("noNews")}</div>
-            <div className="tiny muted" style={{ marginTop: 6 }}>{t("noNewsCat")}</div>
+          <div className="card" style={{ textAlign: "center", padding: "40px 20px", color: "var(--muted)" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📰</div>
+            <div className="h2">Жаңалық жоқ</div>
+            <div className="tiny muted">Нет новостей в этой категории</div>
           </div>
         ) : (
           filtered.map((n, i) => <NewsCard key={n.id} item={n} user={u} index={i} />)
@@ -5659,7 +5657,7 @@ async function hydrateForUser(userDoc) {
     }
   } catch (e) {
     console.error(e);
-    toast(e?.message || t("error"), "error");
+    toast(e?.message || "Ошибка загрузки данных", "error");
   }
 }
 
@@ -5674,7 +5672,7 @@ async function bootstrap() {
     await getRedirectResult(auth);
   } catch (e) {
     console.error(e);
-    toast(e?.message || t("msLoginError"), "error");
+    toast(e?.message || "Ошибка входа через Microsoft", "error");
   }
 
   onAuthStateChanged(auth, async (user) => {
@@ -5723,7 +5721,7 @@ async function bootstrap() {
       render();
     } catch (e) {
       console.error(e);
-      toast(e?.message || t("initError"), "error");
+      toast(e?.message || "Ошибка инициализации", "error");
       setState({ booting: false });
       render();
     }
