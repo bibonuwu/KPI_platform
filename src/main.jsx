@@ -536,7 +536,7 @@ async function ensureUserDoc(uid, email) {
         preDisplayName = preSnap.data().displayName || "";
         prePosition = preSnap.data().position || "";
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   const base = {
@@ -869,6 +869,33 @@ const NEWS_CATEGORIES = [
   { key: "achievement", tKey: "catAchievement" },
   { key: "other", tKey: "catOther" },
 ];
+const NEWS_FONTS = [
+  { key: "", label: "Default" },
+  { key: "'Georgia', serif", label: "Georgia" },
+  { key: "'Courier New', monospace", label: "Courier" },
+  { key: "'Comic Sans MS', cursive", label: "Comic Sans" },
+  { key: "'Times New Roman', serif", label: "Times" },
+  { key: "'Trebuchet MS', sans-serif", label: "Trebuchet" },
+];
+const NEWS_MOODS = ["😊","😂","😍","🔥","👏","💪","🎉","😎","🤔","😢","❤️","👍"];
+
+/** Parse simple **bold** and *italic* markers in text */
+function renderRichDesc(text) {
+  if (!text) return null;
+  const parts = [];
+  const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)/g;
+  let last = 0;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    if (m[1]) parts.push(React.createElement("strong", { key: m.index }, m[2]));
+    else if (m[3]) parts.push(React.createElement("em", { key: m.index }, m[4]));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
 function newsCatLabel(key) {
   const c = NEWS_CATEGORIES.find(x => x.key === key);
   return c ? t(c.tKey) : key;
@@ -880,7 +907,7 @@ async function fetchNewsAll() {
   return res.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-async function createNewsPost({ uid, authorName, authorRole, avatarUrl, category, title, description, photoUrl, coverUrl, link }) {
+async function createNewsPost({ uid, authorName, authorRole, avatarUrl, category, title, description, photoUrl, coverUrl, link, mood, fontFamily }) {
   await addDoc(collection(db, "news"), {
     uid,
     authorName: safeText(authorName),
@@ -892,6 +919,8 @@ async function createNewsPost({ uid, authorName, authorRole, avatarUrl, category
     photoUrl: safeText(photoUrl),
     coverUrl: safeText(coverUrl),
     link: safeText(link),
+    mood: safeText(mood || ""),
+    fontFamily: safeText(fontFamily || ""),
     likes: [],
     createdAt: serverTimestamp()
   });
@@ -969,8 +998,8 @@ function Icon({ name }) {
     case "shield": return <svg {...common}><path {...s} d="M12 22s8-4 8-10V6l-8-3-8 3v6c0 6 8 10 8 10z" /></svg>;
     case "sun": return <svg {...common}><circle {...s} cx="12" cy="12" r="4" /><path {...s} d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>;
     case "moon": return <svg {...common}><path {...s} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>;
-    case "news": return <svg {...common}><path {...s} d="M4 22h14a2 2 0 002-2V7.5L14.5 2H6a2 2 0 00-2 2v4"/><path {...s} d="M14 2v6h6"/><path {...s} d="M2 15h10M2 19h6"/></svg>;
-    case "bug": return <svg {...common}><path {...s} d="M8 2l1.88 1.88M16 2l-1.88 1.88M9 7.13v-1a3.003 3.003 0 116 0v1"/><path {...s} d="M12 20c-3.3 0-6-2.7-6-6v-3a6 6 0 0112 0v3c0 3.3-2.7 6-6 6z"/><path {...s} d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M6 17l-4 1M17.47 9c1.93-.2 3.53-1.9 3.53-4M18 13h4M18 17l4 1"/></svg>;
+    case "news": return <svg {...common}><path {...s} d="M4 22h14a2 2 0 002-2V7.5L14.5 2H6a2 2 0 00-2 2v4" /><path {...s} d="M14 2v6h6" /><path {...s} d="M2 15h10M2 19h6" /></svg>;
+    case "bug": return <svg {...common}><path {...s} d="M8 2l1.88 1.88M16 2l-1.88 1.88M9 7.13v-1a3.003 3.003 0 116 0v1" /><path {...s} d="M12 20c-3.3 0-6-2.7-6-6v-3a6 6 0 0112 0v3c0 3.3-2.7 6-6 6z" /><path {...s} d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M6 17l-4 1M17.47 9c1.93-.2 3.53-1.9 3.53-4M18 13h4M18 17l4 1" /></svg>;
     default: return null;
   }
 }
@@ -1224,7 +1253,7 @@ function TopbarRight() {
         <>
           <Pill kind={u.role === "admin" ? "pending" : "approved"}>{u.role}</Pill>
           <div className="tiny" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            <b>{u.displayName || t("unnamed")}</b> <span className="muted">· {u.email}</span>
+            <b>{u.displayName || t("unnamed")}</b>
           </div>
           <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast(t("loggedOut")); navigate("login"); }}>
             <Icon name="logout" /> {t("navLogout")}
@@ -1327,9 +1356,10 @@ function ForcePasswordChange() {
   const [newPwd2, setNewPwd2] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Show only for onboarded teachers who haven't changed password yet
+  // Show ONLY for teachers who just completed onboarding (needsPasswordChange flag set during onboarding)
+  // Existing teachers who onboarded before this feature won't have this flag → no overlay
   if (!u || u.role === "admin") return null;
-  if (u.onboarded !== true || u.passwordChanged === true) return null;
+  if (u.needsPasswordChange !== true) return null;
 
   const handleChange = async () => {
     if (newPwd.length < 6) { toast(t("pwdMinLength"), "error"); return; }
@@ -1339,9 +1369,9 @@ function ForcePasswordChange() {
     setSaving(true);
     try {
       await updatePassword(user, newPwd);
-      await updateProfile(u.uid, { passwordChanged: true });
-      const freshUser = await ensureUserDoc(u.uid, u.email);
-      setState({ userDoc: freshUser });
+      await updateProfile(u.uid, { needsPasswordChange: false, passwordChanged: true });
+      // Force state update so overlay disappears immediately
+      setState({ userDoc: { ...u, needsPasswordChange: false, passwordChanged: true } });
       toast(t("pwdChangedRedirect"), "ok");
     } catch (e) {
       console.error(e);
@@ -1357,7 +1387,7 @@ function ForcePasswordChange() {
       <div className="force-pwd-card">
         <div className="force-pwd-icon">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" />
           </svg>
         </div>
         <h2>{t("forceChangePwdTitle")}</h2>
@@ -1377,6 +1407,96 @@ function ForcePasswordChange() {
   );
 }
 
+function TeacherProfileModal() {
+  const st = useStore();
+  const m = st.modal;
+  if (m?.kind !== "teacherProfile") return null;
+  const tc = m.teacher;
+  if (!tc) return null;
+
+  const allTeachers = (st.users || []).filter(x => (x.role || "teacher") !== "admin");
+  const sorted = [...allTeachers].sort((a, b) => (Number(b.totalPoints) || 0) - (Number(a.totalPoints) || 0));
+  const rankIdx = sorted.findIndex(x => x.uid === tc.uid);
+  const rank = rankIdx >= 0 ? rankIdx + 1 : "—";
+  const lvl = levelFromPoints(tc.totalPoints || 0);
+  const subs = (st.submissions || []).filter(s => s.uid === tc.uid);
+  const approved = subs.filter(s => s.status === "approved");
+  const igHandle = (tc.instagram || "").replace(/^@/, "").trim();
+
+  const close = () => setState({ modal: null });
+
+  return (
+    <div className="tp-overlay" onClick={close}>
+      <div className="tp-card" onClick={e => e.stopPropagation()}>
+        <button className="tp-close" onClick={close}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        </button>
+
+        <div className="tp-header">
+          <div className="tp-avatar-wrap">
+            <div className="tp-avatar">
+              {tc.avatarUrl
+                ? <img src={tc.avatarUrl} alt="" />
+                : <span>{(tc.displayName || tc.email || "?").slice(0, 1).toUpperCase()}</span>}
+            </div>
+            <div className="tp-rank-badge">#{rank}</div>
+          </div>
+          <div className="tp-name">{tc.displayName || t("unnamed")}</div>
+          <div className="tp-role">{tc.position || t("role")}: {tc.role || "teacher"}</div>
+          {tc.school && <div className="tp-school">{tc.school}</div>}
+        </div>
+
+        <div className="tp-stats-grid">
+          <div className="tp-stat">
+            <div className="tp-stat-value">{fmtPoints(tc.totalPoints)}</div>
+            <div className="tp-stat-label">{t("totalPoints")}</div>
+          </div>
+          <div className="tp-stat">
+            <div className="tp-stat-value">{lvl.name}</div>
+            <div className="tp-stat-label">{t("levelLabel")}</div>
+          </div>
+          <div className="tp-stat">
+            <div className="tp-stat-value">#{rank}</div>
+            <div className="tp-stat-label">{t("rankLabel")}</div>
+          </div>
+          <div className="tp-stat">
+            <div className="tp-stat-value">{tc.experienceYears || 0}</div>
+            <div className="tp-stat-label">{t("expYears")}</div>
+          </div>
+        </div>
+
+        <div className="tp-info-list">
+          {tc.subject && <div className="tp-info-row"><span className="tp-info-icon">📚</span><span>{tc.subject}</span></div>}
+          {tc.city && <div className="tp-info-row"><span className="tp-info-icon">📍</span><span>{tc.city}</span></div>}
+          {tc.email && <div className="tp-info-row"><span className="tp-info-icon">✉️</span><span>{tc.email}</span></div>}
+          {tc.phone && <div className="tp-info-row"><span className="tp-info-icon">📞</span><span>{tc.phone}</span></div>}
+          {tc.experienceYears > 0 && <div className="tp-info-row"><span className="tp-info-icon">⏳</span><span>{tc.experienceYears} {t("yearsShort")}</span></div>}
+        </div>
+
+        <div className="tp-progress">
+          <div className="tp-progress-label">
+            <span>{lvl.name}</span>
+            {lvl.next && <span className="muted">{tc.totalPoints || 0} / {lvl.next}</span>}
+          </div>
+          <div className="tp-progress-bar">
+            <div className="tp-progress-fill" style={{ width: `${lvl.pct}%` }} />
+          </div>
+        </div>
+
+        <div className="tp-footer">
+          {igHandle && (
+            <a href={`https://instagram.com/${igHandle}`} target="_blank" rel="noopener noreferrer" className="btn btn--instagram">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
+              Instagram
+            </a>
+          )}
+          <button className="btn" onClick={close}>{t("closeProfile")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Overlays() {
   const st = useStore();
   return (
@@ -1390,6 +1510,7 @@ function Overlays() {
         ))}
       </div>
       {st.modal?.kind === "crop" && <CropModal file={st.modal.file} onClose={() => setState({ modal: null })} />}
+      <TeacherProfileModal />
       <ForcePasswordChange />
       <OnlineWidget />
     </>
@@ -2078,7 +2199,7 @@ function PageOnboarding() {
       const c = canvasRef.current;
       const blob = await new Promise(res => c.toBlob(res, "image/png"));
       const sigUrl = await uploadFile(`signatures/${u.uid}/${Date.now()}_onboarding.png`, new File([blob], "sig.png", { type: "image/png" }));
-      await updateProfile(u.uid, { onboarded: true, onboardedAt: serverTimestamp(), signatureUrl: sigUrl });
+      await updateProfile(u.uid, { onboarded: true, onboardedAt: serverTimestamp(), signatureUrl: sigUrl, needsPasswordChange: true });
       const freshUser = await ensureUserDoc(u.uid, u.email);
       setState({ userDoc: freshUser });
       toast(t("onbCompleted"), "ok");
@@ -2177,154 +2298,161 @@ function PageOnboarding() {
           )}
         </div>
       </div>
+      <div class="grid2">
+        {/* ═══ DOCUMENTS ════════════════════════════ */}
+        <div className="glass card onb-docs-card">
+          <div className="onb-docs-header">
+            <div style={{ fontSize: 20, fontWeight: 800 }}>{`📄 ${t("onbOfficialDocs")}`}</div>
+            {isOnboarded && <span className="pill approved">{t("onbAllRead")} ✓</span>}
+          </div>
 
-      {/* ═══ DOCUMENTS ════════════════════════════ */}
-      <div className="glass card onb-docs-card">
-        <div className="onb-docs-header">
-          <div style={{ fontSize: 20, fontWeight: 800 }}>{`📄 ${t("onbOfficialDocs")}`}</div>
-          {isOnboarded && <span className="pill approved">{t("onbAllRead")} ✓</span>}
-        </div>
-
-        <div className="onb-docs-list">
-          {docs.map((d, i) => {
-            const done = checks[i] || isOnboarded;
-            const isOpen = expanded === i;
-            return (
-              <div key={i} className={`onb-doc${done ? " onb-doc--done" : ""}${isOpen ? " onb-doc--open" : ""}`}
-                style={{ animationDelay: `${i * 0.07}s` }}>
-                <div
-                  className="onb-doc__head"
-                  role="button" tabIndex={0}
-                  onClick={() => setExpanded(isOpen ? null : i)}
-                >
-                  <div className={`onb-doc__num${done ? " onb-doc__num--done" : ""}`}>
-                    {done ? "✓" : i + 1}
+          <div className="onb-docs-list">
+            {docs.map((d, i) => {
+              const done = checks[i] || isOnboarded;
+              const isOpen = expanded === i;
+              return (
+                <div key={i} className={`onb-doc${done ? " onb-doc--done" : ""}${isOpen ? " onb-doc--open" : ""}`}
+                  style={{ animationDelay: `${i * 0.07}s` }}>
+                  <div
+                    className="onb-doc__head"
+                    role="button" tabIndex={0}
+                    onClick={() => setExpanded(isOpen ? null : i)}
+                  >
+                    <div className={`onb-doc__num${done ? " onb-doc__num--done" : ""}`}>
+                      {done ? "✓" : i + 1}
+                    </div>
+                    <div className="onb-doc__title">{d.title}</div>
+                    <div className={`onb-doc__chevron${isOpen ? " onb-doc__chevron--open" : ""}`}>›</div>
                   </div>
-                  <div className="onb-doc__title">{d.title}</div>
-                  <div className={`onb-doc__chevron${isOpen ? " onb-doc__chevron--open" : ""}`}>›</div>
-                </div>
-                {isOpen && (
-                  <div className="onb-doc__body">
-                    <div className="onb-doc__lang-label">🇰🇿 {t("onbLangKz")}</div>
-                    <p className="onb-doc__text">{d.kz}</p>
-                    <div className="onb-doc__lang-label">🇷🇺 {t("onbLangRu")}</div>
-                    <p className="onb-doc__text">{d.ru}</p>
-                    {!isOnboarded && (
-                      <button
-                        className={`onb-doc__confirm${checks[i] ? " onb-doc__confirm--done" : ""}`}
-                        onClick={() => { if (!checks[i]) toggleCheck(i); setExpanded(null); }}
-                      >
-                        {checks[i] ? `✓ ${t("onbReadDone")}` : t("onbAgree")}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ═══ SIGNATURE ════════════════════════════ */}
-      {!isOnboarded && (
-        <div className={`onb-sig-section glass card${allChecked ? " onb-sig-section--ready" : ""}`}>
-          {!allChecked ? (
-            <div className="onb-sig-locked">
-              <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{t("onbSignSection")}</div>
-              <p className="p" style={{ textAlign: "center" }}>
-                {checkedCount} / {docs.length}
-              </p>
-              <div className="onb-sig-locked__progress">
-                <div className="onb-sig-locked__fill" style={{ width: `${(checkedCount / docs.length) * 100}%` }} />
-              </div>
-              <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>{checkedCount} / {docs.length}</div>
-            </div>
-          ) : (
-            <>
-              <div className="onb-sig-ready-banner">
-                <div className="onb-sig-ready-banner__icon">🎊</div>
-                <div className="onb-sig-ready-banner__title">{t("onbAllDocsRead")}</div>
-                <div className="onb-sig-ready-banner__sub">{t("onbFinalStep")}</div>
-              </div>
-
-              <div className="onb-sig-wrap">
-                <div className="onb-sig-wrap__head">
-                  <div>
-                    <div className="h2" style={{ marginBottom: 4 }}>✍ {t("onbDrawSign")}</div>
-                    <p className="p" style={{ margin: 0, fontSize: 13 }}>
-                      {t("onbDrawHint")}
-                    </p>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("onbThickness")}</span>
-                    {[1, 2, 4].map(sz => (
-                      <button key={sz} onClick={() => setBrushSize(sz)} style={{
-                        width: 32, height: 32, borderRadius: 8,
-                        border: `2px solid ${brushSize === sz ? "var(--accent)" : "var(--border)"}`,
-                        background: brushSize === sz ? "var(--hover-bg)" : "transparent",
-                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s"
-                      }}>
-                        <div style={{ width: Math.max(sz * 4, 8), height: sz, background: "#1a2035", borderRadius: 99 }} />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="onb-sig-canvas-wrap">
-                  <canvas
-                    ref={canvasRef}
-                    width={800}
-                    height={200}
-                    className="onb-sig-canvas"
-                    onMouseDown={onDown}
-                    onMouseMove={onMove}
-                    onMouseUp={onUp}
-                    onMouseLeave={onUp}
-                    onTouchStart={onDown}
-                    onTouchMove={onMove}
-                    onTouchEnd={onUp}
-                  />
-                  {!signed && (
-                    <div className="onb-sig-hint">✍ {t("onbSignHere")}</div>
+                  {isOpen && (
+                    <div className="onb-doc__body">
+                      <div className="onb-doc__lang-label">🇰🇿 {t("onbLangKz")}</div>
+                      <p className="onb-doc__text">{d.kz}</p>
+                      <div className="onb-doc__lang-label">🇷🇺 {t("onbLangRu")}</div>
+                      <p className="onb-doc__text">{d.ru}</p>
+                      {!isOnboarded && (
+                        <button
+                          className={`onb-doc__confirm${checks[i] ? " onb-doc__confirm--done" : ""}`}
+                          onClick={() => { if (!checks[i]) toggleCheck(i); setExpanded(null); }}
+                        >
+                          {checks[i] ? `✓ ${t("onbReadDone")}` : t("onbAgree")}
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
-
-                <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
-                  <Btn onClick={clearSig}>↺ {t("onbClear")}</Btn>
-                  <Btn kind="primary" onClick={submit} disabled={saving || !signed}>
-                    {saving ? t("loading") : `✅ ${t("onbConfirmSign")}`}
-                  </Btn>
-                  {signed && <span style={{ fontSize: 13, color: "var(--green)", fontWeight: 700 }}>✓ {t("onbSignReady")}</span>}
-                </div>
-              </div>
-            </>
-          )}
+              );
+            })}
+          </div>
         </div>
-      )}
 
-      {/* ═══ ALREADY ONBOARDED ════════════════════ */}
-      {isOnboarded && (
-        <div className="glass card onb-done-card">
-          <div className="onb-done-card__icon">🏆</div>
-          <div className="onb-done-card__title">{t("onbSuccess")}</div>
-          <div className="onb-done-card__checks">
-            <div className="onb-done-check"><span>✓</span> {t("onbDocsRead")}</div>
-            <div className="onb-done-check"><span>✓</span> {t("onbSignDone")}</div>
-            {u.onboardedAt && (
-              <div className="onb-done-check">
-                <span>📅</span> {t("date")}: {new Date(u.onboardedAt.seconds * 1000).toLocaleDateString("ru-RU")}
+        {isOnboarded && (
+          <div className="glass card onb-done-card">
+            <div className="onb-done-card__icon">🏆</div>
+            <div className="onb-done-card__title">{t("onbSuccess")}</div>
+            <div className="onb-done-card__checks">
+              <div className="onb-done-check"><span>✓</span> {t("onbDocsRead")}</div>
+              <div className="onb-done-check"><span>✓</span> {t("onbSignDone")}</div>
+              {u.onboardedAt && (
+                <div className="onb-done-check">
+                  <span>📅</span> {t("date")}: {new Date(u.onboardedAt.seconds * 1000).toLocaleDateString("ru-RU")}
+                </div>
+              )}
+            </div>
+            {u.signatureUrl && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: "var(--muted)", marginBottom: 8, textTransform: "uppercase", letterSpacing: .4 }}>{t("onbYourSign")}</div>
+                <img src={u.signatureUrl} alt="Подпись" className="onb-done-card__sig" />
               </div>
             )}
           </div>
-          {u.signatureUrl && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--muted)", marginBottom: 8, textTransform: "uppercase", letterSpacing: .4 }}>{t("onbYourSign")}</div>
-              <img src={u.signatureUrl} alt="Подпись" className="onb-done-card__sig" />
-            </div>
-          )}
-        </div>
-      )}
+        )}
+
+        {/* ═══ SIGNATURE ════════════════════════════ */}
+        {!isOnboarded && (
+          <div className={`onb-sig-section glass card${allChecked ? " onb-sig-section--ready" : ""}`}>
+            {!allChecked ? (
+              <div className="onb-sig-locked">
+                <div style={{ fontSize: 40, marginBottom: 12 }}>🔒</div>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>{t("onbSignSection")}</div>
+                <p className="p" style={{ textAlign: "center" }}>
+                  {checkedCount} / {docs.length}
+                </p>
+                <div className="onb-sig-locked__progress">
+                  <div className="onb-sig-locked__fill" style={{ width: `${(checkedCount / docs.length) * 100}%` }} />
+                </div>
+                <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 6 }}>{checkedCount} / {docs.length}</div>
+              </div>
+            ) : (
+              <>
+                <div className="onb-sig-ready-banner">
+                  <div className="onb-sig-ready-banner__icon">🎊</div>
+                  <div className="onb-sig-ready-banner__title">{t("onbAllDocsRead")}</div>
+                  <div className="onb-sig-ready-banner__sub">{t("onbFinalStep")}</div>
+                </div>
+
+                <div className="onb-sig-wrap">
+                  <div className="onb-sig-wrap__head">
+                    <div>
+                      <div className="h2" style={{ marginBottom: 4 }}>✍ {t("onbDrawSign")}</div>
+                      <p className="p" style={{ margin: 0, fontSize: 13 }}>
+                        {t("onbDrawHint")}
+                      </p>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 12, color: "var(--muted)" }}>{t("onbThickness")}</span>
+                      {[1, 2, 4].map(sz => (
+                        <button key={sz} onClick={() => setBrushSize(sz)} style={{
+                          width: 32, height: 32, borderRadius: 8,
+                          border: `2px solid ${brushSize === sz ? "var(--accent)" : "var(--border)"}`,
+                          background: brushSize === sz ? "var(--hover-bg)" : "transparent",
+                          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s"
+                        }}>
+                          <div style={{ width: Math.max(sz * 4, 8), height: sz, background: "#1a2035", borderRadius: 99 }} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="onb-sig-canvas-wrap">
+                    <canvas
+                      ref={canvasRef}
+                      width={800}
+                      height={200}
+                      className="onb-sig-canvas"
+                      onMouseDown={onDown}
+                      onMouseMove={onMove}
+                      onMouseUp={onUp}
+                      onMouseLeave={onUp}
+                      onTouchStart={onDown}
+                      onTouchMove={onMove}
+                      onTouchEnd={onUp}
+                    />
+                    {!signed && (
+                      <div className="onb-sig-hint">✍ {t("onbSignHere")}</div>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+                    <Btn onClick={clearSig}>↺ {t("onbClear")}</Btn>
+                    <Btn kind="primary" onClick={submit} disabled={saving || !signed}>
+                      {saving ? t("loading") : `✅ ${t("onbConfirmSign")}`}
+                    </Btn>
+                    {signed && <span style={{ fontSize: 13, color: "var(--green)", fontWeight: 700 }}>✓ {t("onbSignReady")}</span>}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+
+      </div>
+
+
+
+      {/* ═══ ALREADY ONBOARDED ════════════════════ */}
+
     </div>
   );
 }
@@ -2488,11 +2616,11 @@ function PageProfile() {
 
   // ALL hooks before any early return
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ displayName: "", school: "", subject: "", experienceYears: 0, phone: "", city: "", position: "" });
+  const [form, setForm] = useState({ displayName: "", school: "", subject: "", experienceYears: 0, phone: "", city: "", position: "", instagram: "" });
   const [pw, setPw] = useState({ current: "", next: "", next2: "" });
   useEffect(() => {
     if (!u) return;
-    setForm({ displayName: u.displayName || "", school: u.school || "", subject: u.subject || "", experienceYears: u.experienceYears || 0, phone: u.phone || "", city: u.city || "", position: u.position || "" });
+    setForm({ displayName: u.displayName || "", school: u.school || "", subject: u.subject || "", experienceYears: u.experienceYears || 0, phone: u.phone || "", city: u.city || "", position: u.position || "", instagram: u.instagram || "" });
   }, [u?.uid]);
   useEffect(() => setPw({ current: "", next: "", next2: "" }), [u?.uid]);
 
@@ -2567,7 +2695,8 @@ function PageProfile() {
         experienceYears: Number(form.experienceYears) || 0,
         phone: safeText(form.phone),
         city: safeText(form.city),
-        position: safeText(form.position)
+        position: safeText(form.position),
+        instagram: safeText(form.instagram)
       });
       const fresh = await ensureUserDoc(u.uid, u.email);
       setState({ userDoc: fresh });
@@ -2606,6 +2735,12 @@ function PageProfile() {
               <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast(t("loggedOut"), "ok"); navigate("login"); }}>
                 <Icon name="logout" /> {t("navLogout")}
               </Btn>
+              {u.instagram && (
+                <a href={`https://instagram.com/${u.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer" className="btn btn--instagram">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
+                  Instagram
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -2650,7 +2785,7 @@ function PageProfile() {
               <div><div className="label">{t("experience")}</div><Input type="number" min="0" max="60" value={form.experienceYears} onChange={(e) => setForm(f => ({ ...f, experienceYears: e.target.value }))} /></div>
               <div><div className="label">{t("phone")}</div><Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
               <div><div className="label">{t("city")}</div><Input value={form.city} onChange={(e) => setForm(f => ({ ...f, city: e.target.value }))} /></div>
-              <div />
+              <div><div className="label">{t("instagram")}</div><Input value={form.instagram} onChange={(e) => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder={t("instagramPh")} /></div>
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
               <Btn kind="primary" onClick={save} disabled={st.loading}>{t("save")}</Btn>
@@ -3672,6 +3807,8 @@ function PageRating() {
     </div>
   );
 
+  const openProfile = (teacher) => setState({ modal: { kind: "teacherProfile", teacher } });
+
   return (
     <div className="glass card">
       <div className="h1">{t("ratingTitle")}</div>
@@ -3695,7 +3832,7 @@ function PageRating() {
           }
           if (isChamp) {
             return (
-              <div key={tc.uid} className="podium__item podium__item--champ glass first">
+              <div key={tc.uid} className="podium__item podium__item--champ glass first" onClick={() => openProfile(tc)} style={{ cursor: "pointer" }}>
                 {/* Decorative shimmer strips */}
                 <div className="champ-shimmer" aria-hidden="true" />
                 <div className="podium__inner">
@@ -3721,16 +3858,24 @@ function PageRating() {
               </div>
             );
           }
+          const isSilver = idx === 1;
+          const isBronze = idx === 2;
+          const placeClass = isSilver ? "podium__item--silver" : "podium__item--bronze";
+          const avatarClass = isSilver ? "podiumAvatar--silver" : "podiumAvatar--bronze";
+          const badgeClass = isSilver ? "silver-rank-badge" : "bronze-rank-badge";
+          const shimmerClass = isSilver ? "silver-shimmer" : "bronze-shimmer";
+          const medal = isSilver ? "🥈" : "🥉";
           return (
-            <div key={tc.uid} className="podium__item glass">
+            <div key={tc.uid} className={`podium__item ${placeClass} glass`} onClick={() => openProfile(tc)} style={{ cursor: "pointer" }}>
+              <div className={shimmerClass} aria-hidden="true" />
               <div className="podium__inner" style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                <div className="podiumAvatar">
+                <div className={`podiumAvatar ${avatarClass}`}>
                   {tc.avatarUrl
                     ? <img src={tc.avatarUrl} alt="" />
                     : <span style={{ fontWeight: 900 }}>{(tc.displayName || tc.email || "?").slice(0, 1).toUpperCase()}</span>}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div className="podium__rank">#{idx + 1} · {trend.get(tc.uid)}</div>
+                  <div className={badgeClass}>#{idx + 1} {medal} · {trend.get(tc.uid)}</div>
                   <div className="podium__name">{tc.displayName || tc.email}</div>
                   <div className="podium__meta">{tc.school || "—"} · {tc.subject || "—"}</div>
                 </div>
@@ -3749,7 +3894,7 @@ function PageRating() {
       <div className="h2">{t("top100")}</div>
       <div className="ratinglist" style={{ marginTop: 10 }}>
         {rest.map((tc, i) => (
-          <div key={tc.uid} className="ratingrow">
+          <div key={tc.uid} className="ratingrow ratingrow--clickable" onClick={() => openProfile(tc)}>
             <div className="ratingrank">{i + 4}</div>
             <Avatar user={tc} />
             <div className="ratingmeta">
@@ -5431,7 +5576,7 @@ function NewsCard({ item, user, index }) {
   const handleShare = async () => {
     const url = window.location.origin + "/#news";
     if (navigator.share) {
-      try { await navigator.share({ title: item.title, url }); } catch {}
+      try { await navigator.share({ title: item.title, url }); } catch { }
     } else {
       await navigator.clipboard.writeText(`${item.title} — ${url}`);
       toast(t("linkCopied"), "ok");
@@ -5462,11 +5607,11 @@ function NewsCard({ item, user, index }) {
           )}
         </div>
 
-        <div className="news-card__title">{item.title}</div>
+        <div className="news-card__title">{item.mood && <span className="news-card__mood">{item.mood}</span>}{item.title}</div>
 
         {desc && (
-          <div className="news-card__desc">
-            {descLong && !expanded ? desc.slice(0, 200) + "…" : desc}
+          <div className="news-card__desc" style={item.fontFamily ? { fontFamily: item.fontFamily } : undefined}>
+            {descLong && !expanded ? renderRichDesc(desc.slice(0, 200) + "…") : renderRichDesc(desc)}
             {descLong && (
               <button className="news-expand-btn" onClick={() => setExpanded(e => !e)}>
                 {expanded ? ` ${t("collapse")}` : ` ${t("readMore")}`}
@@ -5482,9 +5627,9 @@ function NewsCard({ item, user, index }) {
         )}
 
         {item.link && (
-          <a className="news-card__link" href={item.link} target="_blank" rel="noopener noreferrer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            {item.link.replace(/^https?:\/\//, "").slice(0, 40)}{item.link.length > 48 ? "…" : ""}
+          <a className="news-card__link-btn" href={item.link} target="_blank" rel="noopener noreferrer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+            {t("openLink")}
           </a>
         )}
 
@@ -5503,8 +5648,8 @@ function NewsCard({ item, user, index }) {
           </button>
           <button className="news-share-btn" onClick={handleShare}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+              <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
             </svg>
           </button>
         </div>
@@ -5563,8 +5708,11 @@ function PageNews() {
   const [description, setDescription] = useState("");
   const [link, setLink] = useState("");
   const [photo, setPhoto] = useState(null);
+  const [mood, setMood] = useState("");
+  const [fontFamily, setFontFamily] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const descRef = useRef(null);
 
   useEffect(() => { setLocalNews(st.news || []); }, [st.news]);
 
@@ -5589,6 +5737,20 @@ function PageNews() {
     return true;
   };
 
+  const wrapSelection = (before, after) => {
+    const ta = descRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const sel = description.slice(start, end);
+    const wrapped = before + sel + after;
+    const next = description.slice(0, start) + wrapped + description.slice(end);
+    setDescription(next);
+    setTimeout(() => { ta.focus(); ta.setSelectionRange(start + before.length, start + before.length + sel.length); }, 0);
+  };
+
+  const photoInputRef = useRef(null);
+
   const handleSubmit = async () => {
     if (!title.trim()) return toast(t("fillFields"), "error");
     if (!category) return toast(t("fillFields"), "error");
@@ -5604,10 +5766,11 @@ function PageNews() {
         avatarUrl: u.avatarUrl || "",
         category, title: title.trim(), description: description.trim(),
         photoUrl, coverUrl: "", link: link.trim(),
+        mood, fontFamily,
       });
       toast(t("newsPublished"), "ok");
       setShowForm(false);
-      setTitle(""); setDescription(""); setLink(""); setCategory(""); setPhoto(null);
+      setTitle(""); setDescription(""); setLink(""); setCategory(""); setPhoto(null); setMood(""); setFontFamily("");
       const updated = await fetchNewsAll();
       setState({ news: updated });
     } catch (e) {
@@ -5641,7 +5804,7 @@ function PageNews() {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button className={`iconbtn${refreshing ? " spin" : ""}`} onClick={doRefresh} title={t("refresh")} disabled={refreshing}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
           </button>
           {u && (
             <Btn kind="primary" onClick={() => setShowForm(v => !v)}>
@@ -5668,7 +5831,21 @@ function PageNews() {
             </div>
             <div className="field" style={{ gridColumn: "1/-1" }}>
               <label className="label">{t("description")}</label>
-              <textarea className="textarea" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder={t("newsContentPlaceholder")} />
+              <div className="news-desc-toolbar">
+                <button type="button" className="news-tb-btn" title="Bold" onClick={() => wrapSelection("**","**")}><b>B</b></button>
+                <button type="button" className="news-tb-btn news-tb-btn--i" title="Italic" onClick={() => wrapSelection("*","*")}><i>I</i></button>
+                <span className="news-tb-sep" />
+                <select className="news-tb-font" value={fontFamily} onChange={e => setFontFamily(e.target.value)}>
+                  {NEWS_FONTS.map(f => <option key={f.key} value={f.key} style={{ fontFamily: f.key || "inherit" }}>{f.label}</option>)}
+                </select>
+              </div>
+              <textarea ref={descRef} className="textarea" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder={t("newsContentPlaceholder")} style={fontFamily ? { fontFamily } : undefined} />
+              <div className="news-mood-row">
+                <span className="tiny muted">{t("mood")}:</span>
+                {NEWS_MOODS.map(em => (
+                  <button type="button" key={em} className={`news-mood-btn${mood === em ? " active" : ""}`} onClick={() => setMood(mood === em ? "" : em)}>{em}</button>
+                ))}
+              </div>
             </div>
             <div className="field">
               <label className="label">{t("link")}</label>
@@ -5676,8 +5853,14 @@ function PageNews() {
             </div>
             <div className="field">
               <label className="label">{t("photoMax10")}</label>
-              <input type="file" accept="image/*" className="input" onChange={e => setPhoto(e.target.files[0] || null)} />
-              {photo && <div className="tiny muted" style={{ marginTop: 4 }}>{photo.name} ({(photo.size / 1024 / 1024).toFixed(1)} MB)</div>}
+              <input ref={photoInputRef} type="file" accept="image/*" className="input" onChange={e => setPhoto(e.target.files[0] || null)} />
+              {photo && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                  <img src={URL.createObjectURL(photo)} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, border: "1px solid var(--border2)" }} />
+                  <span className="tiny muted">{photo.name} ({(photo.size / 1024 / 1024).toFixed(1)} MB)</span>
+                  <button type="button" className="news-clear-photo" onClick={() => { setPhoto(null); if (photoInputRef.current) photoInputRef.current.value = ""; }}>✕ {t("clearPhoto")}</button>
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
@@ -5719,7 +5902,7 @@ function PageNews() {
           {/* Stats */}
           <div className="news-sidebar-card">
             <h3>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 20V10" /><path d="M12 20V4" /><path d="M6 20v-6" /></svg>
               {t("newsStats")}
             </h3>
             <div className="news-stat-grid">
@@ -5738,7 +5921,7 @@ function PageNews() {
           {popular.length > 0 && (
             <div className="news-sidebar-card">
               <h3>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
                 {t("popularNews")}
               </h3>
               {popular.map((n, i) => (
@@ -5757,7 +5940,7 @@ function PageNews() {
           {topAuthors.length > 0 && (
             <div className="news-sidebar-card">
               <h3>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" /></svg>
                 {t("topAuthors")}
               </h3>
               {topAuthors.map((a, i) => (
@@ -5776,7 +5959,7 @@ function PageNews() {
           {/* Category breakdown */}
           <div className="news-sidebar-card">
             <h3>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
               {t("category")}
             </h3>
             <div className="news-cat-stats">
@@ -5921,12 +6104,12 @@ function PageSupport() {
             <div className="faq-list">
               {faqItems.map((item, i) => (
                 <div key={i} className={`faq-item ${openFaq === i ? "faq-item--open" : ""}`}
-                     onClick={() => setOpenFaq(openFaq === i ? null : i)}>
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}>
                   <div className="faq-question">
                     <span className="faq-num">{String(i + 1).padStart(2, "0")}</span>
                     <span className="faq-q-text">{item.q}</span>
                     <span className={`faq-chevron ${openFaq === i ? "faq-chevron--open" : ""}`}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </span>
                   </div>
                   <div className={`faq-answer ${openFaq === i ? "faq-answer--visible" : ""}`}>
@@ -5944,17 +6127,17 @@ function PageSupport() {
               <a href="https://kzl.nis.edu.kz/" target="_blank" rel="noopener noreferrer" className="social-mini" title="kzl.nis.edu.kz">
                 <img src="/logo-nis.png" alt="NIS" className="social-mini__logo" />
                 <span>kzl.nis.edu.kz</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </a>
               <a href="https://www.youtube.com/@NISKyzylorda" target="_blank" rel="noopener noreferrer" className="social-mini" title="YouTube">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF0000"><path d="M23.5 6.19a3 3 0 00-2.11-2.13C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.39.56A3 3 0 00.5 6.19 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.81 3 3 0 002.11 2.13c1.89.56 9.39.56 9.39.56s7.5 0 9.39-.56a3 3 0 002.11-2.13A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF0000"><path d="M23.5 6.19a3 3 0 00-2.11-2.13C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.39.56A3 3 0 00.5 6.19 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.81 3 3 0 002.11 2.13c1.89.56 9.39.56 9.39.56s7.5 0 9.39-.56a3 3 0 002.11-2.13A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z" /></svg>
                 <span>YouTube</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </a>
               <a href="https://www.instagram.com/nis_qyzylorda/" target="_blank" rel="noopener noreferrer" className="social-mini" title="Instagram">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="ig" x1="0" y1="24" x2="24" y2="0"><stop offset="0%" stopColor="#F77737"/><stop offset="50%" stopColor="#E1306C"/><stop offset="100%" stopColor="#833AB4"/></linearGradient></defs><rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#ig)" strokeWidth="2"/><circle cx="12" cy="12" r="5" stroke="url(#ig)" strokeWidth="2"/><circle cx="17.5" cy="6.5" r="1.5" fill="url(#ig)"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="ig" x1="0" y1="24" x2="24" y2="0"><stop offset="0%" stopColor="#F77737" /><stop offset="50%" stopColor="#E1306C" /><stop offset="100%" stopColor="#833AB4" /></linearGradient></defs><rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#ig)" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="url(#ig)" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="url(#ig)" /></svg>
                 <span>Instagram</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </a>
             </div>
           </div>
@@ -6023,7 +6206,7 @@ function PageAdminSupport() {
       <div className="support-filter-bar slide-up" style={{ animationDelay: ".08s" }}>
         {["all", "new", "in_progress", "done"].map(f => (
           <button key={f} className={`support-filter-btn ${filter === f ? "support-filter-btn--active" : ""}`}
-                  onClick={() => setFilter(f)}>
+            onClick={() => setFilter(f)}>
             {f === "all" ? t("all") : f === "new" ? t("ticketNew") : f === "in_progress" ? t("ticketInProgress") : t("ticketDone")}
           </button>
         ))}
@@ -6049,7 +6232,7 @@ function PageAdminSupport() {
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Pill kind={prioPill(tk.priority)}>{tk.priority}</Pill>
                     <span className={`faq-chevron ${isExpanded ? "faq-chevron--open" : ""}`}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </span>
                   </div>
                 </div>
