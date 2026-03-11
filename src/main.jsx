@@ -312,8 +312,8 @@ function toggleTheme() {
 /** ---------- router ---------- */
 const ROUTES = [
   "login", "onboarding", "profile", "rating", "stats", "add",
-  "requests", "documents", "news",
-  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents"
+  "requests", "documents", "news", "support",
+  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support"
 ];
 
 function parseRoute() {
@@ -343,7 +343,7 @@ function canAccess(path, userDoc) {
   if (role === "teacher") {
     if (userDoc.onboarded !== true) return false; // block all pages until onboarding done
     if (path.startsWith("admin/")) return false;
-    return ["profile", "rating", "stats", "add", "requests", "documents", "news"].includes(path);
+    return ["profile", "rating", "stats", "add", "requests", "documents", "news", "support"].includes(path);
   }
   if (role === "admin") {
     if (path === "add") return false;
@@ -411,6 +411,7 @@ async function render() {
   mount("mount-requests", show("requests") ? <ErrorBoundary name="requests">{booting ? <LoadingScreen /> : <PageRequests />}</ErrorBoundary> : null);
   mount("mount-documents", show("documents") ? <ErrorBoundary name="documents">{booting ? <LoadingScreen /> : <PageDocuments />}</ErrorBoundary> : null);
   mount("mount-news", show("news") ? <ErrorBoundary name="news">{booting ? <LoadingScreen /> : <PageNews />}</ErrorBoundary> : null);
+  mount("mount-support", show("support") ? <ErrorBoundary name="support">{booting ? <LoadingScreen /> : <PageSupport />}</ErrorBoundary> : null);
 
   mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary> : null);
   mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary> : null);
@@ -418,6 +419,7 @@ async function render() {
   mount("mount-admin-types", show("admin/types") ? <ErrorBoundary name="admin/types">{booting ? <LoadingScreen /> : <PageAdminTypes />}</ErrorBoundary> : null);
   mount("mount-admin-users", show("admin/users") ? <ErrorBoundary name="admin/users">{booting ? <LoadingScreen /> : <PageAdminUsers />}</ErrorBoundary> : null);
   mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen /> : <PageAdminTeacher />}</ErrorBoundary> : null);
+  mount("mount-admin-support", show("admin/support") ? <ErrorBoundary name="admin/support">{booting ? <LoadingScreen /> : <PageAdminSupport />}</ErrorBoundary> : null);
 }
 
 function setupMobileDrawer() {
@@ -924,6 +926,33 @@ async function deleteNewsPost(newsId) {
   await deleteDoc(doc(db, "news", newsId));
 }
 
+/** ---------- support tickets ---------- */
+async function fetchAllTickets() {
+  const qy = query(collection(db, "tickets"), orderBy("createdAt", "desc"), limit(500));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function fetchMyTickets(uid) {
+  const qy = query(collection(db, "tickets"), where("uid", "==", uid));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+async function createTicket({ uid, authorName, authorEmail, subject, message, priority }) {
+  await addDoc(collection(db, "tickets"), {
+    uid,
+    authorName: safeText(authorName),
+    authorEmail: safeText(authorEmail),
+    subject: safeText(subject),
+    message: safeText(message),
+    priority: priority || "medium",
+    status: "new",
+    createdAt: serverTimestamp()
+  });
+}
+async function updateTicketStatus(ticketId, newStatus) {
+  await updateDoc(doc(db, "tickets", ticketId), { status: newStatus });
+}
+
 /** ---------- ui components ---------- */
 function Icon({ name }) {
   const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none" };
@@ -941,6 +970,7 @@ function Icon({ name }) {
     case "sun": return <svg {...common}><circle {...s} cx="12" cy="12" r="4" /><path {...s} d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /></svg>;
     case "moon": return <svg {...common}><path {...s} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>;
     case "news": return <svg {...common}><path {...s} d="M4 22h14a2 2 0 002-2V7.5L14.5 2H6a2 2 0 00-2 2v4"/><path {...s} d="M14 2v6h6"/><path {...s} d="M2 15h10M2 19h6"/></svg>;
+    case "bug": return <svg {...common}><path {...s} d="M8 2l1.88 1.88M16 2l-1.88 1.88M9 7.13v-1a3.003 3.003 0 116 0v1"/><path {...s} d="M12 20c-3.3 0-6-2.7-6-6v-3a6 6 0 0112 0v3c0 3.3-2.7 6-6 6z"/><path {...s} d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M6 17l-4 1M17.47 9c1.93-.2 3.53-1.9 3.53-4M18 13h4M18 17l4 1"/></svg>;
     default: return null;
   }
 }
@@ -1063,6 +1093,7 @@ function SidebarNav() {
     { p: "requests", tKey: "navRequests", i: "file" },
     { p: "documents", tKey: "navDocuments", i: "shield" },
     { p: "add", tKey: "navAddKpi", i: "plus" },
+    { p: "support", tKey: "navSupport", i: "bug" },
     { p: "onboarding", tKey: "navOnboarding", i: "check" },
   ];
   const adminMainItems = [
@@ -1077,6 +1108,7 @@ function SidebarNav() {
     { p: "admin/documents", tKey: "navDocuments", i: "shield" },
     { p: "admin/types", tKey: "navKpiTypes", i: "file" },
     { p: "admin/users", tKey: "navUsers", i: "user" },
+    { p: "admin/support", tKey: "navSupport", i: "bug" },
   ];
   const list = !u ? [
     { p: "login", tKey: "navLogin", i: "user" },
@@ -1086,6 +1118,7 @@ function SidebarNav() {
     if (p === "admin/approvals") return (st.pendingSubmissions || []).length || 0;
     if (p === "admin/requests") return (st.pendingRequests || []).length || 0;
     if (p === "documents") return (st.myDocuments || []).filter(d => d.status === "sent").length || 0;
+    if (p === "admin/support") return (st.allTickets || []).filter(tk => tk.status === "new").length || 0;
     return 0;
   };
   const NavLink = ({ it }) => {
@@ -1286,6 +1319,64 @@ function BottomNav() {
   );
 }
 
+/** ---------- Force Password Change overlay ---------- */
+function ForcePasswordChange() {
+  const st = useStore();
+  const u = st.userDoc;
+  const [newPwd, setNewPwd] = useState("");
+  const [newPwd2, setNewPwd2] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Show only for onboarded teachers who haven't changed password yet
+  if (!u || u.role === "admin") return null;
+  if (u.onboarded !== true || u.passwordChanged === true) return null;
+
+  const handleChange = async () => {
+    if (newPwd.length < 6) { toast(t("pwdMinLength"), "error"); return; }
+    if (newPwd !== newPwd2) { toast(t("pwdMismatch"), "error"); return; }
+    const user = auth.currentUser;
+    if (!user) { toast(t("noSession"), "error"); return; }
+    setSaving(true);
+    try {
+      await updatePassword(user, newPwd);
+      await updateProfile(u.uid, { passwordChanged: true });
+      const freshUser = await ensureUserDoc(u.uid, u.email);
+      setState({ userDoc: freshUser });
+      toast(t("pwdChangedRedirect"), "ok");
+    } catch (e) {
+      console.error(e);
+      const code = e?.code || "";
+      if (code === "auth/requires-recent-login") toast(t("reloginNeeded"), "error");
+      else if (code === "auth/too-many-requests") toast(t("tooManyAttempts"), "error");
+      else toast(e?.message || t("pwdChangeError"), "error");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="force-pwd-overlay">
+      <div className="force-pwd-card">
+        <div className="force-pwd-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+        </div>
+        <h2>{t("forceChangePwdTitle")}</h2>
+        <p className="force-pwd-desc">{t("forceChangePwdDesc")}</p>
+        <div className="force-pwd-form">
+          <label className="label">{t("newPwd")}</label>
+          <input className="input" type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="••••••••" />
+          <label className="label">{t("repeatNewPwd")}</label>
+          <input className="input" type="password" value={newPwd2} onChange={e => setNewPwd2(e.target.value)} placeholder="••••••••"
+            onKeyDown={e => { if (e.key === "Enter" && !saving) handleChange(); }} />
+          <Btn kind="primary" disabled={saving} onClick={handleChange} style={{ marginTop: 8, width: "100%", justifyContent: "center" }}>
+            {saving ? t("loading") : t("changePwd")}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Overlays() {
   const st = useStore();
   return (
@@ -1299,6 +1390,7 @@ function Overlays() {
         ))}
       </div>
       {st.modal?.kind === "crop" && <CropModal file={st.modal.file} onClose={() => setState({ modal: null })} />}
+      <ForcePasswordChange />
       <OnlineWidget />
     </>
   );
@@ -1990,6 +2082,7 @@ function PageOnboarding() {
       const freshUser = await ensureUserDoc(u.uid, u.email);
       setState({ userDoc: freshUser });
       toast(t("onbCompleted"), "ok");
+      // After onboarding, redirect to profile — ForcePasswordChange overlay will appear
       navigate("profile");
     } catch (e) {
       console.error(e);
@@ -5524,6 +5617,21 @@ function PageNews() {
 
   const filtered = filter === "all" ? localNews : localNews.filter(n => n.category === filter);
 
+  // Sidebar data
+  const totalLikes = localNews.reduce((s, n) => s + (n.likes || []).length, 0);
+  const popular = [...localNews].sort((a, b) => (b.likes || []).length - (a.likes || []).length).slice(0, 5);
+  const authorMap = new Map();
+  localNews.forEach(n => {
+    const name = n.authorName || t("anonymous");
+    const prev = authorMap.get(name) || { name, avatarUrl: n.avatarUrl || "", count: 0 };
+    prev.count++;
+    authorMap.set(name, prev);
+  });
+  const topAuthors = Array.from(authorMap.values()).sort((a, b) => b.count - a.count).slice(0, 5);
+  const catCounts = {};
+  localNews.forEach(n => { catCounts[n.category] = (catCounts[n.category] || 0) + 1; });
+  const maxCatCount = Math.max(...Object.values(catCounts), 1);
+
   return (
     <div className="page-news">
       <div className="page-head" style={{ marginBottom: 20 }}>
@@ -5590,17 +5698,384 @@ function PageNews() {
         ))}
       </div>
 
-      <div className="news-list">
-        {filtered.length === 0 ? (
-          <div className="news-empty">
-            <div className="news-empty__icon">{filter !== "all" ? (NEWS_CAT_ICONS[filter] || "\u{1F4F0}") : "\u{1F4F0}"}</div>
-            <div className="h2">{t("noNews")}</div>
-            <div className="tiny muted" style={{ marginTop: 6 }}>{t("noNewsCat")}</div>
+      <div className="news-layout">
+        {/* LEFT: news feed */}
+        <div className="news-main">
+          <div className="news-list">
+            {filtered.length === 0 ? (
+              <div className="news-empty">
+                <div className="news-empty__icon">{filter !== "all" ? (NEWS_CAT_ICONS[filter] || "\u{1F4F0}") : "\u{1F4F0}"}</div>
+                <div className="h2">{t("noNews")}</div>
+                <div className="tiny muted" style={{ marginTop: 6 }}>{t("noNewsCat")}</div>
+              </div>
+            ) : (
+              filtered.map((n, i) => <NewsCard key={n.id} item={n} user={u} index={i} />)
+            )}
           </div>
-        ) : (
-          filtered.map((n, i) => <NewsCard key={n.id} item={n} user={u} index={i} />)
-        )}
+        </div>
+
+        {/* RIGHT: sidebar */}
+        <div className="news-sidebar">
+          {/* Stats */}
+          <div className="news-sidebar-card">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+              {t("newsStats")}
+            </h3>
+            <div className="news-stat-grid">
+              <div className="news-stat-item">
+                <span className="news-stat-item__num">{localNews.length}</span>
+                <span className="news-stat-item__label">{t("totalPosts")}</span>
+              </div>
+              <div className="news-stat-item">
+                <span className="news-stat-item__num">{totalLikes}</span>
+                <span className="news-stat-item__label">{t("totalLikes")}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Popular news */}
+          {popular.length > 0 && (
+            <div className="news-sidebar-card">
+              <h3>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                {t("popularNews")}
+              </h3>
+              {popular.map((n, i) => (
+                <div key={n.id} className="news-popular-item">
+                  <div className="news-popular-rank">{i + 1}</div>
+                  <div className="news-popular-info">
+                    <div className="news-popular-title">{n.title}</div>
+                    <div className="news-popular-meta">{(n.likes || []).length} {t("likes")} · {n.authorName || t("anonymous")}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Top authors */}
+          {topAuthors.length > 0 && (
+            <div className="news-sidebar-card">
+              <h3>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                {t("topAuthors")}
+              </h3>
+              {topAuthors.map((a, i) => (
+                <div key={i} className="news-author-item">
+                  {a.avatarUrl
+                    ? <img className="news-author-av" src={a.avatarUrl} alt="" />
+                    : <div className="news-author-av news-author-av--ph">{a.name[0].toUpperCase()}</div>
+                  }
+                  <div className="news-author-name">{a.name}</div>
+                  <div className="news-author-count">{a.count} {t("posts")}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Category breakdown */}
+          <div className="news-sidebar-card">
+            <h3>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+              {t("category")}
+            </h3>
+            <div className="news-cat-stats">
+              {NEWS_CATEGORIES.map(c => (
+                <div key={c.key} className="news-cat-stat-row">
+                  <div className="news-cat-stat-label">{NEWS_CAT_ICONS[c.key]} {t(c.tKey)}</div>
+                  <div className="news-cat-stat-bar">
+                    <div className="news-cat-stat-fill" style={{ width: `${((catCounts[c.key] || 0) / maxCatCount) * 100}%` }} />
+                  </div>
+                  <div className="news-cat-stat-num">{catCounts[c.key] || 0}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/** ---------- PageSupport (teacher: bug report + FAQ + social) ---------- */
+function PageSupport() {
+  const st = useStore();
+  const u = st.userDoc;
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [openFaq, setOpenFaq] = useState(null);
+  if (!canAccess("support", u)) return <Guard />;
+
+  const myTickets = st.myTickets || [];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!subject.trim() || !message.trim()) return;
+    setSending(true);
+    try {
+      await createTicket({
+        uid: u.uid,
+        authorName: u.displayName || u.email,
+        authorEmail: u.email || "",
+        subject,
+        message,
+        priority
+      });
+      setSubject("");
+      setMessage("");
+      setPriority("medium");
+      setSent(true);
+      setTimeout(() => setSent(false), 3500);
+      const tix = await fetchMyTickets(u.uid);
+      setState({ myTickets: tix });
+      toast(t("bugSent"), "ok");
+    } catch (e) {
+      toast(e?.message || t("bugSendError"), "error");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const faqItems = [
+    { q: t("faq1q"), a: t("faq1a") },
+    { q: t("faq2q"), a: t("faq2a") },
+    { q: t("faq3q"), a: t("faq3a") },
+    { q: t("faq4q"), a: t("faq4a") },
+    { q: t("faq5q"), a: t("faq5a") },
+    { q: t("faq6q"), a: t("faq6a") },
+  ];
+
+  const prioPill = (p) => p === "high" ? "rejected" : p === "medium" ? "pending" : "approved";
+  const statusPill = (s) => s === "done" ? "approved" : s === "in_progress" ? "pending" : "rejected";
+  const statusLabel = (s) => s === "done" ? t("ticketDone") : s === "in_progress" ? t("ticketInProgress") : t("ticketNew");
+
+  return (
+    <div className="page-support fade-in">
+      <div className="support-grid">
+        {/* LEFT COLUMN: Form + My Tickets */}
+        <div className="support-left slide-up">
+          <h1 className="h1">{t("supportTitle")}</h1>
+          <p className="p muted" style={{ marginBottom: 16 }}>{t("supportDesc")}</p>
+
+          <div className="support-form-card">
+            <div className="support-form-header">
+              <Icon name="bug" />
+              <span>{t("send")}</span>
+            </div>
+            {sent && (
+              <div className="support-success-banner pop-in">
+                <Icon name="check" /> {t("bugSent")}
+              </div>
+            )}
+            <form onSubmit={handleSubmit} className="support-form">
+              <label className="form-label">{t("bugSubject")}</label>
+              <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder={t("bugSubjectPh")} required />
+
+              <label className="form-label">{t("bugMessage")}</label>
+              <Textarea value={message} onChange={e => setMessage(e.target.value)} placeholder={t("bugMessagePh")} rows={4} required />
+
+              <label className="form-label">{t("bugPriority")}</label>
+              <Select value={priority} onChange={e => setPriority(e.target.value)}>
+                <option value="low">{t("prioLow")}</option>
+                <option value="medium">{t("prioMedium")}</option>
+                <option value="high">{t("prioHigh")}</option>
+              </Select>
+
+              <Btn kind="primary" type="submit" disabled={sending} style={{ marginTop: 14 }}>
+                {sending ? t("sending") : t("send")}
+              </Btn>
+            </form>
+          </div>
+
+          {/* My tickets */}
+          {myTickets.length > 0 && (
+            <div className="support-my-tickets">
+              <h2 className="h2">{t("myTickets")}</h2>
+              <div className="support-ticket-list">
+                {myTickets.map((tk, i) => (
+                  <div key={tk.id} className="support-ticket-card fade-in" style={{ animationDelay: `${i * 0.05}s` }}>
+                    <div className="support-ticket-header">
+                      <span className="support-ticket-subject">{tk.subject}</span>
+                      <Pill kind={prioPill(tk.priority)}>{tk.priority}</Pill>
+                    </div>
+                    <div className="support-ticket-body">{tk.message}</div>
+                    <div className="support-ticket-footer">
+                      <Pill kind={statusPill(tk.status)}>{statusLabel(tk.status)}</Pill>
+                      <span className="tiny muted">{tk.createdAt?.seconds ? new Date(tk.createdAt.seconds * 1000).toLocaleDateString() : ""}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT COLUMN: FAQ + Social */}
+        <div className="support-right slide-up" style={{ animationDelay: ".12s" }}>
+          {/* FAQ */}
+          <div className="support-faq-section">
+            <h2 className="h2">{t("faqTitle")}</h2>
+            <div className="faq-list">
+              {faqItems.map((item, i) => (
+                <div key={i} className={`faq-item ${openFaq === i ? "faq-item--open" : ""}`}
+                     onClick={() => setOpenFaq(openFaq === i ? null : i)}>
+                  <div className="faq-question">
+                    <span className="faq-num">{String(i + 1).padStart(2, "0")}</span>
+                    <span className="faq-q-text">{item.q}</span>
+                    <span className={`faq-chevron ${openFaq === i ? "faq-chevron--open" : ""}`}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </span>
+                  </div>
+                  <div className={`faq-answer ${openFaq === i ? "faq-answer--visible" : ""}`}>
+                    {item.a}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Social — minimalist */}
+          <div className="support-social-section">
+            <h2 className="h2">{t("socialTitle")}</h2>
+            <div className="social-mini-links">
+              <a href="https://kzl.nis.edu.kz/" target="_blank" rel="noopener noreferrer" className="social-mini" title="kzl.nis.edu.kz">
+                <img src="/logo-nis.png" alt="NIS" className="social-mini__logo" />
+                <span>kzl.nis.edu.kz</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </a>
+              <a href="https://www.youtube.com/@NISKyzylorda" target="_blank" rel="noopener noreferrer" className="social-mini" title="YouTube">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF0000"><path d="M23.5 6.19a3 3 0 00-2.11-2.13C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.39.56A3 3 0 00.5 6.19 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.81 3 3 0 002.11 2.13c1.89.56 9.39.56 9.39.56s7.5 0 9.39-.56a3 3 0 002.11-2.13A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.81zM9.75 15.02V8.98L15.5 12l-5.75 3.02z"/></svg>
+                <span>YouTube</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </a>
+              <a href="https://www.instagram.com/nis_qyzylorda/" target="_blank" rel="noopener noreferrer" className="social-mini" title="Instagram">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><defs><linearGradient id="ig" x1="0" y1="24" x2="24" y2="0"><stop offset="0%" stopColor="#F77737"/><stop offset="50%" stopColor="#E1306C"/><stop offset="100%" stopColor="#833AB4"/></linearGradient></defs><rect x="2" y="2" width="20" height="20" rx="5" stroke="url(#ig)" strokeWidth="2"/><circle cx="12" cy="12" r="5" stroke="url(#ig)" strokeWidth="2"/><circle cx="17.5" cy="6.5" r="1.5" fill="url(#ig)"/></svg>
+                <span>Instagram</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="social-mini__arrow"><path d="M7 17L17 7M17 7H7M17 7v10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** ---------- PageAdminSupport (admin: ticket list + status toggle) ---------- */
+function PageAdminSupport() {
+  const st = useStore();
+  const u = st.userDoc;
+  const tickets = st.allTickets || [];
+  const [filter, setFilter] = useState("all");
+  const [updating, setUpdating] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
+  if (!canAccess("admin/support", u)) return <Guard />;
+
+  const filtered = filter === "all" ? tickets : tickets.filter(tk => tk.status === filter);
+
+  const cycleStatus = async (tk) => {
+    const next = tk.status === "new" ? "in_progress" : tk.status === "in_progress" ? "done" : "new";
+    setUpdating(tk.id);
+    try {
+      await updateTicketStatus(tk.id, next);
+      const updated = await fetchAllTickets();
+      setState({ allTickets: updated });
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const prioPill = (p) => p === "high" ? "rejected" : p === "medium" ? "pending" : "approved";
+  const statusLabel = (s) => s === "done" ? t("ticketDone") : s === "in_progress" ? t("ticketInProgress") : t("ticketNew");
+
+  const users = st.users || [];
+  const userName = (uid) => { const uu = users.find(x => x.uid === uid); return uu ? (uu.displayName || uu.email) : uid; };
+
+  const counts = { new: tickets.filter(t => t.status === "new").length, in_progress: tickets.filter(t => t.status === "in_progress").length, done: tickets.filter(t => t.status === "done").length };
+
+  return (
+    <div className="page-admin-support fade-in">
+      <h1 className="h1">{t("adminSupportTitle")}</h1>
+      <p className="p muted">{t("adminSupportDesc")}</p>
+
+      {/* Stats pills */}
+      <div className="admin-support-stats slide-up">
+        <div className="admin-support-stat admin-support-stat--new" onClick={() => setFilter("new")}>
+          <span className="admin-support-stat__num">{counts.new}</span>
+          <span className="admin-support-stat__label">{t("ticketNew")}</span>
+        </div>
+        <div className="admin-support-stat admin-support-stat--progress" onClick={() => setFilter("in_progress")}>
+          <span className="admin-support-stat__num">{counts.in_progress}</span>
+          <span className="admin-support-stat__label">{t("ticketInProgress")}</span>
+        </div>
+        <div className="admin-support-stat admin-support-stat--done" onClick={() => setFilter("done")}>
+          <span className="admin-support-stat__num">{counts.done}</span>
+          <span className="admin-support-stat__label">{t("ticketDone")}</span>
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div className="support-filter-bar slide-up" style={{ animationDelay: ".08s" }}>
+        {["all", "new", "in_progress", "done"].map(f => (
+          <button key={f} className={`support-filter-btn ${filter === f ? "support-filter-btn--active" : ""}`}
+                  onClick={() => setFilter(f)}>
+            {f === "all" ? t("all") : f === "new" ? t("ticketNew") : f === "in_progress" ? t("ticketInProgress") : t("ticketDone")}
+          </button>
+        ))}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="admin-support-empty slide-up">
+          <Icon name="check" />
+          <p>{t("noTickets")}</p>
+        </div>
+      ) : (
+        <div className="admin-ticket-list">
+          {filtered.map((tk, i) => {
+            const isExpanded = expandedId === tk.id;
+            return (
+              <div key={tk.id} className={`admin-ticket-card admin-ticket-card--${tk.status} fade-in`} style={{ animationDelay: `${i * 0.04}s` }}>
+                <div className="admin-ticket-top" onClick={() => setExpandedId(isExpanded ? null : tk.id)} style={{ cursor: "pointer" }}>
+                  <div className="admin-ticket-left-strip" />
+                  <div style={{ flex: 1 }}>
+                    <div className="admin-ticket-subject">{tk.subject}</div>
+                    <div className="tiny muted">{userName(tk.uid)} · {tk.createdAt?.seconds ? new Date(tk.createdAt.seconds * 1000).toLocaleDateString() : ""}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Pill kind={prioPill(tk.priority)}>{tk.priority}</Pill>
+                    <span className={`faq-chevron ${isExpanded ? "faq-chevron--open" : ""}`}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </span>
+                  </div>
+                </div>
+                <div className={`admin-ticket-expand ${isExpanded ? "admin-ticket-expand--open" : ""}`}>
+                  <div className="admin-ticket-body">{tk.message}</div>
+                  <div className="admin-ticket-meta">
+                    <span className="tiny muted">{tk.authorEmail}</span>
+                  </div>
+                </div>
+                <div className="admin-ticket-bottom">
+                  <div className="admin-ticket-status-toggle" onClick={() => cycleStatus(tk)}>
+                    <div className={`status-switch status-switch--${tk.status}`}>
+                      <div className="status-switch__track">
+                        <div className="status-switch__thumb" />
+                      </div>
+                      <span className="status-switch__label">
+                        {updating === tk.id ? "..." : statusLabel(tk.status)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -5609,7 +6084,7 @@ async function hydrateForUser(userDoc) {
   if (!userDoc) return;
   try {
     if (userDoc.role === "admin") {
-      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData] = await Promise.all([
+      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData, ticketsData] = await Promise.all([
         fetchTypesAll(),
         fetchUsersAll(),
         fetchPendingSubmissions(),
@@ -5617,7 +6092,8 @@ async function hydrateForUser(userDoc) {
         fetchPendingRequests(),
         fetchAdminRecentRequests(),
         fetchAllDocuments(),
-        fetchNewsAll()
+        fetchNewsAll(),
+        fetchAllTickets()
       ]);
       setState({
         types,
@@ -5628,20 +6104,23 @@ async function hydrateForUser(userDoc) {
         adminRecentRequests: recentReq,
         allDocuments: allDocs,
         news: newsData,
+        allTickets: ticketsData,
         mySubmissions: [],
         myRequests: [],
-        myDocuments: []
+        myDocuments: [],
+        myTickets: []
       });
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
-      const [types, my, myReq, myDocs, users, recent, newsData] = await Promise.all([
+      const [types, my, myReq, myDocs, users, recent, newsData, myTix] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
         fetchDocumentsForTeacher(userDoc.uid),
         fetchUsersAll(),
         fetchAdminRecentSubs(),
-        fetchNewsAll()
+        fetchNewsAll(),
+        fetchMyTickets(userDoc.uid)
       ]);
       setState({
         types,
@@ -5651,10 +6130,12 @@ async function hydrateForUser(userDoc) {
         users,
         adminRecentSubs: recent,
         news: newsData,
+        myTickets: myTix,
         pendingSubmissions: [],
         pendingRequests: [],
         adminRecentRequests: [],
-        allDocuments: []
+        allDocuments: [],
+        allTickets: []
       });
     }
   } catch (e) {
@@ -5696,7 +6177,9 @@ async function bootstrap() {
           adminRecentRequests: [],
           myDocuments: [],
           allDocuments: [],
-          news: []
+          news: [],
+          myTickets: [],
+          allTickets: []
         });
         setState({ booting: false });
         render();
