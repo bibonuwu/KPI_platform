@@ -311,7 +311,7 @@ function toggleTheme() {
 
 /** ---------- router ---------- */
 const ROUTES = [
-  "login", "onboarding", "profile", "rating", "stats", "add",
+  "login", "onboarding", "dashboard", "profile", "rating", "stats", "add",
   "requests", "documents", "news", "support",
   "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support"
 ];
@@ -343,11 +343,11 @@ function canAccess(path, userDoc) {
   if (role === "teacher") {
     if (userDoc.onboarded !== true) return false; // block all pages until onboarding done
     if (path.startsWith("admin/")) return false;
-    return ["profile", "rating", "stats", "add", "requests", "documents", "news", "support"].includes(path);
+    return ["dashboard", "profile", "rating", "stats", "add", "requests", "documents", "news", "support"].includes(path);
   }
   if (role === "admin") {
     if (path === "add") return false;
-    return ["profile", "rating", "stats", "documents", "news"].includes(path) || path.startsWith("admin/");
+    return ["dashboard", "profile", "rating", "stats", "documents", "news"].includes(path) || path.startsWith("admin/");
   }
   return false;
 }
@@ -404,6 +404,7 @@ async function render() {
 
   mount("mount-login", show("login") ? <ErrorBoundary name="login"><PageLogin /></ErrorBoundary> : null);
   mount("mount-onboarding", show("onboarding") ? <ErrorBoundary name="onboarding">{booting ? <LoadingScreen /> : <PageOnboarding />}</ErrorBoundary> : null);
+  mount("mount-dashboard", show("dashboard") ? <ErrorBoundary name="dashboard">{booting ? <LoadingScreen /> : <PageDashboard />}</ErrorBoundary> : null);
   mount("mount-profile", show("profile") ? <ErrorBoundary name="profile">{booting ? <LoadingScreen /> : <PageProfile />}</ErrorBoundary> : null);
   mount("mount-rating", show("rating") ? <ErrorBoundary name="rating">{booting ? <LoadingScreen /> : <PageRating />}</ErrorBoundary> : null);
   mount("mount-stats", show("stats") ? <ErrorBoundary name="stats">{booting ? <LoadingScreen /> : <PageStats />}</ErrorBoundary> : null);
@@ -1000,6 +1001,11 @@ function Icon({ name }) {
     case "moon": return <svg {...common}><path {...s} d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>;
     case "news": return <svg {...common}><path {...s} d="M4 22h14a2 2 0 002-2V7.5L14.5 2H6a2 2 0 00-2 2v4" /><path {...s} d="M14 2v6h6" /><path {...s} d="M2 15h10M2 19h6" /></svg>;
     case "bug": return <svg {...common}><path {...s} d="M8 2l1.88 1.88M16 2l-1.88 1.88M9 7.13v-1a3.003 3.003 0 116 0v1" /><path {...s} d="M12 20c-3.3 0-6-2.7-6-6v-3a6 6 0 0112 0v3c0 3.3-2.7 6-6 6z" /><path {...s} d="M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M6 17l-4 1M17.47 9c1.93-.2 3.53-1.9 3.53-4M18 13h4M18 17l4 1" /></svg>;
+    case "home": return <svg {...common}><path {...s} d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline {...s} points="9 22 9 12 15 12 15 22" /></svg>;
+    case "chevron": return <svg {...common} style={{ transition: "transform .3s cubic-bezier(.4,0,.2,1)" }}><path {...s} d="M6 9l6 6 6-6" /></svg>;
+    case "folder": return <svg {...common}><path {...s} d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>;
+    case "clipboard": return <svg {...common}><path {...s} d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" /><rect {...s} x="8" y="2" width="8" height="4" rx="1" /></svg>;
+    case "info": return <svg {...common}><circle {...s} cx="12" cy="12" r="10" /><path {...s} d="M12 16v-4M12 8h.01" /></svg>;
     default: return null;
   }
 }
@@ -1109,39 +1115,42 @@ class ErrorBoundary extends React.Component {
 }
 
 
+function NavFlyout({ icon, label, children, badge, open, onToggle }) {
+  const bodyRef = useRef(null);
+  const [height, setHeight] = useState(open ? "auto" : 0);
+
+  useEffect(() => {
+    if (!bodyRef.current) return;
+    if (open) {
+      const h = bodyRef.current.scrollHeight;
+      setHeight(h + "px");
+      const t = setTimeout(() => setHeight("auto"), 320);
+      return () => clearTimeout(t);
+    } else {
+      setHeight(bodyRef.current.scrollHeight + "px");
+      requestAnimationFrame(() => requestAnimationFrame(() => setHeight("0px")));
+    }
+  }, [open]);
+
+  return (
+    <div className={`nav-flyout${open ? " nav-flyout--open" : ""}`}>
+      <div className="nav-flyout__head" role="button" tabIndex={0} onClick={onToggle}>
+        <Icon name={icon} />
+        <span className="nav-flyout__label">{label}</span>
+        {badge > 0 && <span className="nav-badge nav-badge--flyout">{badge > 99 ? "99+" : badge}</span>}
+        <span className="nav-flyout__chevron"><Icon name="chevron" /></span>
+      </div>
+      <div className="nav-flyout__body" ref={bodyRef} style={{ height, overflow: "hidden" }}>
+        <div className="nav-flyout__items">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 function SidebarNav() {
   const st = useStore();
   const u = st.userDoc;
   const path = st.route.path;
-
-  const teacherItems = [
-    { p: "profile", tKey: "navProfile", i: "user" },
-    { p: "rating", tKey: "navRating", i: "rank" },
-    { p: "stats", tKey: "navStats", i: "chart" },
-    { p: "news", tKey: "navNews", i: "news" },
-    { p: "requests", tKey: "navRequests", i: "file" },
-    { p: "documents", tKey: "navDocuments", i: "shield" },
-    { p: "add", tKey: "navAddKpi", i: "plus" },
-    { p: "support", tKey: "navSupport", i: "bug" },
-    { p: "onboarding", tKey: "navOnboarding", i: "check" },
-  ];
-  const adminMainItems = [
-    { p: "profile", tKey: "navProfile", i: "user" },
-    { p: "rating", tKey: "navRating", i: "rank" },
-    { p: "stats", tKey: "navStats", i: "chart" },
-    { p: "news", tKey: "navNews", i: "news" },
-  ];
-  const adminItems = [
-    { p: "admin/approvals", tKey: "navApprovals", i: "check" },
-    { p: "admin/requests", tKey: "navRequests", i: "file" },
-    { p: "admin/documents", tKey: "navDocuments", i: "shield" },
-    { p: "admin/types", tKey: "navKpiTypes", i: "file" },
-    { p: "admin/users", tKey: "navUsers", i: "user" },
-    { p: "admin/support", tKey: "navSupport", i: "bug" },
-  ];
-  const list = !u ? [
-    { p: "login", tKey: "navLogin", i: "user" },
-  ] : (u.role === "admin" ? adminMainItems : teacherItems);
 
   const badgeFor = (p) => {
     if (p === "admin/approvals") return (st.pendingSubmissions || []).length || 0;
@@ -1150,6 +1159,7 @@ function SidebarNav() {
     if (p === "admin/support") return (st.allTickets || []).filter(tk => tk.status === "new").length || 0;
     return 0;
   };
+
   const NavLink = ({ it }) => {
     const badge = badgeFor(it.p);
     return (
@@ -1160,11 +1170,80 @@ function SidebarNav() {
     );
   };
 
+  // Accordion: only one flyout open at a time; sync with current route
+  const groupFor = (p) => {
+    if (["rating", "stats"].includes(p)) return "analytics";
+    if (["requests", "documents", "add"].includes(p)) return "work";
+    if (["support", "onboarding"].includes(p)) return "info";
+    return null;
+  };
+  const [openGroup, setOpenGroup] = useState(() => groupFor(path));
+  useEffect(() => { setOpenGroup(groupFor(path)); }, [path]);
+  const toggle = (key) => setOpenGroup(prev => prev === key ? null : key);
+
+  // Admin panel items
+  const adminItems = [
+    { p: "admin/approvals", tKey: "navApprovals", i: "check" },
+    { p: "admin/requests", tKey: "navRequests", i: "file" },
+    { p: "admin/documents", tKey: "navDocuments", i: "shield" },
+    { p: "admin/types", tKey: "navKpiTypes", i: "file" },
+    { p: "admin/users", tKey: "navUsers", i: "user" },
+    { p: "admin/support", tKey: "navSupport", i: "bug" },
+  ];
+
+  // Flyout group badges (sum of children)
+  const workBadge = badgeFor("documents");
+  const adminReqBadge = badgeFor("admin/approvals") + badgeFor("admin/requests");
+  const adminSupportBadge = badgeFor("admin/support");
+
+  if (!u) {
+    return (
+      <div className="sidenav">
+        <div className="navsec">{t("navTitle")}</div>
+        <NavLink it={{ p: "login", tKey: "navLogin", i: "user" }} />
+      </div>
+    );
+  }
+
+  const isTeacher = u.role !== "admin";
+
   return (
     <div className="sidenav">
       <div className="navsec">{t("navTitle")}</div>
-      {list.map(it => <NavLink key={it.p} it={it} />)}
-      {u?.role === "admin" && (
+
+      {/* Dashboard — home page */}
+      <NavLink it={{ p: "dashboard", tKey: "navDashboard", i: "home" }} />
+
+      {/* Profile */}
+      <NavLink it={{ p: "profile", tKey: "navProfile", i: "user" }} />
+
+      {/* News — standalone */}
+      <NavLink it={{ p: "news", tKey: "navNews", i: "news" }} />
+
+      {/* Group 1: Рейтинг + Статистика */}
+      <NavFlyout icon="rank" label={t("navGroupAnalytics")} open={openGroup === "analytics"} onToggle={() => toggle("analytics")}>
+        <NavLink it={{ p: "rating", tKey: "navRating", i: "rank" }} />
+        <NavLink it={{ p: "stats", tKey: "navStats", i: "chart" }} />
+      </NavFlyout>
+
+      {isTeacher && (
+        <>
+          {/* Group 2: Заявления + Документы + Добавить KPI */}
+          <NavFlyout icon="clipboard" label={t("navGroupWork")} badge={workBadge} open={openGroup === "work"} onToggle={() => toggle("work")}>
+            <NavLink it={{ p: "requests", tKey: "navRequests", i: "file" }} />
+            <NavLink it={{ p: "documents", tKey: "navDocuments", i: "shield" }} />
+            <NavLink it={{ p: "add", tKey: "navAddKpi", i: "plus" }} />
+          </NavFlyout>
+
+          {/* Group 3: Поддержка + Ознакомление */}
+          <NavFlyout icon="info" label={t("navGroupInfo")} open={openGroup === "info"} onToggle={() => toggle("info")}>
+            <NavLink it={{ p: "support", tKey: "navSupport", i: "bug" }} />
+            <NavLink it={{ p: "onboarding", tKey: "navOnboarding", i: "check" }} />
+          </NavFlyout>
+        </>
+      )}
+
+      {u.role === "admin" && (
         <>
           <div className="navsec">{t("navAdmin")}</div>
           {adminItems.map(it => <NavLink key={it.p} it={it} />)}
@@ -1332,8 +1411,8 @@ function BottomNav() {
     { p: "login", tKey: "bottomLogin", i: "user" },
     { p: "rating", tKey: "navRating", i: "rank" },
   ] : [
+    { p: "dashboard", tKey: "navDashboard", i: "home" },
     { p: "rating", tKey: "navRating", i: "rank" },
-    { p: "stats", tKey: "bottomStats", i: "chart" },
     { p: "news", tKey: "bottomNews", i: "news" },
     { p: "profile", tKey: "navProfile", i: "user" },
   ];
@@ -2203,8 +2282,8 @@ function PageOnboarding() {
       const freshUser = await ensureUserDoc(u.uid, u.email);
       setState({ userDoc: freshUser });
       toast(t("onbCompleted"), "ok");
-      // After onboarding, redirect to profile — ForcePasswordChange overlay will appear
-      navigate("profile");
+      // After onboarding, redirect to dashboard — ForcePasswordChange overlay will appear
+      navigate("dashboard");
     } catch (e) {
       console.error(e);
       toast(e?.message || t("saveError"), "error");
@@ -2465,7 +2544,7 @@ function PageLogin() {
   const [pass, setPass] = useState("");
   const [slide, setSlide] = useState(0);
 
-  useEffect(() => { if (st.userDoc) navigate("profile"); }, [st.userDoc]);
+  useEffect(() => { if (st.userDoc) navigate("dashboard"); }, [st.userDoc]);
 
   useEffect(() => {
     const id = setInterval(() => setSlide(s => (s + 1) % 3), 4500);
@@ -2610,17 +2689,290 @@ function PageLogin() {
 }
 
 
+/* ══════════════════════════════════════════════ */
+/* ═══ PAGE: DASHBOARD ════════════════════════= */
+/* ══════════════════════════════════════════════ */
+function PageDashboard() {
+  const st = useStore();
+  const u = st.userDoc;
+  if (!u) return <Guard />;
+  if (!canAccess("dashboard", u)) return <Guard />;
+
+  const users = st.users || [];
+  const subs = st.mySubmissions || [];
+  const allSubs = st.adminRecentSubs || [];
+  const news = st.news || [];
+  const types = st.types || [];
+  const isAdmin = u.role === "admin";
+
+  // Greeting based on time
+  const hour = new Date().getHours();
+  const greet = hour < 12 ? t("dashGreetMorning") : hour < 18 ? t("dashGreetDay") : t("dashGreetEvening");
+  const displayName = (u.displayName || u.email || "").split(" ")[0];
+
+  // Stats
+  const totalPts = Number(u.totalPoints) || 0;
+  const teachers = users.filter(x => x.role !== "admin");
+  const sorted = [...teachers].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+  const myRank = sorted.findIndex(x => x.uid === u.uid) + 1;
+
+  const pending = isAdmin
+    ? (st.pendingSubmissions || []).length
+    : subs.filter(s => s.status === "pending").length;
+  const approved = isAdmin
+    ? allSubs.filter(s => s.status === "approved").length
+    : subs.filter(s => s.status === "approved").length;
+  const totalSubs = isAdmin ? allSubs.length : subs.length;
+  const docsCount = isAdmin ? (st.allDocuments || []).length : (st.myDocuments || []).length;
+
+  // Average points
+  const avgPts = teachers.length ? Math.round(teachers.reduce((s, x) => s + (x.totalPoints || 0), 0) / teachers.length) : 0;
+
+  // Active users (online in last 5 min is hard to track, so count users with points > 0)
+  const activeUsers = teachers.filter(x => (x.totalPoints || 0) > 0).length;
+
+  // Top 5 teachers
+  const top5 = sorted.slice(0, 5);
+
+  // Recent submissions (last 5)
+  const recent = [...(isAdmin ? allSubs : subs)]
+    .sort((a, b) => {
+      const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+      const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+      return db - da;
+    })
+    .slice(0, 5);
+
+  // Mini sparkline data: points per day for last 7 days
+  const now = Date.now();
+  const spark = [];
+  for (let i = 6; i >= 0; i--) {
+    const dayStart = new Date(now - i * 86400000);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart.getTime() + 86400000);
+    const pts = (isAdmin ? allSubs : subs)
+      .filter(s => {
+        const d = s.createdAt?.toDate ? s.createdAt.toDate() : new Date(s.createdAt || 0);
+        return d >= dayStart && d < dayEnd && s.status === "approved";
+      })
+      .reduce((sum, s) => sum + (Number(s.points) || 0), 0);
+    spark.push(pts);
+  }
+  const sparkMax = Math.max(...spark, 1);
+
+  // Status pills helper
+  const statusPill = (status) => {
+    const map = { pending: "warn", approved: "ok", rejected: "error" };
+    const labelMap = { pending: t("dashPending"), approved: t("dashApproved"), rejected: "—" };
+    return <span className={`pill ${map[status] || ""}`}>{labelMap[status] || status}</span>;
+  };
+
+  const AnimNum = ({ value, suffix = "" }) => {
+    const [display, setDisplay] = useState(0);
+    useEffect(() => {
+      const target = Number(value) || 0;
+      if (target === 0) { setDisplay(0); return; }
+      let frame;
+      const start = performance.now();
+      const dur = 900;
+      const step = (t) => {
+        const p = Math.min((t - start) / dur, 1);
+        const ease = 1 - Math.pow(1 - p, 3);
+        setDisplay(Math.round(ease * target));
+        if (p < 1) frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
+      return () => cancelAnimationFrame(frame);
+    }, [value]);
+    return <>{fmtPoints(display)}{suffix}</>;
+  };
+
+  return (
+    <div className="dash">
+      {/* Welcome hero */}
+      <div className="dash-hero glass card" style={{ "--di": 0 }}>
+        <div className="dash-hero__text">
+          <div className="dash-hero__greet">{greet}, <strong>{displayName}</strong>!</div>
+          <div className="dash-hero__sub">{t("dashWelcome")}</div>
+        </div>
+        <div className="dash-hero__visual">
+          <div className="dash-hero__ring">
+            <svg viewBox="0 0 120 120" className="dash-hero__svg">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" strokeWidth="8" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" strokeWidth="8"
+                strokeDasharray={`${Math.min(totalPts / 100, 1) * 327} 327`}
+                strokeLinecap="round" transform="rotate(-90 60 60)"
+                className="dash-hero__progress" />
+            </svg>
+            <div className="dash-hero__ring-text">
+              <div className="dash-hero__ring-num"><AnimNum value={totalPts} /></div>
+              <div className="dash-hero__ring-label">{t("dashMyPoints")}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stat cards row */}
+      <div className="dash-stats">
+        {!isAdmin && (
+          <div className="dash-stat glass card" style={{ "--di": 1 }}>
+            <div className="dash-stat__icon" style={{ background: "rgba(135,188,46,.12)", color: "var(--accent)" }}><Icon name="rank" /></div>
+            <div className="dash-stat__num"><AnimNum value={myRank} /></div>
+            <div className="dash-stat__label">{t("dashMyRank")} {t("dashOf")} {teachers.length}</div>
+          </div>
+        )}
+        <div className="dash-stat glass card" style={{ "--di": 2 }}>
+          <div className="dash-stat__icon" style={{ background: "rgba(59,130,246,.12)", color: "#3b82f6" }}><Icon name="user" /></div>
+          <div className="dash-stat__num"><AnimNum value={teachers.length} /></div>
+          <div className="dash-stat__label">{t("dashTeachers")}</div>
+        </div>
+        <div className="dash-stat glass card" style={{ "--di": 3 }}>
+          <div className="dash-stat__icon" style={{ background: "rgba(245,158,11,.12)", color: "#f59e0b" }}><Icon name="file" /></div>
+          <div className="dash-stat__num"><AnimNum value={totalSubs} /></div>
+          <div className="dash-stat__label">{t("dashSubmissions")}</div>
+        </div>
+        <div className="dash-stat glass card" style={{ "--di": 4 }}>
+          <div className="dash-stat__icon" style={{ background: "rgba(168,85,247,.12)", color: "#a855f7" }}><Icon name="shield" /></div>
+          <div className="dash-stat__num"><AnimNum value={docsCount} /></div>
+          <div className="dash-stat__label">{t("dashDocuments")}</div>
+        </div>
+        <div className="dash-stat glass card" style={{ "--di": 5 }}>
+          <div className="dash-stat__icon" style={{ background: "rgba(236,72,153,.12)", color: "#ec4899" }}><Icon name="news" /></div>
+          <div className="dash-stat__num"><AnimNum value={news.length} /></div>
+          <div className="dash-stat__label">{t("dashNews")}</div>
+        </div>
+      </div>
+
+      {/* Main grid: left + right */}
+      <div className="dash-grid">
+        {/* Left column */}
+        <div className="dash-col">
+          {/* Sparkline / points trend */}
+          <div className="glass card dash-card" style={{ "--di": 6 }}>
+            <div className="dash-card__head">
+              <div className="h2">{t("dashPointsTrend")}</div>
+              <div className="dash-spark-stats">
+                <span className="pill ok">{t("dashApproved")}: {approved}</span>
+                <span className="pill warn">{t("dashPending")}: {pending}</span>
+              </div>
+            </div>
+            <div className="dash-spark">
+              {spark.map((v, i) => (
+                <div key={i} className="dash-spark__bar-wrap">
+                  <div className="dash-spark__bar" style={{ "--h": `${(v / sparkMax) * 100}%`, "--delay": `${i * 0.07}s` }} />
+                  <div className="dash-spark__day">{["Пн","Вт","Ср","Чт","Пт","Сб","Вс"][(new Date(now - (6 - i) * 86400000)).getDay() === 0 ? 6 : (new Date(now - (6 - i) * 86400000)).getDay() - 1]}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick actions */}
+          <div className="glass card dash-card" style={{ "--di": 7 }}>
+            <div className="h2">{t("dashQuickActions")}</div>
+            <div className="dash-actions">
+              {!isAdmin && (
+                <button className="dash-action" onClick={() => navigate("add")}>
+                  <span className="dash-action__icon" style={{ background: "rgba(135,188,46,.15)" }}><Icon name="plus" /></span>
+                  {t("dashAddKpi")}
+                </button>
+              )}
+              <button className="dash-action" onClick={() => navigate("rating")}>
+                <span className="dash-action__icon" style={{ background: "rgba(59,130,246,.15)" }}><Icon name="rank" /></span>
+                {t("dashViewRating")}
+              </button>
+              <button className="dash-action" onClick={() => navigate("stats")}>
+                <span className="dash-action__icon" style={{ background: "rgba(168,85,247,.15)" }}><Icon name="chart" /></span>
+                {t("dashViewStats")}
+              </button>
+              <button className="dash-action" onClick={() => navigate("news")}>
+                <span className="dash-action__icon" style={{ background: "rgba(236,72,153,.15)" }}><Icon name="news" /></span>
+                {t("dashViewNews")}
+              </button>
+            </div>
+          </div>
+
+          {/* Platform overview (for everyone) */}
+          <div className="glass card dash-card" style={{ "--di": 8 }}>
+            <div className="h2">{t("dashPlatformStats")}</div>
+            <div className="dash-platform-row">
+              <div className="dash-platform-item">
+                <div className="dash-platform-item__num"><AnimNum value={avgPts} /></div>
+                <div className="dash-platform-item__label">{t("dashAvgPoints")}</div>
+              </div>
+              <div className="dash-platform-item">
+                <div className="dash-platform-item__num"><AnimNum value={activeUsers} /></div>
+                <div className="dash-platform-item__label">{t("dashActiveUsers")}</div>
+              </div>
+              <div className="dash-platform-item">
+                <div className="dash-platform-item__num"><AnimNum value={types.length} /></div>
+                <div className="dash-platform-item__label">{t("navKpiTypes")}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right column */}
+        <div className="dash-col">
+          {/* Top teachers */}
+          <div className="glass card dash-card" style={{ "--di": 6 }}>
+            <div className="h2">{t("dashTopTeachers")}</div>
+            <div className="dash-top">
+              {top5.map((tc, idx) => (
+                <div key={tc.uid} className="dash-top__row" style={{ "--delay": `${idx * 0.08}s` }}>
+                  <div className={`dash-top__rank${idx < 3 ? " dash-top__rank--medal" : ""}`} data-rank={idx + 1}>{idx + 1}</div>
+                  <div className="dash-top__info">
+                    <div className="dash-top__name">{tc.displayName || tc.email}</div>
+                  </div>
+                  <div className="dash-top__pts">{fmtPoints(tc.totalPoints || 0)}</div>
+                </div>
+              ))}
+              {top5.length === 0 && <p className="p muted">{t("dashNoActivity")}</p>}
+            </div>
+          </div>
+
+          {/* Recent activity */}
+          <div className="glass card dash-card" style={{ "--di": 7 }}>
+            <div className="h2">{t("dashRecentActivity")}</div>
+            <div className="dash-recent">
+              {recent.map((s, idx) => {
+                const tp = types.find(x => x.id === s.typeId);
+                const d = s.createdAt?.toDate ? s.createdAt.toDate() : new Date(s.createdAt || 0);
+                return (
+                  <div key={s.id || idx} className="dash-recent__row" style={{ "--delay": `${idx * 0.08}s` }}>
+                    <div className="dash-recent__dot" />
+                    <div className="dash-recent__body">
+                      <div className="dash-recent__title">{tp?.name || s.typeId || "—"}</div>
+                      <div className="dash-recent__meta">
+                        {isAdmin && <span>{s.userName || s.uid?.slice(0, 6)}</span>}
+                        <span>{d.toLocaleDateString("ru-RU")}</span>
+                        {statusPill(s.status)}
+                      </div>
+                    </div>
+                    <div className="dash-recent__pts">+{s.points || 0}</div>
+                  </div>
+                );
+              })}
+              {recent.length === 0 && <p className="p muted">{t("dashNoActivity")}</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function PageProfile() {
   const st = useStore();
   const u = st.userDoc; // read early, guard comes AFTER all hooks
 
   // ALL hooks before any early return
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ displayName: "", school: "", subject: "", experienceYears: 0, phone: "", city: "", position: "", instagram: "" });
+  const [tab, setTab] = useState("overview"); // overview | settings | security
+  const [form, setForm] = useState({ displayName: "", school: "", subject: "", experienceYears: 0, phone: "", city: "", position: "", instagram: "", youtube: "" });
   const [pw, setPw] = useState({ current: "", next: "", next2: "" });
   useEffect(() => {
     if (!u) return;
-    setForm({ displayName: u.displayName || "", school: u.school || "", subject: u.subject || "", experienceYears: u.experienceYears || 0, phone: u.phone || "", city: u.city || "", position: u.position || "", instagram: u.instagram || "" });
+    setForm({ displayName: u.displayName || "", school: u.school || "", subject: u.subject || "", experienceYears: u.experienceYears || 0, phone: u.phone || "", city: u.city || "", position: u.position || "", instagram: u.instagram || "", youtube: u.youtube || "" });
   }, [u?.uid]);
   useEffect(() => setPw({ current: "", next: "", next2: "" }), [u?.uid]);
 
@@ -2696,7 +3048,8 @@ function PageProfile() {
         phone: safeText(form.phone),
         city: safeText(form.city),
         position: safeText(form.position),
-        instagram: safeText(form.instagram)
+        instagram: safeText(form.instagram),
+        youtube: safeText(form.youtube)
       });
       const fresh = await ensureUserDoc(u.uid, u.email);
       setState({ userDoc: fresh });
@@ -2716,134 +3069,179 @@ function PageProfile() {
 
   // Блок "Первый запуск / сделать меня админом" удалён по запросу.
 
+  const approvedPts = sum(approved, s => s.points);
+  const aprPct = subs.length ? Math.round((approved.length / subs.length) * 100) : 0;
+  const nextPts = lvl.next ? lvl.next - (Number(u.totalPoints) || 0) : 0;
+
+  const TabBtn = ({ id, icon, label }) => (
+    <button className={`prof-tab${tab === id ? " prof-tab--active" : ""}`} onClick={() => setTab(id)}>
+      <Icon name={icon} /> {label}
+    </button>
+  );
+
   return (
-    <div className="grid2">
-      <div className="glass card">
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-          <div className="avatar">
-            {u.avatarUrl ? <img src={u.avatarUrl} alt="avatar" /> : <span style={{ fontWeight: 900 }}>{(u.displayName || u.email || "?").slice(0, 1).toUpperCase()}</span>}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div className="h2" style={{ margin: 0 }}>{u.displayName || t("unnamed")}</div>
-            <div className="tiny muted">{u.email} · {t("role")}: <b>{u.role}</b></div>
-            <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <label className="btn">
-                <Icon name="file" /> {t("photo")}
-                <input hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
-              </label>
-              {u.role !== "admin" && <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> {t("addKpi")}</Btn>}
-              <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast(t("loggedOut"), "ok"); navigate("login"); }}>
-                <Icon name="logout" /> {t("navLogout")}
-              </Btn>
-              {u.instagram && (
-                <a href={`https://instagram.com/${u.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer" className="btn btn--instagram">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
-                  Instagram
-                </a>
-              )}
+    <div className="prof">
+      {/* Hero card */}
+      <div className="prof-hero glass card" style={{ "--di": 0 }}>
+        <div className="prof-hero__bg" />
+        <div className="prof-hero__content">
+          <div className="prof-hero__avatar-wrap" onClick={() => document.getElementById("prof-avatar-input")?.click()}>
+            <div className="prof-hero__avatar">
+              {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : <span>{(u.displayName || u.email || "?").slice(0, 1).toUpperCase()}</span>}
             </div>
+            <div className="prof-hero__avatar-overlay"><Icon name="file" /></div>
+            <input id="prof-avatar-input" hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
+          </div>
+          <div className="prof-hero__info">
+            <div className="prof-hero__name">{u.displayName || t("unnamed")}</div>
+            <div className="prof-hero__role">
+              <Pill kind="approved">{u.role === "admin" ? "Admin" : "Teacher"}</Pill>
+              <Pill kind="pending">{lvl.name}</Pill>
+            </div>
+            <div className="prof-hero__meta">{u.email}</div>
+            {(u.school || u.subject) && (
+              <div className="prof-hero__meta">{[u.school, u.subject].filter(Boolean).join(" · ")}</div>
+            )}
+          </div>
+          <div className="prof-hero__actions">
+            {u.role !== "admin" && <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> {t("addKpi")}</Btn>}
+            <Btn onClick={() => navigate("rating")}><Icon name="rank" /> {t("navRating")}</Btn>
           </div>
         </div>
 
-        <div className="sep"></div>
-
-        <div className="grid3">
-          <div className="kpi">
-            <div><div className="muted tiny">{t("totalPoints")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.totalPoints)}</div></div>
-            <Pill kind="approved">{lvl.name}</Pill>
-          </div>
-          <div className="kpi">
-            <div><div className="muted tiny">{t("submissions")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(subs.length)}</div></div>
-            <span className="tiny muted">APR {subs.length ? Math.round((approved.length / subs.length) * 100) : 0}%</span>
-          </div>
-          <div className="kpi">
-            <div><div className="muted tiny">{t("approvedPts")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(sum(approved, s => s.points))}</div></div>
-            <span className="tiny muted">{approved.length} шт</span>
-          </div>
-          <div className="kpi">
-            <div><div className="muted tiny">{t("compDays")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.compDays || 0)}</div></div>
-            <Btn kind="ghost" onClick={() => navigate("requests")}>{t("requests")}</Btn>
-          </div>
+        {/* Social links */}
+        <div className="prof-hero__social">
+          {u.instagram && (
+            <a href={`https://instagram.com/${u.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
+              Instagram
+            </a>
+          )}
+          {u.youtube && (
+            <a href={u.youtube} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--yt">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              YouTube
+            </a>
+          )}
+          {u.phone && (
+            <a href={`tel:${u.phone}`} className="prof-social-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" strokeWidth="2" /></svg>
+              {u.phone}
+            </a>
+          )}
         </div>
-
-        <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Pill kind="approved">approved: {approved.length}</Pill>
-          <Pill kind="pending">pending: {pending.length}</Pill>
-          <Pill kind="rejected">rejected: {rejected.length}</Pill>
-        </div>
-
-        <div className="sep"></div>
-        <Btn onClick={() => setOpen(v => !v)}>{open ? t("closeSettings") : t("settings")}</Btn>
-
-        {open && (
-          <div style={{ marginTop: 12 }}>
-            <div className="grid2">
-              <div><div className="label">{t("fullName")}</div><Input value={form.displayName} onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))} /></div>
-              <div><div className="label">{t("position")}</div><Input value={form.position} onChange={(e) => setForm(f => ({ ...f, position: e.target.value }))} /></div>
-              <div><div className="label">{t("school")}</div><Input value={form.school} onChange={(e) => setForm(f => ({ ...f, school: e.target.value }))} /></div>
-              <div><div className="label">{t("subject")}</div><Input value={form.subject} onChange={(e) => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
-              <div><div className="label">{t("experience")}</div><Input type="number" min="0" max="60" value={form.experienceYears} onChange={(e) => setForm(f => ({ ...f, experienceYears: e.target.value }))} /></div>
-              <div><div className="label">{t("phone")}</div><Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
-              <div><div className="label">{t("city")}</div><Input value={form.city} onChange={(e) => setForm(f => ({ ...f, city: e.target.value }))} /></div>
-              <div><div className="label">{t("instagram")}</div><Input value={form.instagram} onChange={(e) => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder={t("instagramPh")} /></div>
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              <Btn kind="primary" onClick={save} disabled={st.loading}>{t("save")}</Btn>
-              <Btn onClick={() => setOpen(false)}>{t("cancel")}</Btn>
-            </div>
-
-            <div className="sep"></div>
-            <div className="h2" style={{ fontSize: 18 }}>{t("security")}</div>
-            <div className="help">
-              {isPasswordProvider
-                ? t("securityHelp")
-                : t("securityNote")}
-            </div>
-            <div className="grid2" style={{ marginTop: 10 }}>
-              {isPasswordProvider && (
-                <div>
-                  <div className="label">{t("currentPwd")}</div>
-                  <Input type="password" autoComplete="current-password" value={pw.current}
-                    onChange={(e) => setPw(p => ({ ...p, current: e.target.value }))} />
-                </div>
-              )}
-              <div>
-                <div className="label">{t("newPwd")}</div>
-                <Input type="password" autoComplete="new-password" value={pw.next}
-                  onChange={(e) => setPw(p => ({ ...p, next: e.target.value }))} />
-              </div>
-              <div>
-                <div className="label">{t("repeatNewPwd")}</div>
-                <Input type="password" autoComplete="new-password" value={pw.next2}
-                  onChange={(e) => setPw(p => ({ ...p, next2: e.target.value }))} />
-              </div>
-              <div />
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              <Btn kind="primary" onClick={changePassword} disabled={st.loading}>{t("changePwd")}</Btn>
-              <Btn kind="ghost" onClick={resetPasswordEmail} disabled={st.loading}>{t("resetByEmail")}</Btn>
-            </div>
-          </div>
-        )}
-
-        {/* блок "Первый запуск" удалён */}
       </div>
 
-      <div className="glass card">
-        <div className="h2">{t("recentSubs")}</div>
-        <div className="sep"></div>
-        <DataCards
-          emptyText={t("noSubsYet")}
-          columns={[
-            { key: "eventDate", label: t("date") },
-            { key: "typeName", label: t("type") },
-            { key: "title", label: t("title") },
-            { key: "points", label: t("points"), render: s => <b>{fmtPoints(s.points)}</b> },
-            { key: "status", label: t("status"), render: s => <Pill kind={s.status}>{s.status}</Pill> }
-          ]}
-          rows={subs.slice(0, 8).map(s => ({ ...s, __key: s.id }))}
-        />
+      {/* Stats row */}
+      <div className="prof-stats">
+        <div className="prof-stat glass card" style={{ "--di": 1 }}>
+          <div className="prof-stat__num">{fmtPoints(u.totalPoints)}</div>
+          <div className="prof-stat__label">{t("totalPoints")}</div>
+          <div className="prof-stat__bar"><div className="prof-stat__fill" style={{ width: `${lvl.pct}%` }} /></div>
+          {lvl.next && <div className="prof-stat__hint">{t("profileNextLevel")}: {nextPts}</div>}
+        </div>
+        <div className="prof-stat glass card" style={{ "--di": 2 }}>
+          <div className="prof-stat__num">{subs.length}</div>
+          <div className="prof-stat__label">{t("submissions")}</div>
+          <div className="prof-stat__badges">
+            <span className="pill ok">{approved.length}</span>
+            <span className="pill warn">{pending.length}</span>
+            <span className="pill error">{rejected.length}</span>
+          </div>
+        </div>
+        <div className="prof-stat glass card" style={{ "--di": 3 }}>
+          <div className="prof-stat__num">{fmtPoints(approvedPts)}</div>
+          <div className="prof-stat__label">{t("approvedPts")}</div>
+          <div className="prof-stat__hint">APR {aprPct}%</div>
+        </div>
+        <div className="prof-stat glass card" style={{ "--di": 4 }}>
+          <div className="prof-stat__num">{fmtPoints(u.compDays || 0)}</div>
+          <div className="prof-stat__label">{t("compDays")}</div>
+          <Btn kind="ghost" style={{ marginTop: 6, fontSize: 12 }} onClick={() => navigate("requests")}>{t("requests")}</Btn>
+        </div>
       </div>
+
+      {/* Tabs */}
+      <div className="prof-tabs">
+        <TabBtn id="overview" icon="chart" label={t("profileOverview")} />
+        <TabBtn id="settings" icon="user" label={t("profileEditInfo")} />
+        <TabBtn id="security" icon="shield" label={t("security")} />
+      </div>
+
+      {/* Tab: overview */}
+      {tab === "overview" && (
+        <div className="glass card prof-card" style={{ "--di": 5 }}>
+          <div className="h2">{t("recentSubs")}</div>
+          <div className="sep"></div>
+          <DataCards
+            emptyText={t("noSubsYet")}
+            columns={[
+              { key: "eventDate", label: t("date") },
+              { key: "typeName", label: t("type") },
+              { key: "title", label: t("title") },
+              { key: "points", label: t("points"), render: s => <b>{fmtPoints(s.points)}</b> },
+              { key: "status", label: t("status"), render: s => <Pill kind={s.status}>{s.status}</Pill> }
+            ]}
+            rows={subs.slice(0, 8).map(s => ({ ...s, __key: s.id }))}
+          />
+        </div>
+      )}
+
+      {/* Tab: settings */}
+      {tab === "settings" && (
+        <div className="glass card prof-card" style={{ "--di": 5 }}>
+          <div className="h2">{t("profilePersonal")}</div>
+          <div className="sep"></div>
+          <div className="grid2">
+            <div><div className="label">{t("fullName")}</div><Input value={form.displayName} onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))} /></div>
+            <div><div className="label">{t("position")}</div><Input value={form.position} onChange={(e) => setForm(f => ({ ...f, position: e.target.value }))} /></div>
+            <div><div className="label">{t("school")}</div><Input value={form.school} onChange={(e) => setForm(f => ({ ...f, school: e.target.value }))} /></div>
+            <div><div className="label">{t("subject")}</div><Input value={form.subject} onChange={(e) => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
+            <div><div className="label">{t("experience")}</div><Input type="number" min="0" max="60" value={form.experienceYears} onChange={(e) => setForm(f => ({ ...f, experienceYears: e.target.value }))} /></div>
+            <div><div className="label">{t("phone")}</div><Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
+            <div><div className="label">{t("city")}</div><Input value={form.city} onChange={(e) => setForm(f => ({ ...f, city: e.target.value }))} /></div>
+            <div><div className="label">{t("instagram")}</div><Input value={form.instagram} onChange={(e) => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder={t("instagramPh")} /></div>
+            <div style={{ gridColumn: "1 / -1" }}><div className="label">{t("youtube")}</div><Input value={form.youtube} onChange={(e) => setForm(f => ({ ...f, youtube: e.target.value }))} placeholder={t("youtubePh")} /></div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <Btn kind="primary" onClick={save} disabled={st.loading}><Icon name="check" /> {t("save")}</Btn>
+            <Btn onClick={() => setTab("overview")}>{t("cancel")}</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: security */}
+      {tab === "security" && (
+        <div className="glass card prof-card" style={{ "--di": 5 }}>
+          <div className="h2">{t("security")}</div>
+          <div className="help" style={{ marginBottom: 12 }}>
+            {isPasswordProvider ? t("securityHelp") : t("securityNote")}
+          </div>
+          <div className="grid2">
+            {isPasswordProvider && (
+              <div>
+                <div className="label">{t("currentPwd")}</div>
+                <Input type="password" autoComplete="current-password" value={pw.current}
+                  onChange={(e) => setPw(p => ({ ...p, current: e.target.value }))} />
+              </div>
+            )}
+            <div>
+              <div className="label">{t("newPwd")}</div>
+              <Input type="password" autoComplete="new-password" value={pw.next}
+                onChange={(e) => setPw(p => ({ ...p, next: e.target.value }))} />
+            </div>
+            <div>
+              <div className="label">{t("repeatNewPwd")}</div>
+              <Input type="password" autoComplete="new-password" value={pw.next2}
+                onChange={(e) => setPw(p => ({ ...p, next2: e.target.value }))} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <Btn kind="primary" onClick={changePassword} disabled={st.loading}><Icon name="shield" /> {t("changePwd")}</Btn>
+            <Btn kind="ghost" onClick={resetPasswordEmail} disabled={st.loading}>{t("resetByEmail")}</Btn>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3352,7 +3750,7 @@ function PageAdd() {
       setState({ mySubmissions: my });
 
       setTitle(""); setDescription(""); setEvidenceLink(""); setFile(null);
-      navigate("profile");
+      navigate("dashboard");
     } catch (err) {
       console.error(err);
       toast(err?.message || "Ошибка отправки", "error");
@@ -3681,7 +4079,7 @@ function PageRequests() {
           <form onSubmit={submit}>
             <div className="label">{t("requestType")}</div>
             <Select value={kind} onChange={(e) => setKind(e.target.value)}>
-              {REQUEST_KINDS.map(x => <option key={x.key} value={x.key}>{x.label}</option>)}
+              {REQUEST_KINDS.map(x => <option key={x.key} value={x.key}>{t(x.tKey)}</option>)}
             </Select>
 
             <div className="grid2">
