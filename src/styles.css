@@ -6553,3 +6553,164 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ══════════════════════════════════════════════ */
+/* ═══ ACCESSIBILITY: REDUCE MOTION ═══════════ */
+/* ══════════════════════════════════════════════ */
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before,
+[data-reduce-motion="true"] *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
+[data-reduce-motion="true"] body::before {
+  display: none !important;
+}
+
+[data-reduce-motion="true"] .route-section {
+  animation: none !important;
+}
+
+/* ══════════════════════════════════════════════ */
+/* ═══ ACCESSIBILITY: LARGE TEXT ═══════════════ */
+/* ══════════════════════════════════════════════ */
+[data-large-text="true"] body {
+  font-size: 18px;
+}
+
+[data-large-text="true"] .h1 {
+  font-size: 32px;
+}
+
+[data-large-text="true"] .h2 {
+  font-size: 24px;
+}
+
+[data-large-text="true"] .h3 {
+  font-size: 19px;
+}
+
+[data-large-text="true"] .tiny {
+  font-size: 13px;
+}
+
+[data-large-text="true"] .btn {
+  font-size: 16px;
+  padding: 10px 20px;
+}
+
+[data-large-text="true"] .sidebar .nav__link {
+  font-size: 15px;
+  padding: 10px 14px;
+}
+
+[data-large-text="true"] .topbar__titleBig {
+  font-size: 20px;
+}
+
+/* ══════════════════════════════════════════════ */
+/* ═══ ACCESSIBILITY: HIGH CONTRAST ═══════════ */
+/* ══════════════════════════════════════════════ */
+[data-high-contrast="true"][data-theme="light"] {
+  --bg: #ffffff;
+  --bg-body: #ffffff;
+  --surface: #ffffff;
+  --surface2: #f0f0f0;
+  --border: rgba(0, 0, 0, .3);
+  --border2: rgba(0, 0, 0, .2);
+  --text: #000000;
+  --muted: rgba(0, 0, 0, .7);
+  --shadow: 0 1px 4px rgba(0, 0, 0, .15);
+  --shadow-lg: 0 4px 24px rgba(0, 0, 0, .2);
+  --card-bg: #ffffff;
+  --text2: #222;
+}
+
+[data-high-contrast="true"][data-theme="dark"] {
+  --bg: #000000;
+  --bg-body: #000000;
+  --surface: rgba(255, 255, 255, .1);
+  --surface2: rgba(255, 255, 255, .06);
+  --border: rgba(255, 255, 255, .25);
+  --border2: rgba(255, 255, 255, .15);
+  --text: #ffffff;
+  --muted: rgba(255, 255, 255, .8);
+  --shadow: 0 2px 12px rgba(0, 0, 0, .5);
+  --shadow-lg: 0 6px 32px rgba(0, 0, 0, .6);
+  --card-bg: rgba(255, 255, 255, .08);
+  --text2: rgba(255, 255, 255, .85);
+}
+
+/* ══════════════════════════════════════════════ */
+/* ═══ ACCESSIBILITY PANEL UI ═════════════════ */
+/* ══════════════════════════════════════════════ */
+.acc-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.acc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius2);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+}
+
+.acc-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.acc-row__label {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.acc-row__desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.acc-toggle {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--border);
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.acc-toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+
+.acc-toggle--on {
+  background: var(--accent);
+}
+
+.acc-toggle--on::after {
+  left: auto;
+  right: 3px;
+}

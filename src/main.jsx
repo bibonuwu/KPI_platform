@@ -281,7 +281,9 @@ const store = {
     // ui
     statsRangeMode: "14d",
     statsView: "mine",
-    theme: (function () { try { return localStorage.getItem("kpi_theme") || "light"; } catch (e) { return "light"; } })()
+    theme: (function () { try { return localStorage.getItem("kpi_theme") || "light"; } catch (e) { return "light"; } })(),
+    accessibility: { reduceMotion: false, largeText: false, highContrast: false },
+    showAccessibilityModal: false
   },
   subs: new Set()
 };
@@ -306,7 +308,29 @@ function applyTheme(t) {
   setState({ theme: t });
 }
 function toggleTheme() {
-  applyTheme(store.state.theme === "dark" ? "light" : "dark");
+  const next = store.state.theme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  const u = store.state.userDoc;
+  if (u) {
+    updateDoc(doc(db, "users", u.uid), { preferredTheme: next }).catch(() => {});
+  }
+}
+
+/* -------- Accessibility settings -------- */
+function getDefaultAccessibility() {
+  return { reduceMotion: false, largeText: false, highContrast: false };
+}
+function applyAccessibility(acc) {
+  const el = document.documentElement;
+  el.setAttribute("data-reduce-motion", acc.reduceMotion ? "true" : "false");
+  el.setAttribute("data-large-text", acc.largeText ? "true" : "false");
+  el.setAttribute("data-high-contrast", acc.highContrast ? "true" : "false");
+  setState({ accessibility: { ...acc } });
+}
+async function saveAccessibilityToFirestore(uid, acc) {
+  try {
+    await updateDoc(doc(db, "users", uid), { accessibility: acc });
+  } catch (e) { console.warn("Accessibility save failed:", e); }
 }
 
 /** ---------- router ---------- */
@@ -1006,6 +1030,7 @@ function Icon({ name }) {
     case "folder": return <svg {...common}><path {...s} d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" /></svg>;
     case "clipboard": return <svg {...common}><path {...s} d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" /><rect {...s} x="8" y="2" width="8" height="4" rx="1" /></svg>;
     case "info": return <svg {...common}><circle {...s} cx="12" cy="12" r="10" /><path {...s} d="M12 16v-4M12 8h.01" /></svg>;
+    case "eye": return <svg {...common}><path {...s} d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" /><circle {...s} cx="12" cy="12" r="3" /></svg>;
     default: return null;
   }
 }
@@ -1311,6 +1336,52 @@ function LangSwitcher() {
   );
 }
 
+function AccessibilityModal() {
+  const st = useStore();
+  if (!st.showAccessibilityModal) return null;
+  const acc = st.accessibility || getDefaultAccessibility();
+  const u = st.userDoc;
+  const toggle = (key) => {
+    const next = { ...acc, [key]: !acc[key] };
+    applyAccessibility(next);
+    if (u) saveAccessibilityToFirestore(u.uid, next);
+  };
+  const close = () => setState({ showAccessibilityModal: false });
+  const rows = [
+    { key: "reduceMotion", label: t("accReduceMotion"), desc: t("accReduceMotionDesc") },
+    { key: "largeText", label: t("accLargeText"), desc: t("accLargeTextDesc") },
+    { key: "highContrast", label: t("accHighContrast"), desc: t("accHighContrastDesc") },
+  ];
+  return (
+    <div className="modalback" onClick={close}>
+      <div className="modal glass" style={{ maxWidth: 440, width: "92vw" }} onClick={e => e.stopPropagation()}>
+        <div className="modal__head">
+          <div>
+            <div className="h2" style={{ marginBottom: 2 }}>{t("accessibilityTitle")}</div>
+            <div className="tiny muted">{t("accessibilityDesc")}</div>
+          </div>
+          <Btn onClick={close}>✕</Btn>
+        </div>
+        <div className="acc-panel">
+          {rows.map(r => (
+            <div className="acc-row" key={r.key}>
+              <div className="acc-row__info">
+                <div className="acc-row__label">{r.label}</div>
+                <div className="acc-row__desc">{r.desc}</div>
+              </div>
+              <button
+                className={`acc-toggle${acc[r.key] ? " acc-toggle--on" : ""}`}
+                onClick={() => toggle(r.key)}
+                aria-label={r.label}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TopbarRight() {
   const st = useStore();
   const u = st.userDoc;
@@ -1320,6 +1391,14 @@ function TopbarRight() {
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
       <LiveClock />
       <LangSwitcher />
+      <button
+        className="iconbtn"
+        onClick={() => setState({ showAccessibilityModal: true })}
+        aria-label={t("accessibilityBtn")}
+        title={t("accessibilityBtn")}
+      >
+        <Icon name="eye" />
+      </button>
       <button
         className="iconbtn theme-toggle"
         onClick={toggleTheme}
@@ -1592,6 +1671,7 @@ function Overlays() {
       <TeacherProfileModal />
       <ForcePasswordChange />
       <OnlineWidget />
+      <AccessibilityModal />
     </>
   );
 }
@@ -6729,6 +6809,7 @@ async function hydrateForUser(userDoc) {
 async function bootstrap() {
   setupMobileDrawer();
   applyTheme(store.state.theme);
+  applyAccessibility(getDefaultAccessibility());
   window.addEventListener("hashchange", () => render().catch(console.error));
 
   // Needed for signInWithRedirect flows (including Microsoft on mobile)
@@ -6769,6 +6850,12 @@ async function bootstrap() {
 
       const userDoc = await ensureUserDoc(user.uid, user.email || "");
       setState({ userDoc });
+
+      // Load user's accessibility + theme preferences from Firestore
+      const savedAcc = userDoc.accessibility || getDefaultAccessibility();
+      applyAccessibility(savedAcc);
+      if (userDoc.preferredTheme) applyTheme(userDoc.preferredTheme);
+
       await hydrateForUser(userDoc);
 
       // Mark user online + start heartbeat

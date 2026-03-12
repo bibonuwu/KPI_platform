@@ -628,6 +628,18 @@ export const T = {
 
   // ===== SOCIAL =====
   socialTitle: { kz: "Бізді әлеуметтік желілерде табыңыз", ru: "Мы в социальных сетях", en: "Find us on social media" },
+
+  // ===== ACCESSIBILITY SETTINGS =====
+  accessibilityBtn: { kz: "Қолжетімділік", ru: "Доступность", en: "Accessibility" },
+  accessibilityTitle: { kz: "Қолжетімділік баптаулары", ru: "Настройки доступности", en: "Accessibility Settings" },
+  accessibilityDesc: { kz: "Платформаны ыңғайлы етіңіз", ru: "Настройте платформу под себя", en: "Customize the platform for comfort" },
+  accReduceMotion: { kz: "Анимацияны өшіру", ru: "Убрать анимации", en: "Reduce animations" },
+  accReduceMotionDesc: { kz: "Барлық анимация мен transition өшеді — ескі ПК үшін жақсы", ru: "Отключает все анимации и переходы — хорошо для старых ПК", en: "Disables all animations and transitions — good for old PCs" },
+  accLargeText: { kz: "Үлкен мәтін", ru: "Крупный текст", en: "Large text" },
+  accLargeTextDesc: { kz: "Шрифт өлшемін үлкейтеді", ru: "Увеличивает размер шрифта", en: "Increases font size" },
+  accHighContrast: { kz: "Жоғары контраст", ru: "Высокий контраст", en: "High contrast" },
+  accHighContrastDesc: { kz: "Мәтін мен фон арасындағы контрастты күшейтеді", ru: "Усиливает контраст между текстом и фоном", en: "Increases contrast between text and background" },
+  accSaved: { kz: "Баптаулар сақталды", ru: "Настройки сохранены", en: "Settings saved" },
 };
 
 /**
