@@ -738,7 +738,7 @@ async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, evidenc
   await addDoc(collection(db, "requests"), {
     uid,
     kind: k.key,
-    kindLabel: k.label,
+    kindLabel: t(k.tKey),
     compMode: k.compMode,
     dateFrom: from,
     dateTo: to,
@@ -862,8 +862,38 @@ async function decideTeacherRequest(reqId, adminUid, action, pointsDelta) {
 async function setRole(uid, role) {
   await updateDoc(doc(db, "users", uid), { role });
 }
+async function setPosition(uid, position) {
+  await updateDoc(doc(db, "users", uid), { position });
+}
+async function logAdminAction({ action, targetUid, targetName, details }) {
+  try {
+    const u = store.state.userDoc;
+    await addDoc(collection(db, "admin_logs"), {
+      action,
+      targetUid: targetUid || "",
+      targetName: targetName || "",
+      details: details || "",
+      adminUid: u?.uid || "",
+      adminName: u?.displayName || u?.email || "",
+      createdAt: serverTimestamp()
+    });
+  } catch (e) { console.error("logAdminAction error:", e); }
+}
+async function fetchAdminLogs(limitN = 200) {
+  const qy = query(collection(db, "admin_logs"), orderBy("createdAt", "desc"), limit(limitN));
+  const snap = await getDocs(qy);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 async function updateProfile(uid, patch) {
   await updateDoc(doc(db, "users", uid), patch);
+}
+async function fetchCustomPositions() {
+  const snap = await getDoc(doc(db, "settings", "positions"));
+  if (snap.exists()) return snap.data().list || [];
+  return [];
+}
+async function saveCustomPositions(list) {
+  await setDoc(doc(db, "settings", "positions"), { list });
 }
 
 /** ---------- storage ---------- */
@@ -1031,6 +1061,9 @@ function Icon({ name }) {
     case "clipboard": return <svg {...common}><path {...s} d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" /><rect {...s} x="8" y="2" width="8" height="4" rx="1" /></svg>;
     case "info": return <svg {...common}><circle {...s} cx="12" cy="12" r="10" /><path {...s} d="M12 16v-4M12 8h.01" /></svg>;
     case "eye": return <svg {...common}><path {...s} d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" /><circle {...s} cx="12" cy="12" r="3" /></svg>;
+    case "briefcase": return <svg {...common}><rect {...s} x="2" y="7" width="20" height="14" rx="2" /><path {...s} d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" /></svg>;
+    case "settings": return <svg {...common}><circle {...s} cx="12" cy="12" r="3" /><path {...s} d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001.08 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1.08z" /></svg>;
+    case "refresh": return <svg {...common}><path {...s} d="M23 4v6h-6" /><path {...s} d="M1 20v-6h6" /><path {...s} d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" /></svg>;
     default: return null;
   }
 }
@@ -1038,7 +1071,7 @@ const Btn = ({ kind = "", children, ...props }) => <button className={["btn", ki
 const Input = (p) => <input className="input" {...p} />;
 const Select = (p) => <select className="select" {...p} />;
 const Textarea = (p) => <textarea className="textarea" {...p} />;
-const Pill = ({ kind, children }) => <span className={`pill ${kind}`}>{children}</span>;
+const Pill = ({ kind, children, style }) => <span className={`pill ${kind}`} style={style}>{children}</span>;
 // Mobile-friendly data display: cards on mobile, table on desktop
 function DataCards({ columns, rows, emptyText }) {
   if (!emptyText) emptyText = t("noData");
@@ -4060,7 +4093,6 @@ function PageRequests() {
   const [dateFrom, setDateFrom] = useState(ymd());
   const [dateTo, setDateTo] = useState(ymd());
   const [note, setNote] = useState("");
-  const [evidenceFile, setEvidenceFile] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [viewReq, setViewReq] = useState(null);
   const days = useMemo(() => dateRangeDays(dateFrom, dateTo), [dateFrom, dateTo]);
@@ -4102,16 +4134,11 @@ function PageRequests() {
       if (dt.getTime() < df.getTime()) { toast(t("invalidDateRange"), "error"); return; }
 
       setState({ loading: true });
-      let evidenceUrl = "";
-      if (evidenceFile) {
-        evidenceUrl = await uploadEvidence(u.uid, evidenceFile);
-      }
-      await createTeacherRequest({ uid: u.uid, kind, dateFrom: f, dateTo: to, note, evidenceFileUrl: evidenceUrl });
+      await createTeacherRequest({ uid: u.uid, kind, dateFrom: f, dateTo: to, note, evidenceFileUrl: "" });
       toast(t("requestSent"), "ok");
       const myReq = await fetchMyRequests(u.uid);
       setState({ myRequests: myReq });
       setNote("");
-      setEvidenceFile(null);
     } catch (err) {
       console.error(err);
       toast(err?.message || t("sendError"), "error");
@@ -4125,8 +4152,8 @@ function PageRequests() {
 
   // Preview data for the form
   const previewReq = {
-    kind, kindLabel: k.label, dateFrom, dateTo,
-    days, note, status: "pending", id: "XXXXXX",
+    kind, kindLabel: t(k.tKey), dateFrom, dateTo,
+    days, note, status: "pending", id: Math.random().toString(36).slice(2, 8).toUpperCase(),
     evidenceFileUrl: ""
   };
 
@@ -4175,10 +4202,6 @@ function PageRequests() {
 
             <div className="label">{t("reason")}</div>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("reasonPlaceholder")} />
-
-            <div className="label">{t("attachment")}</div>
-            <Input type="file" onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" />
-            {evidenceFile && <div className="help">{t("file")}: {evidenceFile.name}</div>}
 
             <div className="help" style={{ marginTop: 8 }}>
               Кезеңдегі күндер: <b>{days}</b>. {k.compMode === "earn" && <>{t("earnedDays")}: <b>+{days}</b>.</>}
@@ -5235,6 +5258,97 @@ function PageDocuments() {
   );
 }
 
+/** ---------- Staff positions for admin documents & users ---------- */
+const DEFAULT_POSITION_LIST = [
+  // --- Административно-управленческий персонал ---
+  { position: "Директор", group: "admin" },
+  { position: "Заместитель директора, эксперт", group: "admin" },
+  { position: "Заместитель директора", group: "admin" },
+  { position: "Заместитель директора, модератор", group: "admin" },
+  { position: "Заведующий лабораторией, модератор", group: "admin" },
+  { position: "Главный бухгалтер", group: "admin" },
+  { position: "Бухгалтер", group: "admin" },
+  { position: "Экономист", group: "admin" },
+  { position: "Юрист", group: "admin" },
+  { position: "Менеджер по персоналу (HR менеджер)", group: "admin" },
+  { position: "Менеджер по связям с общественностью (PR менеджер)", group: "admin" },
+  { position: "Специалист по закупкам", group: "admin" },
+  { position: "Инженер по безопасности и охране труда", group: "admin" },
+  { position: "Делопроизводитель-секретарь", group: "admin" },
+  // --- Основной производственный персонал ---
+  { position: "Учитель-эксперт казахского языка и литературы", group: "teacher" },
+  { position: "Учитель-модератор казахского языка и литературы", group: "teacher" },
+  { position: "Учитель казахского языка", group: "teacher" },
+  { position: "Учитель-эксперт русского языка и литературы", group: "teacher" },
+  { position: "Учитель-модератор русского языка и литературы", group: "teacher" },
+  { position: "Учитель русского языка и литературы", group: "teacher" },
+  { position: "Учитель-эксперт английского языка", group: "teacher" },
+  { position: "Учитель-модератор английского языка", group: "teacher" },
+  { position: "Учитель английского языка", group: "teacher" },
+  { position: "Учитель-стажёр английского языка", group: "teacher" },
+  { position: "Учитель-эксперт биологии", group: "teacher" },
+  { position: "Учитель-модератор биологии", group: "teacher" },
+  { position: "Учитель-эксперт физики", group: "teacher" },
+  { position: "Учитель-модератор физики", group: "teacher" },
+  { position: "Учитель физики", group: "teacher" },
+  { position: "Учитель-эксперт химии", group: "teacher" },
+  { position: "Учитель-модератор химии", group: "teacher" },
+  { position: "Учитель химии", group: "teacher" },
+  { position: "Учитель-эксперт математики", group: "teacher" },
+  { position: "Учитель-модератор математики", group: "teacher" },
+  { position: "Учитель математики", group: "teacher" },
+  { position: "Учитель-эксперт информатики", group: "teacher" },
+  { position: "Учитель-модератор информатики", group: "teacher" },
+  { position: "Учитель информатики", group: "teacher" },
+  { position: "Учитель-стажер информатики", group: "teacher" },
+  { position: "Учитель-эксперт географии", group: "teacher" },
+  { position: "Учитель-модератор географии", group: "teacher" },
+  { position: "Учитель географии", group: "teacher" },
+  { position: "Учитель-эксперт истории", group: "teacher" },
+  { position: "Учитель-модератор истории", group: "teacher" },
+  { position: "Учитель истории", group: "teacher" },
+  { position: "Учитель-эксперт глобальных перспектив и проектных работ, экономики", group: "teacher" },
+  { position: "Учитель-модератор физической культуры", group: "teacher" },
+  { position: "Учитель физической культуры", group: "teacher" },
+  { position: "Преподаватель-организатор по НВП", group: "teacher" },
+  { position: "Учитель-эксперт музыки", group: "teacher" },
+  { position: "Учитель-эксперт изобразительного искусства", group: "teacher" },
+  { position: "Учитель-модератор изобразительного искусства", group: "teacher" },
+  { position: "Учитель изобразительного искусства", group: "teacher" },
+  // --- Не основной производственный персонал ---
+  { position: "Методист", group: "support" },
+  { position: "Консультант по профессиональной ориентации", group: "support" },
+  { position: "Старший педагог-библиотекарь", group: "support" },
+  { position: "Педагог-библиотекарь", group: "support" },
+  { position: "Старший инженер", group: "support" },
+  { position: "Инженер по специальному оборудованию", group: "support" },
+  { position: "Инженер по компьютерному оборудованию", group: "support" },
+  { position: "Педагог-психолог", group: "support" },
+  { position: "Педагог-организатор-куратор", group: "support" },
+  { position: "Педагог дополнительного образования", group: "support" },
+  { position: "Лаборант (химия)", group: "support" },
+  { position: "Лаборант (биология)", group: "support" },
+  { position: "Лаборант (физика)", group: "support" },
+];
+const POSITION_GROUP_MAP = {};
+DEFAULT_POSITION_LIST.forEach(p => { POSITION_GROUP_MAP[p.position.toLowerCase()] = p.group; });
+
+const STAFF_GROUPS = [
+  { key: "admin", label: "Административно-управленческий персонал" },
+  { key: "teacher", label: "Основной производственный персонал" },
+  { key: "support", label: "Не основной производственный персонал" },
+];
+function getStaffGroup(email, position) {
+  if (position) {
+    const g = POSITION_GROUP_MAP[position.toLowerCase()];
+    if (g) return g;
+  }
+  return "teacher";
+}
+function getStaffPosition(email, position) {
+  return position || "";
+}
+
 /** ---------- PageAdminDocuments ---------- */
 function PageAdminDocuments() {
   const st = useStore();
@@ -5246,15 +5360,22 @@ function PageAdminDocuments() {
   const [sending, setSending] = useState(false);
   const [tab, setTab] = useState("send");
   const [filterUid, setFilterUid] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [recipientQ, setRecipientQ] = useState("");
 
   const u = st.userDoc;
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
 
-  const users = (st.users || []).filter(x => x.role !== "admin");
+  const allUsers = (st.users || []).filter(x => x.uid !== u.uid);
+  const users = roleFilter ? allUsers.filter(x => getStaffGroup(x.email, x.position) === roleFilter) : allUsers;
+  const groupedUsers = STAFF_GROUPS.map(g => ({
+    ...g,
+    users: allUsers.filter(x => getStaffGroup(x.email, x.position) === g.key)
+  })).filter(g => g.users.length > 0);
   const docs = st.allDocuments || [];
 
-  const selectedUser = users.find(x => x.uid === toUid);
+  const selectedUser = allUsers.find(x => x.uid === toUid);
 
   const send = async () => {
     if (!toUid || !title.trim() || !body.trim()) {
@@ -5303,39 +5424,126 @@ function PageAdminDocuments() {
         </div>
       </div>
 
-      {tab === "send" && (
-        <div className="glass card">
-          <div className="h2" style={{ marginBottom: 16 }}>{t("newDocument")}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <label className="label">{t("recipient")}</label>
-              <select className="input" value={toUid} onChange={e => setToUid(e.target.value)}>
-                <option value="">{t("selectRecipient")}</option>
-                {users.map(x => (
-                  <option key={x.uid} value={x.uid}>{x.displayName || x.email} ({x.email})</option>
-                ))}
-              </select>
+      {tab === "send" && (() => {
+        const rq = recipientQ.trim().toLowerCase();
+        const recipientList = (roleFilter ? users : allUsers).filter(x => {
+          if (!rq) return true;
+          const hay = `${x.displayName || ""} ${x.email || ""} ${x.position || ""}`.toLowerCase();
+          return hay.includes(rq);
+        });
+        const recipientGrouped = STAFF_GROUPS.map(g => ({
+          ...g,
+          users: recipientList.filter(x => getStaffGroup(x.email, x.position) === g.key)
+        })).filter(g => g.users.length > 0);
+
+        return (
+          <div className="admin-users-layout">
+            {/* LEFT: Recipient picker */}
+            <div className="admin-users-left">
+              <div className="glass card" style={{ position: "sticky", top: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(135,188,46,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon name="user" />
+                  </div>
+                  <div className="h2" style={{ margin: 0, flex: 1 }}>{t("recipient")}</div>
+                </div>
+
+                {/* Selected user card */}
+                {selectedUser ? (
+                  <div className="admin-users-selected">
+                    {selectedUser.avatarUrl ? (
+                      <img src={selectedUser.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
+                    ) : (
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(135,188,46,.15)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
+                        {(selectedUser.displayName || selectedUser.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <b style={{ fontSize: 14 }}>{selectedUser.displayName || selectedUser.email}</b>
+                      {selectedUser.position && <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>{selectedUser.position}</div>}
+                    </div>
+                    <button className="iconbtn" onClick={() => setToUid("")}><Icon name="x" /></button>
+                  </div>
+                ) : (
+                  <div className="admin-users-placeholder">
+                    <div className="muted" style={{ fontSize: 13 }}>{t("selectRecipient")}</div>
+                  </div>
+                )}
+
+                {/* Search */}
+                <input className="input" style={{ width: "100%", marginBottom: 8 }} placeholder={t("searchPlaceholder")} value={recipientQ} onChange={e => setRecipientQ(e.target.value)} />
+
+                {/* Group filter pills */}
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+                  <Btn kind={roleFilter === "" ? "primary" : "ghost"} onClick={() => { setRoleFilter(""); }} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 8 }}>{t("all")}</Btn>
+                  {STAFF_GROUPS.map(g => {
+                    const cnt = allUsers.filter(x => getStaffGroup(x.email, x.position) === g.key).length;
+                    return cnt > 0 ? <Btn key={g.key} kind={roleFilter === g.key ? "primary" : "ghost"} onClick={() => { setRoleFilter(g.key); }} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 8 }}>{g.label} ({cnt})</Btn> : null;
+                  })}
+                </div>
+
+                {/* Scrollable user list */}
+                <div style={{ maxHeight: "calc(100vh - 480px)", overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
+                  {recipientGrouped.length === 0 && <div className="muted" style={{ textAlign: "center", padding: 12, fontSize: 13 }}>{t("noResults")}</div>}
+                  {recipientGrouped.map(g => {
+                    const grpColor = g.key === "admin" ? "#6366f1" : g.key === "support" ? "#06b6d4" : "var(--accent)";
+                    return (
+                      <div key={g.key}>
+                        <div className="pos-group-label" style={{ color: grpColor }}>{g.label} ({g.users.length})</div>
+                        {g.users.map(x => {
+                          const isSel = toUid === x.uid;
+                          const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                          return (
+                            <div key={x.uid} className={`pos-item${isSel ? " active" : ""}`} onClick={() => setToUid(x.uid)} style={{ padding: "6px 10px", gap: 8 }}>
+                              {x.avatarUrl ? (
+                                <img src={x.avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                              ) : (
+                                <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${grpColor}18`, color: grpColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{initials}</div>
+                              )}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.displayName || x.email}</div>
+                                {x.position && <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.position}</div>}
+                              </div>
+                              {isSel && <Icon name="check" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="label">{t("subjectLabel2")}</label>
-              <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder={t("subjectPlaceholder")} />
-            </div>
-            <div>
-              <label className="label">{t("docText")}</label>
-              <textarea className="input" rows={6} value={body} onChange={e => setBody(e.target.value)} placeholder={t("docTextPlaceholder")} style={{ resize: "vertical" }} />
-            </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14 }}>
-              <input type="checkbox" checked={requireSig} onChange={e => setRequireSig(e.target.checked)} style={{ width: 18, height: 18, accentColor: "var(--accent)" }} />
-              <span>{t("requireSignature")}</span>
-            </label>
-            <div>
-              <Btn kind="primary" onClick={send} disabled={sending}>
-                {sending ? t("sending") : t("sendDocument")}
-              </Btn>
+
+            {/* RIGHT: Document form */}
+            <div className="admin-users-right">
+              <div className="glass card">
+                <div className="h2" style={{ marginBottom: 16 }}>{t("newDocument")}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div>
+                    <label className="label">{t("subjectLabel2")}</label>
+                    <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder={t("subjectPlaceholder")} />
+                  </div>
+                  <div>
+                    <label className="label">{t("docText")}</label>
+                    <textarea className="input" rows={8} value={body} onChange={e => setBody(e.target.value)} placeholder={t("docTextPlaceholder")} style={{ resize: "vertical" }} />
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14 }}>
+                    <input type="checkbox" checked={requireSig} onChange={e => setRequireSig(e.target.checked)} style={{ width: 18, height: 18, accentColor: "var(--accent)" }} />
+                    <span>{t("requireSignature")}</span>
+                  </label>
+                  <div>
+                    <Btn kind="primary" onClick={send} disabled={sending || !toUid}>
+                      {sending ? t("sending") : t("sendDocument")}
+                    </Btn>
+                    {!toUid && <span className="muted" style={{ fontSize: 12, marginLeft: 10 }}>{t("selectRecipient")}</span>}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {tab === "list" && (
         <div className="glass card">
@@ -5343,7 +5551,7 @@ function PageAdminDocuments() {
             <div className="h2">{t("sentDocuments")}</div>
             <select className="input" style={{ width: "auto", minWidth: 180 }} value={filterUid} onChange={e => setFilterUid(e.target.value)}>
               <option value="">{t("all")}</option>
-              {users.map(x => <option key={x.uid} value={x.uid}>{x.displayName || x.email}</option>)}
+              {allUsers.map(x => <option key={x.uid} value={x.uid}>{x.displayName || x.email}</option>)}
             </select>
           </div>
           {filteredDocs.length === 0 ? (
@@ -5352,7 +5560,7 @@ function PageAdminDocuments() {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {filteredDocs.map(d => {
                 const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
-                const recipient = users.find(x => x.uid === d.toUid);
+                const recipient = allUsers.find(x => x.uid === d.toUid);
                 return (
                   <div key={d.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -5474,38 +5682,102 @@ function PageAdminTypes() {
 
 function PageAdminUsers() {
   const st = useStore();
-  // hooks before early returns
   const [q, setQ] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(null); // uid to delete
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [groupFilter, setGroupFilter] = useState("");
+  const [posFilter, setPosFilter] = useState("");
+  const [selectedUid, setSelectedUid] = useState(null);
+  const [customPos, setCustomPos] = useState([]);
+  const [newPosName, setNewPosName] = useState("");
+  const [usersTab, setUsersTab] = useState("users");
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logFilter, setLogFilter] = useState("");
 
   const u = st.userDoc;
+
+  useEffect(() => {
+    fetchCustomPositions().then(setCustomPos).catch(() => {});
+  }, []);
+
+  const loadLogs = async () => {
+    try {
+      setLogsLoading(true);
+      const data = await fetchAdminLogs(300);
+      setLogs(data);
+    } catch (e) { console.error(e); }
+    finally { setLogsLoading(false); }
+  };
+
+  useEffect(() => {
+    if (usersTab === "history") loadLogs();
+  }, [usersTab]);
+
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
 
+  const allPositions = [...DEFAULT_POSITION_LIST.map(p => p.position), ...customPos];
+  const allUsrs = st.users || [];
+
   const qn = q.trim().toLowerCase();
-  const filtered = st.users.filter(x => {
-    const hay = `${x.displayName || ""} ${x.email || ""} ${x.school || ""} ${x.subject || ""}`.toLowerCase();
+  const afterSearch = allUsrs.filter(x => {
+    const hay = `${x.displayName || ""} ${x.email || ""} ${x.position || ""} ${x.school || ""} ${x.subject || ""}`.toLowerCase();
     return hay.includes(qn);
   });
+  let filtered = groupFilter ? afterSearch.filter(x => getStaffGroup(x.email, x.position) === groupFilter) : afterSearch;
+  if (posFilter) filtered = filtered.filter(x => (x.position || "") === posFilter);
+
+  const groupCounts = {};
+  STAFF_GROUPS.forEach(g => { groupCounts[g.key] = 0; });
+  allUsrs.forEach(x => { const g = getStaffGroup(x.email, x.position); groupCounts[g] = (groupCounts[g] || 0) + 1; });
+
+  // Position counts for sub-filter
+  const posCounts = {};
+  const afterGroupFilter = groupFilter ? afterSearch.filter(x => getStaffGroup(x.email, x.position) === groupFilter) : afterSearch;
+  afterGroupFilter.forEach(x => { const p = x.position || ""; posCounts[p] = (posCounts[p] || 0) + 1; });
+  const uniquePositions = Object.keys(posCounts).filter(p => p).sort();
 
   async function setR(uid, role) {
     try {
       setState({ loading: true });
+      const target = allUsrs.find(x => x.uid === uid);
+      const oldRole = target?.role || "";
       await setRole(uid, role);
+      await logAdminAction({ action: "role_change", targetUid: uid, targetName: target?.displayName || target?.email || uid, details: `${oldRole} → ${role}` });
       toast(t("roleUpdated"), "ok");
       const users = await fetchUsersAll();
       setState({ users });
     } catch (e) {
       console.error(e);
-      toast(e?.message || "Ошибка", "error");
+      toast(e?.message || "Error", "error");
+    } finally { setState({ loading: false }); }
+  }
+
+  async function assignPos(uid, pos) {
+    try {
+      setState({ loading: true });
+      const target = allUsrs.find(x => x.uid === uid);
+      const oldPos = target?.position || "—";
+      await setPosition(uid, pos);
+      await logAdminAction({ action: "position_change", targetUid: uid, targetName: target?.displayName || target?.email || uid, details: `${oldPos} → ${pos || "—"}` });
+      toast(t("positionUpdated"), "ok");
+      const users = await fetchUsersAll();
+      setState({ users });
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || "Error", "error");
     } finally { setState({ loading: false }); }
   }
 
   async function doDelete(uid) {
     try {
       setDeleting(true);
+      const target = allUsrs.find(x => x.uid === uid);
+      const targetName = target?.displayName || target?.email || uid;
+      const targetPos = target?.position || "";
       await deleteUserAndData(uid);
+      await logAdminAction({ action: "user_delete", targetUid: uid, targetName, details: targetPos });
       const users = await fetchUsersAll();
       setState({ users });
       toast(t("accountDeleted"), "ok");
@@ -5516,15 +5788,35 @@ function PageAdminUsers() {
     } finally { setDeleting(false); }
   }
 
-  const onlineCount = filtered.filter(x => x.online === true).length;
-  const totalCount = filtered.length;
+  async function addCustomPos() {
+    const name = newPosName.trim();
+    if (!name) return;
+    if (allPositions.some(p => p.toLowerCase() === name.toLowerCase())) {
+      toast(t("positionExists"), "error"); return;
+    }
+    const updated = [...customPos, name];
+    await saveCustomPositions(updated);
+    setCustomPos(updated);
+    setNewPosName("");
+    toast(t("positionAdded"), "ok");
+  }
 
-  const delUser = confirmDelete ? st.users.find(x => x.uid === confirmDelete) : null;
+  async function removeCustomPos(name) {
+    const updated = customPos.filter(p => p !== name);
+    await saveCustomPositions(updated);
+    setCustomPos(updated);
+    toast(t("positionRemoved"), "ok");
+  }
+
+  const onlineCount = filtered.filter(x => x.online === true).length;
+  const delUser = confirmDelete ? allUsrs.find(x => x.uid === confirmDelete) : null;
+  const selUser = selectedUid ? allUsrs.find(x => x.uid === selectedUid) : null;
 
   return (
     <>
+      {/* Delete confirmation modal */}
       {confirmDelete && (
-        <div className="modal-backdrop" onClick={() => setConfirmDelete(null)}>
+        <div className="modalback" onClick={() => setConfirmDelete(null)}>
           <div className="modal glass" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
             <div className="h2" style={{ marginBottom: 12 }}>{t("deleteAccount")}</div>
             <p className="p" style={{ marginBottom: 16 }}>
@@ -5534,78 +5826,290 @@ function PageAdminUsers() {
             <div style={{ display: "flex", gap: 8 }}>
               <Btn onClick={() => setConfirmDelete(null)}>{t("cancel")}</Btn>
               <Btn kind="primary" style={{ background: "var(--red, #ef4444)" }} onClick={() => doDelete(confirmDelete)} disabled={deleting}>
-                {deleting ? t("deleting") : `✕ ${t("delete")}`}
+                {deleting ? t("deleting") : `\u2715 ${t("delete")}`}
               </Btn>
             </div>
           </div>
         </div>
       )}
 
-      <div className="glass card">
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-          <div className="h1" style={{ margin: 0 }}>{t("usersTitle")}</div>
+      {/* Page header */}
+      <div className="glass card" style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
+          <div style={{ flex: 1 }}>
+            <div className="h1" style={{ margin: 0 }}>{t("usersTitle")}</div>
+            <div className="muted" style={{ fontSize: 13 }}>{t("usersDesc")}</div>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
             <span className="online-dot" />
             <span style={{ color: "var(--green, #22c55e)" }}>{onlineCount} online</span>
-            <span className="muted">/ {totalCount}</span>
+            <span className="muted">/ {filtered.length}</span>
           </div>
         </div>
-        <p className="p">{t("usersDesc")}</p>
-        <div className="sep"></div>
-
-        <div className="grid2">
-          <div>
-            <div className="label">{t("search")}</div>
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("searchPlaceholder")} />
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
-            <Btn onClick={async () => { const users = await fetchUsersAll(); setState({ users }); toast(t("updated"), "ok"); }}>{t("refresh")}</Btn>
-          </div>
-        </div>
-
-        <div className="sep"></div>
-
-        {!filtered.length && <p className="p muted" style={{ padding: "12px 0" }}>{t("noResults")}</p>}
-        <div className="mobile-cards">
-          {filtered.map(x => (
-            <div key={x.uid} className="mobile-card glass">
-              <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("nameEmail")}</span>
-                <span className="mobile-card__val">
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {x.online && <span className="online-dot" title="Онлайн" />}
-                    <b>{x.displayName || "—"}</b>
-                  </div>
-                  <div className="muted tiny">{x.email}</div>
-                </span>
-              </div>
-              <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("schoolSubject")}</span>
-                <span className="mobile-card__val">{x.school || "—"} · <span className="muted">{x.subject || "—"}</span></span>
-              </div>
-              <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("ptsRoleComp")}</span>
-                <span className="mobile-card__val">
-                  <b>{fmtPoints(x.totalPoints)}</b> pts ·{" "}
-                  <Pill kind={x.role === "admin" ? "pending" : "approved"}>{x.role}</Pill>
-                  {(x.compDays || 0) > 0 && <span className="muted tiny" style={{ marginLeft: 6 }}>🏖 {x.compDays} {t("compShort")}</span>}
-                </span>
-              </div>
-              <div className="mobile-card__actions">
-                <Btn onClick={() => setR(x.uid, "teacher")} disabled={st.loading}>teacher</Btn>
-                <Btn onClick={() => setR(x.uid, "admin")} disabled={st.loading}>admin</Btn>
-                <Btn kind="primary" onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })}>{t("profileBtn")}</Btn>
-                {x.uid !== u.uid && (
-                  <Btn style={{ background: "rgba(239,68,68,.12)", color: "var(--red,#ef4444)", border: "1px solid rgba(239,68,68,.3)" }} onClick={() => setConfirmDelete(x.uid || x.id)}>✕ {t("delete")}</Btn>
-                )}
-              </div>
-            </div>
-          ))}
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <Btn kind={usersTab === "users" ? "primary" : "ghost"} onClick={() => setUsersTab("users")}>{t("usersTabUsers")}</Btn>
+          <Btn kind={usersTab === "history" ? "primary" : "ghost"} onClick={() => setUsersTab("history")}>{t("usersTabHistory")} ({logs.length})</Btn>
         </div>
       </div>
+
+      {/* ===== Two-panel layout ===== */}
+      {usersTab === "users" && <div className="admin-users-layout">
+
+        {/* LEFT: Position Assignment */}
+        <div className="admin-users-left">
+          <div className="glass card" style={{ position: "sticky", top: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(135,188,46,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon name="briefcase" />
+              </div>
+              <div className="h2" style={{ margin: 0, flex: 1 }}>{t("assignPosition")}</div>
+            </div>
+
+            {/* Selected user or placeholder */}
+            {selUser ? (
+              <div className="admin-users-selected">
+                {selUser.avatarUrl ? (
+                  <img src={selUser.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(135,188,46,.15)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
+                    {(selUser.displayName || selUser.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <b style={{ fontSize: 14 }}>{selUser.displayName || selUser.email}</b>
+                  {selUser.position && <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>{selUser.position}</div>}
+                </div>
+                <button className="iconbtn" onClick={() => setSelectedUid(null)} title={t("cancel")}><Icon name="x" /></button>
+              </div>
+            ) : (
+              <div className="admin-users-placeholder">
+                <Icon name="user" />
+                <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{t("selectUserHint")}</div>
+              </div>
+            )}
+
+            {/* Position list grouped */}
+            <div style={{ maxHeight: "calc(100vh - 420px)", overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
+              {STAFF_GROUPS.map(g => {
+                const gPos = DEFAULT_POSITION_LIST.filter(p => p.group === g.key);
+                const cPos = g.key === "teacher" ? customPos : [];
+                if (!gPos.length && !cPos.length) return null;
+                const grpColor = g.key === "admin" ? "#6366f1" : g.key === "support" ? "#06b6d4" : "var(--accent)";
+                return (
+                  <div key={g.key}>
+                    <div className="pos-group-label" style={{ color: grpColor }}>{g.label}</div>
+                    {gPos.map(p => {
+                      const active = selUser?.position === p.position;
+                      const cnt = allUsrs.filter(x => x.position === p.position).length;
+                      return (
+                        <div key={p.position} className={`pos-item${active ? " active" : ""}${!selUser ? " disabled" : ""}`} onClick={() => selUser && assignPos(selUser.uid, p.position)}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {active && <Icon name="check" />}
+                            <span>{p.position}</span>
+                          </div>
+                          {cnt > 0 && <span className="tiny muted">{cnt}</span>}
+                        </div>
+                      );
+                    })}
+                    {cPos.map(p => {
+                      const active = selUser?.position === p;
+                      const cnt = allUsrs.filter(x => x.position === p).length;
+                      return (
+                        <div key={p} className={`pos-item${active ? " active" : ""}${!selUser ? " disabled" : ""}`} style={{ paddingRight: 4 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }} onClick={() => selUser && assignPos(selUser.uid, p)}>
+                            {active && <Icon name="check" />}
+                            <span>{p}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            {cnt > 0 && <span className="tiny muted">{cnt}</span>}
+                            <button className="iconbtn" onClick={(e) => { e.stopPropagation(); removeCustomPos(p); }} style={{ color: "var(--red, #ef4444)", width: 22, height: 22 }}><Icon name="x" /></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+
+              {/* Clear position */}
+              {selUser && selUser.position && (
+                <div className="pos-item" style={{ color: "var(--red, #ef4444)", marginTop: 8 }} onClick={() => assignPos(selUser.uid, "")}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <Icon name="x" />
+                    <span>{t("noPosition")}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Add custom position */}
+            <div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 12 }}>
+              <div className="label" style={{ fontSize: 12, marginBottom: 6 }}>{t("addPosition")}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input className="input" style={{ flex: 1 }} placeholder={t("positionName")} value={newPosName} onChange={e => setNewPosName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomPos(); }} />
+                <Btn kind="primary" onClick={addCustomPos} disabled={!newPosName.trim()}><Icon name="plus" /></Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: Employees */}
+        <div className="admin-users-right">
+          {/* Filters */}
+          <div className="glass card" style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <Input value={q} onChange={e => setQ(e.target.value)} placeholder={t("searchPlaceholder")} />
+              </div>
+              <Btn onClick={async () => { const users = await fetchUsersAll(); setState({ users }); toast(t("updated"), "ok"); }} style={{ flexShrink: 0 }}><Icon name="refresh" /></Btn>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <Btn kind={groupFilter === "" ? "primary" : "ghost"} onClick={() => { setGroupFilter(""); setPosFilter(""); }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 8 }}>
+                {t("allStaff")} ({allUsrs.length})
+              </Btn>
+              {STAFF_GROUPS.map(g => (
+                <Btn key={g.key} kind={groupFilter === g.key ? "primary" : "ghost"} onClick={() => { setGroupFilter(groupFilter === g.key ? "" : g.key); setPosFilter(""); }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 8 }}>
+                  {g.label} ({groupCounts[g.key] || 0})
+                </Btn>
+              ))}
+            </div>
+            {uniquePositions.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <select className="input" style={{ width: "auto", minWidth: 240, maxWidth: "100%", fontSize: 13 }} value={posFilter} onChange={e => setPosFilter(e.target.value)}>
+                  <option value="">{t("allStaff")} ({afterGroupFilter.length})</option>
+                  {STAFF_GROUPS.map(g => {
+                    const gPositions = uniquePositions.filter(p => {
+                      const pg = POSITION_GROUP_MAP[p.toLowerCase()];
+                      return pg ? pg === g.key : g.key === "teacher";
+                    });
+                    if (!gPositions.length) return null;
+                    return (
+                      <optgroup key={g.key} label={`${g.label} (${gPositions.reduce((s, p) => s + (posCounts[p] || 0), 0)})`}>
+                        {gPositions.map(p => (
+                          <option key={p} value={p}>{p} ({posCounts[p] || 0})</option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Employee cards */}
+          {!filtered.length && <div className="glass card"><p className="p muted" style={{ padding: "12px 0", textAlign: "center" }}>{t("noResults")}</p></div>}
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+            {filtered.map(x => {
+              const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+              const grp = getStaffGroup(x.email, x.position);
+              const grpColor = grp === "admin" ? "#6366f1" : grp === "support" ? "#06b6d4" : "var(--accent)";
+              const isSel = selectedUid === x.uid;
+              return (
+                <div key={x.uid} className="glass" style={{ borderRadius: 14, padding: "14px 16px", borderLeft: `4px solid ${grpColor}`, transition: "all .2s", outline: isSel ? "2px solid var(--accent)" : "none", outlineOffset: -1 }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
+                    {x.avatarUrl ? (
+                      <img src={x.avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--border)" }} />
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${grpColor}18`, color: grpColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, border: `2px solid ${grpColor}30`, flexShrink: 0 }}>{initials}</div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {x.online && <span className="online-dot" />}
+                        <b style={{ fontSize: 14 }}>{x.displayName || "\u2014"}</b>
+                      </div>
+                      <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.email}</div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: 18, color: "var(--accent)" }}>{fmtPoints(x.totalPoints)}</div>
+                      <div className="tiny muted">pts</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                    <Pill kind={x.role === "admin" ? "pending" : "approved"}>{x.role}</Pill>
+                    {x.position && <Pill kind="approved" style={{ background: `${grpColor}12`, color: grpColor, border: `1px solid ${grpColor}30` }}>{x.position}</Pill>}
+                    {(x.compDays || 0) > 0 && <Pill kind="approved">{x.compDays} {t("compShort")}</Pill>}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <Btn onClick={() => setR(x.uid, x.role === "admin" ? "teacher" : "admin")} disabled={st.loading} style={{ fontSize: 12, padding: "5px 10px" }}>
+                      {x.role === "admin" ? "\u2192 teacher" : "\u2192 admin"}
+                    </Btn>
+                    <Btn kind={isSel ? "primary" : undefined} onClick={() => setSelectedUid(isSel ? null : x.uid)} style={{ fontSize: 12, padding: "5px 10px" }}>
+                      <Icon name="briefcase" /> {t("position")}
+                    </Btn>
+                    <Btn kind="primary" onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })} style={{ fontSize: 12, padding: "5px 10px" }}>
+                      {t("profileBtn")}
+                    </Btn>
+                    {x.uid !== u.uid && (
+                      <Btn style={{ fontSize: 12, padding: "5px 10px", background: "rgba(239,68,68,.06)", color: "var(--red,#ef4444)", border: "1px solid rgba(239,68,68,.15)" }} onClick={() => setConfirmDelete(x.uid || x.id)}>
+                        <Icon name="x" />
+                      </Btn>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>}
+
+      {/* ===== History tab ===== */}
+      {usersTab === "history" && (
+        <div className="glass card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+            <div className="h2">{t("historyTitle")}</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select className="input" style={{ width: "auto", minWidth: 180, fontSize: 13 }} value={logFilter} onChange={e => setLogFilter(e.target.value)}>
+                <option value="">{t("actionAll")}</option>
+                <option value="role_change">{t("actionRoleChange")}</option>
+                <option value="position_change">{t("actionPositionChange")}</option>
+                <option value="user_delete">{t("actionUserDelete")}</option>
+              </select>
+              <Btn onClick={loadLogs} disabled={logsLoading}><Icon name="refresh" /></Btn>
+            </div>
+          </div>
+          {logsLoading ? (
+            <div style={{ textAlign: "center", padding: 24 }}><LoadingScreen /></div>
+          ) : (() => {
+            const filteredLogs = logFilter ? logs.filter(l => l.action === logFilter) : logs;
+            return filteredLogs.length === 0 ? (
+              <div style={{ textAlign: "center", color: "var(--muted)", padding: 24 }}>{t("noLogs")}</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {filteredLogs.map(l => {
+                  const dateStr = l.createdAt ? new Date(l.createdAt.seconds * 1000).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "\u2014";
+                  const actionLabel = l.action === "role_change" ? t("actionRoleChange") : l.action === "position_change" ? t("actionPositionChange") : l.action === "user_delete" ? t("actionUserDelete") : l.action;
+                  const actionColor = l.action === "user_delete" ? "rejected" : l.action === "role_change" ? "pending" : "approved";
+                  const initials = (l.targetName || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <div key={l.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: l.action === "user_delete" ? "rgba(239,68,68,.1)" : "rgba(135,188,46,.1)", color: l.action === "user_delete" ? "var(--red, #ef4444)" : "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>{initials}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 2 }}>
+                          <b style={{ fontSize: 14 }}>{l.targetName}</b>
+                          <Pill kind={actionColor}>{actionLabel}</Pill>
+                        </div>
+                        {l.details && <div style={{ fontSize: 13, color: "var(--muted)" }}>{l.details}</div>}
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
+                          <span className="tiny muted">{t("adminLabel")}: {l.adminName}</span>
+                          <span className="tiny muted">{dateStr}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
     </>
   );
 }
+
 
 
 function PageAdminTeacher() {

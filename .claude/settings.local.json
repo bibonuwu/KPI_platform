@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(node -e \":*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(git stash:*)",
+      "Bash(npx -y esbuild src/main.jsx --bundle --jsx=automatic --outfile=/dev/null)"
     ]
   }
 }
