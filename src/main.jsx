@@ -2,6 +2,7 @@ console.log("[KPI] main.jsx loaded");
 try { const el = document.getElementById("boot-status"); if (el) { el.textContent = "JS: loaded"; el.dataset.kind = "ok"; } } catch (e) { }
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import "./styles.css";
 import { t, getLang, setLang } from "./i18n.js";
 
@@ -5685,6 +5686,7 @@ function PageAdminUsers() {
   const [q, setQ] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirmRole, setConfirmRole] = useState(null);
   const [groupFilter, setGroupFilter] = useState("");
   const [posFilter, setPosFilter] = useState("");
   const [selectedUid, setSelectedUid] = useState(null);
@@ -5694,6 +5696,8 @@ function PageAdminUsers() {
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logFilter, setLogFilter] = useState("");
+  const [sortCol, setSortCol] = useState("");
+  const [sortDir, setSortDir] = useState("asc");
 
   const u = st.userDoc;
 
@@ -5808,14 +5812,44 @@ function PageAdminUsers() {
     toast(t("positionRemoved"), "ok");
   }
 
+  function toggleSort(col) {
+    if (sortCol === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortCol) return 0;
+    const dir = sortDir === "asc" ? 1 : -1;
+    if (sortCol === "name") {
+      return dir * (a.displayName || "").localeCompare(b.displayName || "", "ru");
+    }
+    if (sortCol === "email") {
+      return dir * (a.email || "").localeCompare(b.email || "", "ru");
+    }
+    if (sortCol === "position") {
+      return dir * (a.position || "").localeCompare(b.position || "", "ru");
+    }
+    if (sortCol === "role") {
+      return dir * (a.role || "").localeCompare(b.role || "", "ru");
+    }
+    if (sortCol === "points") {
+      return dir * ((Number(a.totalPoints) || 0) - (Number(b.totalPoints) || 0));
+    }
+    return 0;
+  });
+
   const onlineCount = filtered.filter(x => x.online === true).length;
   const delUser = confirmDelete ? allUsrs.find(x => x.uid === confirmDelete) : null;
   const selUser = selectedUid ? allUsrs.find(x => x.uid === selectedUid) : null;
 
   return (
     <>
-      {/* Delete confirmation modal */}
-      {confirmDelete && (
+      {/* Delete confirmation modal (portal to body) */}
+      {confirmDelete && createPortal(
         <div className="modalback" onClick={() => setConfirmDelete(null)}>
           <div className="modal glass" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
             <div className="h2" style={{ marginBottom: 12 }}>{t("deleteAccount")}</div>
@@ -5830,8 +5864,32 @@ function PageAdminUsers() {
               </Btn>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
+      {/* Role change confirmation modal (portal to body) */}
+      {confirmRole && createPortal((() => {
+        const crUser = allUsrs.find(x => x.uid === confirmRole.uid);
+        const newRole = confirmRole.newRole;
+        return (
+          <div className="modalback" onClick={() => setConfirmRole(null)}>
+            <div className="modal glass" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+              <div className="h2" style={{ marginBottom: 12 }}>{t("roleChangeTitle")}</div>
+              <p className="p" style={{ marginBottom: 16 }}>
+                <b>{crUser?.displayName || crUser?.email || confirmRole.uid}</b><br />
+                <span style={{ fontSize: 13 }}>{t("roleChangeConfirm")} <b style={{ color: newRole === "admin" ? "#6366f1" : "var(--accent)" }}>{newRole}</b>?</span>
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn onClick={() => setConfirmRole(null)}>{t("cancel")}</Btn>
+                <Btn kind="primary" onClick={() => { setR(confirmRole.uid, newRole); setConfirmRole(null); }} disabled={st.loading}>
+                  {t("confirm")}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
 
       {/* Page header */}
       <div className="glass card" style={{ marginBottom: 20 }}>
@@ -5997,62 +6055,87 @@ function PageAdminUsers() {
             )}
           </div>
 
-          {/* Employee cards */}
+          {/* Employee table (Excel-style) */}
           {!filtered.length && <div className="glass card"><p className="p muted" style={{ padding: "12px 0", textAlign: "center" }}>{t("noResults")}</p></div>}
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
-            {filtered.map(x => {
-              const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-              const grp = getStaffGroup(x.email, x.position);
-              const grpColor = grp === "admin" ? "#6366f1" : grp === "support" ? "#06b6d4" : "var(--accent)";
-              const isSel = selectedUid === x.uid;
-              return (
-                <div key={x.uid} className="glass" style={{ borderRadius: 14, padding: "14px 16px", borderLeft: `4px solid ${grpColor}`, transition: "all .2s", outline: isSel ? "2px solid var(--accent)" : "none", outlineOffset: -1 }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10 }}>
-                    {x.avatarUrl ? (
-                      <img src={x.avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "2px solid var(--border)" }} />
-                    ) : (
-                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${grpColor}18`, color: grpColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, border: `2px solid ${grpColor}30`, flexShrink: 0 }}>{initials}</div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {x.online && <span className="online-dot" />}
-                        <b style={{ fontSize: 14 }}>{x.displayName || "\u2014"}</b>
-                      </div>
-                      <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.email}</div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontWeight: 800, fontSize: 18, color: "var(--accent)" }}>{fmtPoints(x.totalPoints)}</div>
-                      <div className="tiny muted">pts</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                    <Pill kind={x.role === "admin" ? "pending" : "approved"}>{x.role}</Pill>
-                    {x.position && <Pill kind="approved" style={{ background: `${grpColor}12`, color: grpColor, border: `1px solid ${grpColor}30` }}>{x.position}</Pill>}
-                    {(x.compDays || 0) > 0 && <Pill kind="approved">{x.compDays} {t("compShort")}</Pill>}
-                  </div>
-
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <Btn onClick={() => setR(x.uid, x.role === "admin" ? "teacher" : "admin")} disabled={st.loading} style={{ fontSize: 12, padding: "5px 10px" }}>
-                      {x.role === "admin" ? "\u2192 teacher" : "\u2192 admin"}
-                    </Btn>
-                    <Btn kind={isSel ? "primary" : undefined} onClick={() => setSelectedUid(isSel ? null : x.uid)} style={{ fontSize: 12, padding: "5px 10px" }}>
-                      <Icon name="briefcase" /> {t("position")}
-                    </Btn>
-                    <Btn kind="primary" onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })} style={{ fontSize: 12, padding: "5px 10px" }}>
-                      {t("profileBtn")}
-                    </Btn>
-                    {x.uid !== u.uid && (
-                      <Btn style={{ fontSize: 12, padding: "5px 10px", background: "rgba(239,68,68,.06)", color: "var(--red,#ef4444)", border: "1px solid rgba(239,68,68,.15)" }} onClick={() => setConfirmDelete(x.uid || x.id)}>
-                        <Icon name="x" />
-                      </Btn>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {filtered.length > 0 && (
+            <div className="excel-table-wrap glass">
+              <table className="excel-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 44 }}>#</th>
+                    {[
+                      { key: "name", label: t("colName") },
+                      { key: "email", label: t("colEmail") },
+                      { key: "position", label: t("colPosition") },
+                      { key: "role", label: t("colRole") },
+                      { key: "points", label: t("colPoints"), style: { width: 80, textAlign: "right" } },
+                    ].map(col => (
+                      <th key={col.key} className="excel-th-sort" style={col.style || {}} onClick={() => toggleSort(col.key)}>
+                        <span>{col.label}</span>
+                        <span className="excel-sort-icon">{sortCol === col.key ? (sortDir === "asc" ? "\u25B2" : "\u25BC") : "\u25B4\u25BE"}</span>
+                      </th>
+                    ))}
+                    <th style={{ width: 120, textAlign: "center" }}>{t("colActions")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((x, idx) => {
+                    const grp = getStaffGroup(x.email, x.position);
+                    const grpColor = grp === "admin" ? "#6366f1" : grp === "support" ? "#06b6d4" : "var(--accent)";
+                    const isSel = selectedUid === x.uid;
+                    const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                    return (
+                      <tr key={x.uid} className={isSel ? "excel-row-selected" : ""} style={{ borderLeft: `3px solid ${grpColor}` }}>
+                        <td className="excel-cell-num">{idx + 1}</td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            {x.avatarUrl ? (
+                              <img src={x.avatarUrl} alt="" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                            ) : (
+                              <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${grpColor}18`, color: grpColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{initials}</div>
+                            )}
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                {x.online && <span className="online-dot" />}
+                                <b style={{ fontSize: 13 }}>{x.displayName || "\u2014"}</b>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td><span className="muted" style={{ fontSize: 12 }}>{x.email}</span></td>
+                        <td>
+                          {x.position ? (
+                            <span className="excel-pos-pill" style={{ background: `${grpColor}12`, color: grpColor, borderColor: `${grpColor}30` }}>{x.position}</span>
+                          ) : <span className="muted" style={{ fontSize: 12 }}>{"\u2014"}</span>}
+                        </td>
+                        <td><Pill kind={x.role === "admin" ? "pending" : "approved"} style={{ fontSize: 11 }}>{x.role}</Pill></td>
+                        <td style={{ textAlign: "right", fontWeight: 700, color: "var(--accent)", fontSize: 14 }}>{fmtPoints(x.totalPoints)}</td>
+                        <td>
+                          <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                            <button className="excel-action-btn" title={x.role === "admin" ? "\u2192 teacher" : "\u2192 admin"} onClick={() => setConfirmRole({ uid: x.uid, newRole: x.role === "admin" ? "teacher" : "admin" })} disabled={st.loading}>
+                              <Icon name="refresh" />
+                            </button>
+                            <button className={`excel-action-btn${isSel ? " active" : ""}`} title={t("position")} onClick={() => setSelectedUid(isSel ? null : x.uid)}>
+                              <Icon name="briefcase" />
+                            </button>
+                            <button className="excel-action-btn" title={t("profileBtn")} onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })}>
+                              <Icon name="user" />
+                            </button>
+                            {x.uid !== u.uid && (
+                              <button className="excel-action-btn excel-action-del" title={t("delete")} onClick={() => setConfirmDelete(x.uid || x.id)}>
+                                <Icon name="x" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>}
 
