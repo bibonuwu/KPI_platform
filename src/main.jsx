@@ -625,6 +625,12 @@ async function addType(p) {
 async function toggleType(id, active) {
   await updateDoc(doc(db, "types", id), { active: !!active });
 }
+async function deleteTypeDoc(id) {
+  await deleteDoc(doc(db, "types", id));
+}
+async function updateType(id, data) {
+  await updateDoc(doc(db, "types", id), data);
+}
 
 async function fetchUsersAll() {
   const qy = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(2000));
@@ -2210,8 +2216,85 @@ function StackedBarChart({ data, labels }) {
   );
 }
 
+/** ---------- Document Download Helpers ---------- */
+function generateDocHTML(request, user, signatureUrl, adminSignatureUrl) {
+  const now = new Date();
+  const dateStr = `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
+  const docNum = (request.id || "").slice(-6).toUpperCase();
+  const days = request.days || dateRangeDays(request.dateFrom, request.dateTo);
+  const kindLabel = request.kindLabel || requestKindLabel(request.kind);
+  const statusText = request.status === "approved" ? t("dpApproved") : request.status === "rejected" ? t("dpRejected") : t("dpPending");
+  const period = `${request.dateFrom}${request.dateTo && request.dateTo !== request.dateFrom ? " — " + request.dateTo : ""}`;
+
+  const sigBlock = (url, label, name) => url
+    ? `<div style="text-align:center"><img src="${url}" style="max-width:160px;height:50px;object-fit:contain"/><div style="font-size:11px;color:#888">${label}</div>${name ? `<div style="font-size:12px">${name}</div>` : ""}</div>`
+    : `<div style="text-align:center"><div style="width:160px;border-bottom:1px solid #333;margin:0 auto 4px"></div><div style="font-size:11px;color:#888">${label}</div>${name ? `<div style="font-size:12px">${name}</div>` : ""}</div>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${t("statement")} - ${docNum}</title>
+<style>
+  @page { margin: 20mm; }
+  body { font-family: 'Times New Roman', serif; font-size: 14px; color: #1a1d2e; line-height: 1.6; max-width: 700px; margin: 0 auto; padding: 40px 20px; }
+  .header { text-align: center; margin-bottom: 24px; }
+  .logo { width: 60px; height: 60px; margin: 0 auto 8px; }
+  .org { font-size: 15px; font-weight: bold; }
+  .sub { font-size: 12px; color: #666; margin-top: 4px; }
+  .regnum { text-align: right; font-size: 12px; color: #888; margin-bottom: 8px; }
+  .title { text-align: center; font-size: 20px; font-weight: bold; margin: 20px 0; text-transform: uppercase; }
+  .field { margin-bottom: 8px; }
+  .field-label { font-weight: bold; }
+  .signatures { display: flex; justify-content: space-between; margin-top: 40px; }
+  .sig-block { width: 45%; }
+  .date-line { margin-top: 24px; font-size: 13px; color: #666; }
+  .stamp { position: absolute; right: 60px; bottom: 120px; border: 3px solid rgba(135,188,46,.4); border-radius: 50%; width: 100px; height: 100px; display: flex; align-items: center; justify-content: center; transform: rotate(-15deg); color: rgba(135,188,46,.6); font-weight: bold; font-size: 13px; text-align: center; }
+</style></head><body>
+  <div class="regnum">No. ${docNum}</div>
+  <div class="header">
+    <div class="org">${t("nisOrg")}</div>
+    <div class="sub">${t("toSchoolPrincipal")}</div>
+  </div>
+  <div class="title">${t("statement")}</div>
+  <div class="field"><span class="field-label">${t("fromWhom")}:</span> ${user.displayName || user.email || "—"}</div>
+  <div class="field"><span class="field-label">${t("positionLabel")}:</span> ${user.position || user.subject || "—"}</div>
+  ${user.school ? `<div class="field"><span class="field-label">${t("schoolLabel")}:</span> ${user.school}</div>` : ""}
+  <div class="field"><span class="field-label">${t("requestTypeLabel")}:</span> <b>${kindLabel}</b></div>
+  <div class="field"><span class="field-label">${t("periodLabel")}:</span> ${period}</div>
+  ${request.note ? `<div class="field"><span class="field-label">${t("reasonLabel")}:</span> ${request.note}</div>` : ""}
+  <div class="field"><span class="field-label">${t("daysCount")}:</span> ${days}</div>
+  <div class="field"><span class="field-label">${t("statusLabel")}:</span> ${statusText}</div>
+  <div class="signatures">
+    ${sigBlock(signatureUrl, t("employeeSign"), user.displayName || "")}
+    ${sigBlock(adminSignatureUrl, t("directorSign"), "")}
+  </div>
+  <div class="date-line">${t("date")}: ${dateStr}</div>
+</body></html>`;
+}
+
+function downloadDocAsWord(request, user, signatureUrl, adminSignatureUrl) {
+  const html = generateDocHTML(request, user, signatureUrl, adminSignatureUrl);
+  const wordHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">${html.slice(html.indexOf("<head>"))}`;
+  const blob = new Blob(["\ufeff", wordHtml], { type: "application/msword" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${t("statement")}_${(request.id || "doc").slice(-6).toUpperCase()}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadDocAsPdf(request, user, signatureUrl, adminSignatureUrl) {
+  const html = generateDocHTML(request, user, signatureUrl, adminSignatureUrl);
+  const win = window.open("", "_blank");
+  if (!win) { toast(t("error"), "error"); return; }
+  win.document.write(html);
+  win.document.close();
+  win.onafterprint = () => win.close();
+  setTimeout(() => win.print(), 300);
+}
+
 /** ---------- DocumentPreview ---------- */
-function DocumentPreview({ request, user, signatureUrl, adminSignatureUrl, onPrint }) {
+function DocumentPreview({ request, user, signatureUrl, adminSignatureUrl, onPrint, showDownload }) {
   if (!request || !user) return null;
   const now = new Date();
   const dateStr = `${String(now.getDate()).padStart(2, "0")}.${String(now.getMonth() + 1).padStart(2, "0")}.${now.getFullYear()}`;
@@ -2295,9 +2378,19 @@ function DocumentPreview({ request, user, signatureUrl, adminSignatureUrl, onPri
         </div>
       )}
 
-      {onPrint && (
-        <div style={{ marginTop: 20, textAlign: "center" }} className="doc-preview__actions">
-          <Btn kind="primary" onClick={onPrint}><Icon name="file" /> {t("preview")}</Btn>
+      {(onPrint || showDownload) && (
+        <div style={{ marginTop: 20, textAlign: "center", display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }} className="doc-preview__actions">
+          {onPrint && <Btn kind="primary" onClick={onPrint}><Icon name="file" /> {t("preview")}</Btn>}
+          {showDownload && (
+            <>
+              <Btn kind="ghost" onClick={() => downloadDocAsWord(request, user, signatureUrl, adminSignatureUrl)}>
+                <Icon name="file" /> {t("downloadWord")}
+              </Btn>
+              <Btn kind="ghost" onClick={() => downloadDocAsPdf(request, user, signatureUrl, adminSignatureUrl)}>
+                <Icon name="file" /> {t("downloadPdf")}
+              </Btn>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -3193,28 +3286,101 @@ function PageProfile() {
     </button>
   );
 
+  const LevelRing = ({ pct, size = 72, stroke = 5 }) => {
+    const r = (size - stroke) / 2;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (circ * Math.min(pct, 100)) / 100;
+    return (
+      <svg width={size} height={size} className="prof-level-ring">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#profGrad)" strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)" }}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        <defs><linearGradient id="profGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="var(--accent)" /><stop offset="100%" stopColor="var(--accent2)" /></linearGradient></defs>
+      </svg>
+    );
+  };
+
   return (
     <div className="prof">
-      {/* Hero card */}
+      {/* ══ Modern Hero Card ══ */}
       <div className="prof-hero glass card" style={{ "--di": 0 }}>
-        <div className="prof-hero__bg" />
+        <div className="prof-hero__banner" />
         <div className="prof-hero__content">
+          {/* Avatar with upload */}
           <div className="prof-hero__avatar-wrap" onClick={() => document.getElementById("prof-avatar-input")?.click()}>
-            <div className="prof-hero__avatar">
-              {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : <span>{(u.displayName || u.email || "?").slice(0, 1).toUpperCase()}</span>}
+            <div className="prof-hero__avatar-ring">
+              <div className="prof-hero__avatar">
+                {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : <span>{(u.displayName || u.email || "?").slice(0, 1).toUpperCase()}</span>}
+              </div>
             </div>
             <div className="prof-hero__avatar-overlay"><Icon name="file" /></div>
             <input id="prof-avatar-input" hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
+            <div className="prof-hero__badge-role">{u.role === "admin" ? "A" : "T"}</div>
           </div>
+
+          {/* Info block */}
           <div className="prof-hero__info">
             <div className="prof-hero__name">{u.displayName || t("unnamed")}</div>
-            <div className="prof-hero__role">
-              <Pill kind="approved">{u.role === "admin" ? "Admin" : "Teacher"}</Pill>
-              <Pill kind="pending">{lvl.name}</Pill>
+            <div className="prof-hero__tags">
+              <span className="prof-tag prof-tag--role">{u.role === "admin" ? "Admin" : "Teacher"}</span>
+              <span className="prof-tag prof-tag--level">{lvl.name}</span>
+              {u.position && <span className="prof-tag">{u.position}</span>}
             </div>
-            <div className="prof-hero__meta">{u.email}</div>
-            {(u.school || u.subject) && (
-              <div className="prof-hero__meta">{[u.school, u.subject].filter(Boolean).join(" · ")}</div>
+            <div className="prof-hero__meta-row">
+              <span className="prof-hero__meta-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2"/><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2"/></svg>
+                {u.email}
+              </span>
+              {u.school && (
+                <span className="prof-hero__meta-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2"/></svg>
+                  {u.school}
+                </span>
+              )}
+              {u.subject && (
+                <span className="prof-hero__meta-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2"/></svg>
+                  {u.subject}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Level ring + actions */}
+          <div className="prof-hero__right">
+            <div className="prof-hero__level-wrap">
+              <LevelRing pct={lvl.pct} />
+              <div className="prof-hero__level-inner">
+                <div className="prof-hero__level-pts">{fmtPoints(u.totalPoints)}</div>
+                <div className="prof-hero__level-label">{t("points")}</div>
+              </div>
+            </div>
+            {lvl.next && <div className="prof-hero__level-hint">{nextPts} {t("profileNextLevel").toLowerCase()}</div>}
+          </div>
+        </div>
+
+        {/* Social links + quick actions */}
+        <div className="prof-hero__bottom">
+          <div className="prof-hero__social">
+            {u.instagram && (
+              <a href={`https://instagram.com/${u.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
+                Instagram
+              </a>
+            )}
+            {u.youtube && (
+              <a href={u.youtube} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--yt">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                YouTube
+              </a>
+            )}
+            {u.phone && (
+              <a href={`tel:${u.phone}`} className="prof-social-btn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" strokeWidth="2" /></svg>
+                {u.phone}
+              </a>
             )}
           </div>
           <div className="prof-hero__actions">
@@ -3222,39 +3388,23 @@ function PageProfile() {
             <Btn onClick={() => navigate("rating")}><Icon name="rank" /> {t("navRating")}</Btn>
           </div>
         </div>
-
-        {/* Social links */}
-        <div className="prof-hero__social">
-          {u.instagram && (
-            <a href={`https://instagram.com/${u.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
-              Instagram
-            </a>
-          )}
-          {u.youtube && (
-            <a href={u.youtube} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--yt">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              YouTube
-            </a>
-          )}
-          {u.phone && (
-            <a href={`tel:${u.phone}`} className="prof-social-btn">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" strokeWidth="2" /></svg>
-              {u.phone}
-            </a>
-          )}
-        </div>
       </div>
 
-      {/* Stats row */}
+      {/* ══ Stats row ══ */}
       <div className="prof-stats">
         <div className="prof-stat glass card" style={{ "--di": 1 }}>
+          <div className="prof-stat__icon prof-stat__icon--green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
           <div className="prof-stat__num">{fmtPoints(u.totalPoints)}</div>
           <div className="prof-stat__label">{t("totalPoints")}</div>
           <div className="prof-stat__bar"><div className="prof-stat__fill" style={{ width: `${lvl.pct}%` }} /></div>
           {lvl.next && <div className="prof-stat__hint">{t("profileNextLevel")}: {nextPts}</div>}
         </div>
         <div className="prof-stat glass card" style={{ "--di": 2 }}>
+          <div className="prof-stat__icon prof-stat__icon--blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="2"/><path d="M14 2v6h6" stroke="currentColor" strokeWidth="2"/></svg>
+          </div>
           <div className="prof-stat__num">{subs.length}</div>
           <div className="prof-stat__label">{t("submissions")}</div>
           <div className="prof-stat__badges">
@@ -3264,18 +3414,24 @@ function PageProfile() {
           </div>
         </div>
         <div className="prof-stat glass card" style={{ "--di": 3 }}>
+          <div className="prof-stat__icon prof-stat__icon--amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
           <div className="prof-stat__num">{fmtPoints(approvedPts)}</div>
           <div className="prof-stat__label">{t("approvedPts")}</div>
-          <div className="prof-stat__hint">APR {aprPct}%</div>
+          <div className="prof-stat__hint">{t("profApprovalRate")}: {aprPct}%</div>
         </div>
         <div className="prof-stat glass card" style={{ "--di": 4 }}>
+          <div className="prof-stat__icon prof-stat__icon--purple">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          </div>
           <div className="prof-stat__num">{fmtPoints(u.compDays || 0)}</div>
           <div className="prof-stat__label">{t("compDays")}</div>
           <Btn kind="ghost" style={{ marginTop: 6, fontSize: 12 }} onClick={() => navigate("requests")}>{t("requests")}</Btn>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* ══ Tabs ══ */}
       <div className="prof-tabs">
         <TabBtn id="overview" icon="chart" label={t("profileOverview")} />
         <TabBtn id="settings" icon="user" label={t("profileEditInfo")} />
@@ -4173,6 +4329,7 @@ function PageRequests() {
               user={u}
               signatureUrl={u.signatureUrl}
               onPrint={() => window.print()}
+              showDownload
             />
           </div>
         </div>
@@ -4220,7 +4377,7 @@ function PageRequests() {
             <>
               <div className="sep" />
               <div className="h2">{t("preview")}</div>
-              <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} />
+              <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} showDownload />
             </>
           )}
         </div>
@@ -5354,7 +5511,7 @@ function getStaffPosition(email, position) {
 function PageAdminDocuments() {
   const st = useStore();
   // All hooks before any conditional returns
-  const [toUid, setToUid] = useState("");
+  const [toUids, setToUids] = useState([]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [requireSig, setRequireSig] = useState(false);
@@ -5363,6 +5520,7 @@ function PageAdminDocuments() {
   const [filterUid, setFilterUid] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [recipientQ, setRecipientQ] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
   const u = st.userDoc;
   if (!u) return <Guard />;
@@ -5376,28 +5534,32 @@ function PageAdminDocuments() {
   })).filter(g => g.users.length > 0);
   const docs = st.allDocuments || [];
 
-  const selectedUser = allUsers.find(x => x.uid === toUid);
+  const selectedUsers = allUsers.filter(x => toUids.includes(x.uid));
+  const toggleUid = (uid) => setToUids(prev => prev.includes(uid) ? prev.filter(id => id !== uid) : [...prev, uid]);
 
   const send = async () => {
-    if (!toUid || !title.trim() || !body.trim()) {
+    if (toUids.length === 0 || !title.trim() || !body.trim()) {
       toast(t("fillFields"), "error");
       return;
     }
     try {
       setSending(true);
-      await createDocument({
-        fromUid: u.uid,
-        toUid,
-        toEmail: selectedUser?.email || "",
-        toName: selectedUser?.displayName || selectedUser?.email || "",
-        title: title.trim(),
-        body: body.trim(),
-        requireSignature: requireSig
-      });
+      for (const uid of toUids) {
+        const rec = allUsers.find(x => x.uid === uid);
+        await createDocument({
+          fromUid: u.uid,
+          toUid: uid,
+          toEmail: rec?.email || "",
+          toName: rec?.displayName || rec?.email || "",
+          title: title.trim(),
+          body: body.trim(),
+          requireSignature: requireSig
+        });
+      }
       const fresh = await fetchAllDocuments();
       setState({ allDocuments: fresh });
-      toast(t("docSent"), "ok");
-      setToUid(""); setTitle(""); setBody(""); setRequireSig(false);
+      toast(t("docSent") + ` (${toUids.length})`, "ok");
+      setToUids([]); setTitle(""); setBody(""); setRequireSig(false);
     } catch (e) {
       toast(e?.message || t("error"), "error");
     } finally {
@@ -5449,25 +5611,27 @@ function PageAdminDocuments() {
                   <div className="h2" style={{ margin: 0, flex: 1 }}>{t("recipient")}</div>
                 </div>
 
-                {/* Selected user card */}
-                {selectedUser ? (
-                  <div className="admin-users-selected">
-                    {selectedUser.avatarUrl ? (
-                      <img src={selectedUser.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
-                    ) : (
-                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(135,188,46,.15)", color: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
-                        {(selectedUser.displayName || selectedUser.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                {/* Selected users chips */}
+                {selectedUsers.length > 0 ? (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                    {selectedUsers.map(su => (
+                      <div key={su.uid} style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(135,188,46,.12)", borderRadius: 20, padding: "3px 10px 3px 6px", fontSize: 12, fontWeight: 600, color: "var(--accent)" }}>
+                        {su.avatarUrl ? (
+                          <img src={su.avatarUrl} alt="" style={{ width: 20, height: 20, borderRadius: "50%", objectFit: "cover" }} />
+                        ) : (
+                          <div style={{ width: 20, height: 20, borderRadius: "50%", background: "rgba(135,188,46,.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 800 }}>
+                            {(su.displayName || su.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{su.displayName || su.email}</span>
+                        <button className="iconbtn" onClick={() => toggleUid(su.uid)} style={{ width: 16, height: 16, fontSize: 10, padding: 0 }}><Icon name="x" /></button>
                       </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <b style={{ fontSize: 14 }}>{selectedUser.displayName || selectedUser.email}</b>
-                      {selectedUser.position && <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>{selectedUser.position}</div>}
-                    </div>
-                    <button className="iconbtn" onClick={() => setToUid("")}><Icon name="x" /></button>
+                    ))}
+                    <button className="iconbtn" onClick={() => setToUids([])} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, color: "var(--muted)" }}>{t("clearAll")}</button>
                   </div>
                 ) : (
                   <div className="admin-users-placeholder">
-                    <div className="muted" style={{ fontSize: 13 }}>{t("selectRecipient")}</div>
+                    <div className="muted" style={{ fontSize: 13 }}>{t("selectRecipients")}</div>
                   </div>
                 )}
 
@@ -5488,14 +5652,29 @@ function PageAdminDocuments() {
                   {recipientGrouped.length === 0 && <div className="muted" style={{ textAlign: "center", padding: 12, fontSize: 13 }}>{t("noResults")}</div>}
                   {recipientGrouped.map(g => {
                     const grpColor = g.key === "admin" ? "#6366f1" : g.key === "support" ? "#06b6d4" : "var(--accent)";
+                    const isOpen = !collapsedGroups[g.key];
+                    const grpUids = g.users.map(x => x.uid);
+                    const allSel = grpUids.every(id => toUids.includes(id));
+                    const selCount = grpUids.filter(id => toUids.includes(id)).length;
                     return (
-                      <div key={g.key}>
-                        <div className="pos-group-label" style={{ color: grpColor }}>{g.label} ({g.users.length})</div>
+                      <div key={g.key} style={{ marginBottom: 4 }}>
+                        <div className="pos-group-label" style={{ color: grpColor, display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}
+                          onClick={() => setCollapsedGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }))}>
+                          <span style={{ transition: "transform .2s", transform: isOpen ? "rotate(0deg)" : "rotate(-90deg)", display: "inline-flex" }}>
+                            <Icon name="chevron" />
+                          </span>
+                          <span style={{ flex: 1 }}>{g.label} ({g.users.length}){selCount > 0 && <span style={{ fontSize: 11, opacity: .7 }}> — {selCount} {t("selected") || "selected"}</span>}</span>
+                          <button className="iconbtn" style={{ fontSize: 10, padding: "1px 6px", borderRadius: 6, color: grpColor, opacity: .7 }}
+                            onClick={(e) => { e.stopPropagation(); setToUids(prev => allSel ? prev.filter(id => !grpUids.includes(id)) : [...new Set([...prev, ...grpUids])]); }}>
+                            {allSel ? t("deselectAll") : t("selectAll")}
+                          </button>
+                        </div>
+                        <div style={{ overflow: "hidden", maxHeight: isOpen ? g.users.length * 60 : 0, opacity: isOpen ? 1 : 0, transition: "max-height .25s ease, opacity .2s ease" }}>
                         {g.users.map(x => {
-                          const isSel = toUid === x.uid;
+                          const isSel = toUids.includes(x.uid);
                           const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
                           return (
-                            <div key={x.uid} className={`pos-item${isSel ? " active" : ""}`} onClick={() => setToUid(x.uid)} style={{ padding: "6px 10px", gap: 8 }}>
+                            <div key={x.uid} className={`pos-item${isSel ? " active" : ""}`} onClick={() => toggleUid(x.uid)} style={{ padding: "6px 10px", gap: 8 }}>
                               {x.avatarUrl ? (
                                 <img src={x.avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
                               ) : (
@@ -5505,10 +5684,13 @@ function PageAdminDocuments() {
                                 <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.displayName || x.email}</div>
                                 {x.position && <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.position}</div>}
                               </div>
-                              {isSel && <Icon name="check" />}
+                              <div style={{ width: 18, height: 18, borderRadius: 4, border: isSel ? "none" : "2px solid var(--border)", background: isSel ? "var(--accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all .15s" }}>
+                                {isSel && <Icon name="check" />}
+                              </div>
                             </div>
                           );
                         })}
+                        </div>
                       </div>
                     );
                   })}
@@ -5516,8 +5698,8 @@ function PageAdminDocuments() {
               </div>
             </div>
 
-            {/* RIGHT: Document form */}
-            <div className="admin-users-right">
+            {/* MIDDLE: Document form */}
+            <div className="admin-docs-middle">
               <div className="glass card">
                 <div className="h2" style={{ marginBottom: 16 }}>{t("newDocument")}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -5534,12 +5716,76 @@ function PageAdminDocuments() {
                     <span>{t("requireSignature")}</span>
                   </label>
                   <div>
-                    <Btn kind="primary" onClick={send} disabled={sending || !toUid}>
-                      {sending ? t("sending") : t("sendDocument")}
+                    <Btn kind="primary" onClick={send} disabled={sending || toUids.length === 0}>
+                      {sending ? t("sending") : toUids.length > 1 ? `${t("sendDocument")} (${toUids.length})` : t("sendDocument")}
                     </Btn>
-                    {!toUid && <span className="muted" style={{ fontSize: 12, marginLeft: 10 }}>{t("selectRecipient")}</span>}
+                    {toUids.length === 0 && <span className="muted" style={{ fontSize: 12, marginLeft: 10 }}>{t("selectRecipients")}</span>}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* RIGHT: Live document preview */}
+            <div className="admin-docs-preview">
+              <div className="glass card" style={{ position: "sticky", top: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(135,188,46,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon name="file" />
+                  </div>
+                  <div className="h2" style={{ margin: 0 }}>{t("docPreview")}</div>
+                </div>
+
+                {(!title.trim() && !body.trim()) ? (
+                  <div style={{ textAlign: "center", padding: "32px 12px", color: "var(--muted)" }}>
+                    <Icon name="file" />
+                    <div style={{ fontSize: 13, marginTop: 8 }}>{t("docPreviewHint")}</div>
+                  </div>
+                ) : (
+                  <div className="doc-preview" style={{ fontSize: 12, padding: 20 }}>
+                    <div className="doc-preview__header">
+                      <img src="/logo-nis.png" alt="NIS" className="doc-preview__logo" style={{ width: 36, height: 36 }} />
+                      <div className="doc-preview__org">{t("nisOrg")}</div>
+                    </div>
+
+                    <div className="doc-preview__title" style={{ fontSize: 14, margin: "14px 0 10px" }}>{title.trim() || t("officialLetter")}</div>
+
+                    <div className="doc-preview__body" style={{ fontSize: 12 }}>
+                      <div className="doc-preview__field">
+                        <span className="doc-preview__field-label">{t("fromLabel")}:</span>
+                        <span className="doc-preview__field-value">{u.displayName || u.email || "—"}</span>
+                      </div>
+                      {selectedUsers.length > 0 && (
+                        <div className="doc-preview__field">
+                          <span className="doc-preview__field-label">{t("toLabel")}:</span>
+                          <span className="doc-preview__field-value">
+                            {selectedUsers.length <= 3
+                              ? selectedUsers.map(s => s.displayName || s.email).join(", ")
+                              : `${selectedUsers.slice(0, 2).map(s => s.displayName || s.email).join(", ")} +${selectedUsers.length - 2}`}
+                          </span>
+                        </div>
+                      )}
+                      {body.trim() && (
+                        <div style={{ marginTop: 10, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{body}</div>
+                      )}
+                    </div>
+
+                    <div className="doc-preview__signature" style={{ marginTop: 18 }}>
+                      <div className="doc-preview__sig-block">
+                        {u.signatureUrl ? <img src={u.signatureUrl} alt="" className="doc-preview__sig-img" /> : <div className="doc-preview__sig-line" />}
+                        <div className="doc-preview__sig-label">{t("directorSign")}</div>
+                        <div className="doc-preview__sig-name">{u.displayName || ""}</div>
+                      </div>
+                      {requireSig && (
+                        <div className="doc-preview__sig-block">
+                          <div className="doc-preview__sig-line" />
+                          <div className="doc-preview__sig-label">{t("employeeSign")}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="doc-preview__date" style={{ fontSize: 11 }}>{t("date")}: {new Date().toLocaleDateString("ru-RU")}</div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -5592,24 +5838,33 @@ function PageAdminDocuments() {
 function PageAdminTypes() {
   const st = useStore();
   const u = st.userDoc;
-  const [form, setForm] = useState({ section: "", subsection: "", name: "", defaultPoints: 5 }); // hook before early return
+  const [form, setForm] = useState({ section: "", subsection: "", name: "", defaultPoints: 5 });
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editModal, setEditModal] = useState(null);
+  const [editForm, setEditForm] = useState({ section: "", subsection: "", name: "", defaultPoints: 5 });
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [q, setQ] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
+  const [sortCol, setSortCol] = useState("");
+  const [sortDir, setSortDir] = useState("asc");
 
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
 
   async function refresh() {
-    const t = await fetchTypesAll();
-    setState({ types: t });
+    const tp = await fetchTypesAll();
+    setState({ types: tp });
   }
   async function seed() {
     try {
       setState({ loading: true });
       const r = await seedDefaultTypes();
-      toast(r.added ? `Добавлено: ${r.added}` : "Ничего не добавлено", "ok");
+      toast(r.added ? `${t("typeSeedAdded")}: ${r.added}` : t("typeSeedNone"), "ok");
       await refresh();
     } catch (e) {
       console.error(e);
-      toast(e?.message || e?.code || "Ошибка seed", "error");
+      toast(e?.message || e?.code || t("error"), "error");
     } finally { setState({ loading: false }); }
   }
   async function add() {
@@ -5621,10 +5876,11 @@ function PageAdminTypes() {
       await addType(form);
       toast(t("typeAdded"), "ok");
       setForm({ section: "", subsection: "", name: "", defaultPoints: 5 });
+      setShowAddModal(false);
       await refresh();
     } catch (e) {
       console.error(e);
-      toast(e?.message || "Ошибка", "error");
+      toast(e?.message || t("error"), "error");
     } finally { setState({ loading: false }); }
   }
   async function toggle(id, active) {
@@ -5637,47 +5893,245 @@ function PageAdminTypes() {
       toast(e?.message || t("error"), "error");
     }
   }
+  async function doDelete(id) {
+    try {
+      setDeleting(true);
+      await deleteTypeDoc(id);
+      toast(t("typeDeleted"), "ok");
+      setConfirmDelete(null);
+      await refresh();
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || t("error"), "error");
+    } finally { setDeleting(false); }
+  }
+  async function saveEdit() {
+    try {
+      if (!safeText(editForm.section) || !safeText(editForm.subsection) || !safeText(editForm.name)) {
+        toast(t("fillFields"), "error"); return;
+      }
+      setState({ loading: true });
+      await updateType(editModal, {
+        section: safeText(editForm.section),
+        subsection: safeText(editForm.subsection),
+        name: safeText(editForm.name),
+        defaultPoints: Number(editForm.defaultPoints) || 0
+      });
+      toast(t("updated"), "ok");
+      setEditModal(null);
+      await refresh();
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || t("error"), "error");
+    } finally { setState({ loading: false }); }
+  }
+
+  function toggleSort(col) {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  }
+
+  const allTypes = st.types || [];
+  const sections = [...new Set(allTypes.map(x => x.section).filter(Boolean))].sort();
+  const sectionCounts = {};
+  sections.forEach(s => { sectionCounts[s] = allTypes.filter(x => x.section === s).length; });
+
+  const qn = q.trim().toLowerCase();
+  let filtered = allTypes.filter(x => {
+    const hay = `${x.section || ""} ${x.subsection || ""} ${x.name || ""}`.toLowerCase();
+    return hay.includes(qn);
+  });
+  if (sectionFilter) filtered = filtered.filter(x => x.section === sectionFilter);
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortCol) return 0;
+    const dir = sortDir === "asc" ? 1 : -1;
+    if (sortCol === "section") return dir * (a.section || "").localeCompare(b.section || "", "ru");
+    if (sortCol === "subsection") return dir * (a.subsection || "").localeCompare(b.subsection || "", "ru");
+    if (sortCol === "name") return dir * (a.name || "").localeCompare(b.name || "", "ru");
+    if (sortCol === "points") return dir * ((Number(a.defaultPoints) || 0) - (Number(b.defaultPoints) || 0));
+    if (sortCol === "active") return dir * ((a.active ? 1 : 0) - (b.active ? 1 : 0));
+    return 0;
+  });
+
+  const activeCount = allTypes.filter(x => x.active).length;
+  const delType = confirmDelete ? allTypes.find(x => x.id === confirmDelete) : null;
 
   return (
-    <div className="grid2">
-      <div className="glass card">
-        <div className="h1">{t("typesTitle")}</div>
-        <p className="p">{t("typesDesc")}</p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-          <Btn kind="primary" onClick={seed} disabled={st.loading}>Seed default types</Btn>
-          <Btn onClick={refresh}>{t("refresh")}</Btn>
-        </div>
-        <div className="sep"></div>
+    <>
+      {/* Delete confirmation modal */}
+      {confirmDelete && createPortal(
+        <div className="modalback" onClick={() => setConfirmDelete(null)}>
+          <div className="modal glass" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="h2" style={{ marginBottom: 12 }}>{t("typeDeleteTitle")}</div>
+            <p className="p" style={{ marginBottom: 16 }}>
+              <b>{delType?.name || confirmDelete}</b><br />
+              <span className="muted" style={{ fontSize: 13 }}>{delType?.section} &rarr; {delType?.subsection}</span><br />
+              <span className="muted" style={{ fontSize: 13, marginTop: 8, display: "block" }}>{t("typeDeleteWarning")}</span>
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn onClick={() => setConfirmDelete(null)}>{t("cancel")}</Btn>
+              <Btn kind="primary" style={{ background: "var(--red, #ef4444)" }} onClick={() => doDelete(confirmDelete)} disabled={deleting}>
+                {deleting ? t("deleting") : `\u2715 ${t("delete")}`}
+              </Btn>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
-        <DataCards
-          emptyText={t("noTypes")}
-          columns={[
-            { key: "section", label: "Section" },
-            { key: "subsection", label: "Subsection" },
-            { key: "name", label: "Name", render: t => <b>{t.name}</b> },
-            { key: "defaultPoints", label: "Points", render: t => fmtPoints(t.defaultPoints) },
-            { key: "active", label: "Active", render: t => <input type="checkbox" checked={!!t.active} onChange={(e) => toggle(t.id, e.target.checked)} /> }
-          ]}
-          rows={st.types.map(t => ({ ...t, __key: t.id }))}
-        />
+      {/* Add type modal */}
+      {showAddModal && createPortal(
+        <div className="modalback" onClick={() => setShowAddModal(false)}>
+          <div className="modal glass" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div className="h2" style={{ margin: 0 }}>{t("addTypeTitle")}</div>
+              <button className="iconbtn" onClick={() => setShowAddModal(false)}><Icon name="x" /></button>
+            </div>
+            <div className="label">{t("typeSection")}</div>
+            <Input value={form.section} onChange={e => setForm(f => ({ ...f, section: e.target.value }))} placeholder={t("typeSectionPlaceholder")} />
+            <div className="label" style={{ marginTop: 10 }}>{t("typeSubsection")}</div>
+            <Input value={form.subsection} onChange={e => setForm(f => ({ ...f, subsection: e.target.value }))} placeholder={t("typeSubsectionPlaceholder")} />
+            <div className="label" style={{ marginTop: 10 }}>{t("typeName")}</div>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t("typeNamePlaceholder")} />
+            <div className="label" style={{ marginTop: 10 }}>{t("typePoints")}</div>
+            <Input type="number" min="0" max="9999" value={form.defaultPoints} onChange={e => setForm(f => ({ ...f, defaultPoints: e.target.value }))} />
+            <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+              <Btn onClick={() => setShowAddModal(false)}>{t("cancel")}</Btn>
+              <Btn kind="primary" onClick={add} disabled={st.loading}><Icon name="plus" /> {t("typeAddBtn")}</Btn>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Edit type modal */}
+      {editModal && createPortal(
+        <div className="modalback" onClick={() => setEditModal(null)}>
+          <div className="modal glass" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div className="h2" style={{ margin: 0 }}>{t("typeEditTitle")}</div>
+              <button className="iconbtn" onClick={() => setEditModal(null)}><Icon name="x" /></button>
+            </div>
+            <div className="label">{t("typeSection")}</div>
+            <Input value={editForm.section} onChange={e => setEditForm(f => ({ ...f, section: e.target.value }))} />
+            <div className="label" style={{ marginTop: 10 }}>{t("typeSubsection")}</div>
+            <Input value={editForm.subsection} onChange={e => setEditForm(f => ({ ...f, subsection: e.target.value }))} />
+            <div className="label" style={{ marginTop: 10 }}>{t("typeName")}</div>
+            <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+            <div className="label" style={{ marginTop: 10 }}>{t("typePoints")}</div>
+            <Input type="number" min="0" max="9999" value={editForm.defaultPoints} onChange={e => setEditForm(f => ({ ...f, defaultPoints: e.target.value }))} />
+            <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+              <Btn onClick={() => setEditModal(null)}>{t("cancel")}</Btn>
+              <Btn kind="primary" onClick={saveEdit} disabled={st.loading}>{t("save")}</Btn>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Page header */}
+      <div className="glass card" style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
+          <div style={{ flex: 1 }}>
+            <div className="h1" style={{ margin: 0 }}>{t("typesTitle")}</div>
+            <div className="muted" style={{ fontSize: 13 }}>{t("typesDesc")}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div className="types-stat-pill">
+              <Icon name="check" />
+              <span>{activeCount} {t("typeActive")}</span>
+            </div>
+            <div className="types-stat-pill muted-pill">
+              <Icon name="file" />
+              <span>{allTypes.length} {t("typeTotal")}</span>
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <Btn kind="primary" onClick={() => setShowAddModal(true)}><Icon name="plus" /> {t("addTypeTitle")}</Btn>
+          <Btn onClick={seed} disabled={st.loading}>{t("seedDefaults")}</Btn>
+          <Btn onClick={refresh}><Icon name="refresh" /></Btn>
+        </div>
       </div>
 
-      <div className="glass card">
-        <div className="h2">{t("addTypeTitle")}</div>
-        <div className="sep"></div>
-        <div className="label">Section</div>
-        <Input value={form.section} onChange={(e) => setForm(f => ({ ...f, section: e.target.value }))} />
-        <div className="label">Subsection</div>
-        <Input value={form.subsection} onChange={(e) => setForm(f => ({ ...f, subsection: e.target.value }))} />
-        <div className="label">Name</div>
-        <Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
-        <div className="label">Default Points</div>
-        <Input type="number" min="0" max="9999" value={form.defaultPoints} onChange={(e) => setForm(f => ({ ...f, defaultPoints: e.target.value }))} />
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-          <Btn kind="primary" onClick={add} disabled={st.loading}>Добавить</Btn>
+      {/* Filters */}
+      <div className="glass card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <Input value={q} onChange={e => setQ(e.target.value)} placeholder={t("typeSearchPlaceholder")} />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <Btn kind={sectionFilter === "" ? "primary" : "ghost"} onClick={() => setSectionFilter("")} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 8 }}>
+            {t("typeAllSections")} ({allTypes.length})
+          </Btn>
+          {sections.map(s => (
+            <Btn key={s} kind={sectionFilter === s ? "primary" : "ghost"} onClick={() => setSectionFilter(sectionFilter === s ? "" : s)} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 8 }}>
+              {s} ({sectionCounts[s] || 0})
+            </Btn>
+          ))}
         </div>
       </div>
-    </div>
+
+      {/* Types table */}
+      {!filtered.length && <div className="glass card"><p className="p muted" style={{ padding: "12px 0", textAlign: "center" }}>{t("noTypes")}</p></div>}
+
+      {filtered.length > 0 && (
+        <div className="excel-table-wrap glass">
+          <table className="excel-table">
+            <thead>
+              <tr>
+                <th style={{ width: 44 }}>#</th>
+                {[
+                  { key: "section", label: t("typeSection") },
+                  { key: "subsection", label: t("typeSubsection") },
+                  { key: "name", label: t("typeName") },
+                  { key: "points", label: t("typePoints"), style: { width: 80, textAlign: "right" } },
+                  { key: "active", label: t("typeActiveCol"), style: { width: 80, textAlign: "center" } },
+                ].map(col => (
+                  <th key={col.key} className="excel-th-sort" style={col.style || {}} onClick={() => toggleSort(col.key)}>
+                    <span>{col.label}</span>
+                    <span className="excel-sort-icon">{sortCol === col.key ? (sortDir === "asc" ? "\u25B2" : "\u25BC") : "\u25B4\u25BE"}</span>
+                  </th>
+                ))}
+                <th style={{ width: 110, textAlign: "center" }}>{t("colActions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((x, idx) => (
+                <tr key={x.id}>
+                  <td className="excel-cell-num">{idx + 1}</td>
+                  <td>
+                    <span className="excel-pos-pill" style={{ background: "rgba(135,188,46,.08)", color: "var(--accent)", borderColor: "rgba(135,188,46,.25)" }}>{x.section}</span>
+                  </td>
+                  <td><span className="muted" style={{ fontSize: 13 }}>{x.subsection}</span></td>
+                  <td><b style={{ fontSize: 13 }}>{x.name}</b></td>
+                  <td style={{ textAlign: "right", fontWeight: 700, color: "var(--accent)", fontSize: 14 }}>{fmtPoints(x.defaultPoints)}</td>
+                  <td style={{ textAlign: "center" }}>
+                    <label className="type-toggle">
+                      <input type="checkbox" checked={!!x.active} onChange={e => toggle(x.id, e.target.checked)} />
+                      <span className="type-toggle-slider" />
+                    </label>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                      <button className="excel-action-btn" title={t("typeEditTitle")} onClick={() => { setEditModal(x.id); setEditForm({ section: x.section || "", subsection: x.subsection || "", name: x.name || "", defaultPoints: x.defaultPoints || 0 }); }}>
+                        <Icon name="settings" />
+                      </button>
+                      <button className="excel-action-btn excel-action-del" title={t("delete")} onClick={() => setConfirmDelete(x.id)}>
+                        <Icon name="x" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -5692,6 +6146,8 @@ function PageAdminUsers() {
   const [selectedUid, setSelectedUid] = useState(null);
   const [customPos, setCustomPos] = useState([]);
   const [newPosName, setNewPosName] = useState("");
+  const [posSearch, setPosSearch] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState({});
   const [usersTab, setUsersTab] = useState("users");
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
@@ -5947,48 +6403,71 @@ function PageAdminUsers() {
               </div>
             )}
 
-            {/* Position list grouped */}
-            <div style={{ maxHeight: "calc(100vh - 420px)", overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
-              {STAFF_GROUPS.map(g => {
-                const gPos = DEFAULT_POSITION_LIST.filter(p => p.group === g.key);
-                const cPos = g.key === "teacher" ? customPos : [];
-                if (!gPos.length && !cPos.length) return null;
-                const grpColor = g.key === "admin" ? "#6366f1" : g.key === "support" ? "#06b6d4" : "var(--accent)";
-                return (
-                  <div key={g.key}>
-                    <div className="pos-group-label" style={{ color: grpColor }}>{g.label}</div>
-                    {gPos.map(p => {
-                      const active = selUser?.position === p.position;
-                      const cnt = allUsrs.filter(x => x.position === p.position).length;
-                      return (
-                        <div key={p.position} className={`pos-item${active ? " active" : ""}${!selUser ? " disabled" : ""}`} onClick={() => selUser && assignPos(selUser.uid, p.position)}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            {active && <Icon name="check" />}
-                            <span>{p.position}</span>
-                          </div>
-                          {cnt > 0 && <span className="tiny muted">{cnt}</span>}
+            {/* Position search */}
+            <div style={{ marginBottom: 10 }}>
+              <input className="input" style={{ fontSize: 13 }} placeholder={t("searchPositionPlaceholder")} value={posSearch} onChange={e => setPosSearch(e.target.value)} />
+            </div>
+
+            {/* Position list grouped — collapsible */}
+            <div className="pos-scroll" style={{ maxHeight: "calc(100vh - 480px)", overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
+              {(() => {
+                const psq = posSearch.trim().toLowerCase();
+                return STAFF_GROUPS.map(g => {
+                  const gPos = DEFAULT_POSITION_LIST.filter(p => p.group === g.key);
+                  const cPos = g.key === "teacher" ? customPos : [];
+                  const filteredGPos = psq ? gPos.filter(p => p.position.toLowerCase().includes(psq)) : gPos;
+                  const filteredCPos = psq ? cPos.filter(p => p.toLowerCase().includes(psq)) : cPos;
+                  if (!filteredGPos.length && !filteredCPos.length) return null;
+                  const grpColor = g.key === "admin" ? "#6366f1" : g.key === "support" ? "#06b6d4" : "var(--accent)";
+                  const totalInGroup = filteredGPos.length + filteredCPos.length;
+                  const isCollapsed = !psq && collapsedGroups[g.key];
+                  const toggleCollapse = () => setCollapsedGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }));
+                  return (
+                    <div key={g.key} className="pos-group-section">
+                      <div className="pos-group-header" style={{ color: grpColor }} onClick={toggleCollapse}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                          <span className="pos-group-chevron" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0)" }}><Icon name="chevron" /></span>
+                          <span className="pos-group-title">{g.label}</span>
                         </div>
-                      );
-                    })}
-                    {cPos.map(p => {
-                      const active = selUser?.position === p;
-                      const cnt = allUsrs.filter(x => x.position === p).length;
-                      return (
-                        <div key={p} className={`pos-item${active ? " active" : ""}${!selUser ? " disabled" : ""}`} style={{ paddingRight: 4 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }} onClick={() => selUser && assignPos(selUser.uid, p)}>
-                            {active && <Icon name="check" />}
-                            <span>{p}</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            {cnt > 0 && <span className="tiny muted">{cnt}</span>}
-                            <button className="iconbtn" onClick={(e) => { e.stopPropagation(); removeCustomPos(p); }} style={{ color: "var(--red, #ef4444)", width: 22, height: 22 }}><Icon name="x" /></button>
-                          </div>
+                        <span className="pos-group-count" style={{ background: `${grpColor}18`, color: grpColor }}>{totalInGroup}</span>
+                      </div>
+                      {!isCollapsed && (
+                        <div className="pos-group-items">
+                          {filteredGPos.map(p => {
+                            const active = selUser?.position === p.position;
+                            const cnt = allUsrs.filter(x => x.position === p.position).length;
+                            return (
+                              <div key={p.position} className={`pos-item${active ? " active" : ""}${!selUser ? " disabled" : ""}`} onClick={() => selUser && assignPos(selUser.uid, p.position)}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  {active && <Icon name="check" />}
+                                  <span>{p.position}</span>
+                                </div>
+                                {cnt > 0 && <span className="tiny muted">{cnt}</span>}
+                              </div>
+                            );
+                          })}
+                          {filteredCPos.map(p => {
+                            const active = selUser?.position === p;
+                            const cnt = allUsrs.filter(x => x.position === p).length;
+                            return (
+                              <div key={p} className={`pos-item${active ? " active" : ""}${!selUser ? " disabled" : ""}`} style={{ paddingRight: 4 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }} onClick={() => selUser && assignPos(selUser.uid, p)}>
+                                  {active && <Icon name="check" />}
+                                  <span>{p}</span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  {cnt > 0 && <span className="tiny muted">{cnt}</span>}
+                                  <button className="iconbtn" onClick={(e) => { e.stopPropagation(); removeCustomPos(p); }} style={{ color: "var(--red, #ef4444)", width: 22, height: 22 }}><Icon name="x" /></button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                      )}
+                    </div>
+                  );
+                });
+              })()}
 
               {/* Clear position */}
               {selUser && selUser.position && (
@@ -6337,10 +6816,14 @@ function PageAdminTeacher() {
     );
   }
 
+  const [atTab, setAtTab] = useState("overview"); // overview | edit | subs
+
   const approved = subs.filter(s => s.status === "approved");
   const pending = subs.filter(s => s.status === "pending");
   const rejected = subs.filter(s => s.status === "rejected");
   const approvedPts = sum(approved, s => s.points);
+  const tLvl = levelFromPoints(teacherDoc?.totalPoints || 0);
+  const aprPct = subs.length ? Math.round((approved.length / subs.length) * 100) : 0;
 
   async function saveTeacher() {
     try {
@@ -6387,178 +6870,355 @@ function PageAdminTeacher() {
     }
   }
 
+  const AtTabBtn = ({ id, icon, label, count }) => (
+    <button className={`prof-tab${atTab === id ? " prof-tab--active" : ""}`} onClick={() => setAtTab(id)}>
+      <Icon name={icon} /> {label} {count != null && <span className="at-tab-count">{count}</span>}
+    </button>
+  );
+
+  const LevelRingAT = ({ pct, size = 64, stroke = 4 }) => {
+    const r = (size - stroke) / 2;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (circ * Math.min(pct, 100)) / 100;
+    return (
+      <svg width={size} height={size} className="prof-level-ring">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#atGrad)" strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)" }}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        <defs><linearGradient id="atGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="var(--accent)" /><stop offset="100%" stopColor="var(--accent2)" /></linearGradient></defs>
+      </svg>
+    );
+  };
+
   return (
-    <div className="grid2">
-      <div className="glass card">
-        <div className="h1">{t("teacherDetail")}</div>
-        <p className="p">{t("teacherDetailDesc")}</p>
-
-        <div className="sep"></div>
-
-        <div className="kpi">
-          <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
-            <div className="avatar">
-              {edit.avatarUrl
-                ? <img src={edit.avatarUrl} alt="avatar" />
-                : <span style={{ fontWeight: 900 }}>{(edit.displayName || teacherDoc?.email || uid).slice(0, 1).toUpperCase()}</span>}
+    <div className="prof">
+      {/* ══ Hero Card ══ */}
+      <div className="prof-hero glass card" style={{ "--di": 0 }}>
+        <div className="prof-hero__banner" />
+        <div className="prof-hero__content">
+          {/* Avatar */}
+          <div className="prof-hero__avatar-wrap" style={{ cursor: "default" }}>
+            <div className="prof-hero__avatar-ring">
+              <div className="prof-hero__avatar">
+                {edit.avatarUrl
+                  ? <img src={edit.avatarUrl} alt="" />
+                  : <span>{(edit.displayName || teacherDoc?.email || uid).slice(0, 1).toUpperCase()}</span>}
+              </div>
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 900 }}>{teacherDoc?.displayName || "—"}</div>
-              <div className="muted tiny">{teacherDoc?.email || uid}</div>
+            <div className="prof-hero__badge-role">{teacherDoc?.role === "admin" ? "A" : "T"}</div>
+          </div>
+
+          {/* Info */}
+          <div className="prof-hero__info">
+            <div className="prof-hero__name">{teacherDoc?.displayName || "—"}</div>
+            <div className="prof-hero__tags">
+              <span className="prof-tag prof-tag--role">{teacherDoc?.role === "admin" ? "Admin" : "Teacher"}</span>
+              <span className="prof-tag prof-tag--level">{tLvl.name}</span>
+              {teacherDoc?.position && <span className="prof-tag">{teacherDoc.position}</span>}
+              {teacherDoc?.onboarded
+                ? <span className="prof-tag prof-tag--ok">{t("completed")}</span>
+                : <span className="prof-tag prof-tag--warn">{t("onboarding")}</span>}
+            </div>
+            <div className="prof-hero__meta-row">
+              <span className="prof-hero__meta-item">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2"/><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2"/></svg>
+                {teacherDoc?.email || uid}
+              </span>
+              {teacherDoc?.school && (
+                <span className="prof-hero__meta-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2"/></svg>
+                  {teacherDoc.school}
+                </span>
+              )}
+              {teacherDoc?.subject && (
+                <span className="prof-hero__meta-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2"/></svg>
+                  {teacherDoc.subject}
+                </span>
+              )}
+              {teacherDoc?.city && (
+                <span className="prof-hero__meta-item">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2"/></svg>
+                  {teacherDoc.city}
+                </span>
+              )}
             </div>
           </div>
-          <Btn onClick={() => navigate("admin/users")}>{t("back")}</Btn>
+
+          {/* Level ring */}
+          <div className="prof-hero__right">
+            <div className="prof-hero__level-wrap">
+              <LevelRingAT pct={tLvl.pct} />
+              <div className="prof-hero__level-inner" style={{ "--sz": "64px" }}>
+                <div className="prof-hero__level-pts" style={{ fontSize: 16 }}>{fmtPoints(teacherDoc?.totalPoints || 0)}</div>
+                <div className="prof-hero__level-label">{t("points")}</div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="sep"></div>
-
-        <div className="grid3">
-          <div className="kpi"><div><div className="muted tiny">{t("totalPoints")}</div><b>{fmtPoints(teacherDoc?.totalPoints || 0)}</b></div><Pill kind="approved">{t("totalPill")}</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">{t("approved")}</div><b>{fmtPoints(approvedPts)}</b></div><Pill kind="approved">{t("approvedPill2")}</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">{t("pending")}</div><b>{fmtPoints(pending.length)}</b></div><Pill kind="pending">{t("pendingPill")}</Pill></div>
-          <div className="kpi">
-            <div>
-              <div className="muted tiny">{t("compDays")}</div>
-              <b style={{ color: (teacherDoc?.compDays || 0) > 0 ? "var(--green, #22c55e)" : "var(--text)" }}>
-                {Number(teacherDoc?.compDays || 0)} {t("dayShort")}
-              </b>
-            </div>
-            <Pill kind={(teacherDoc?.compDays || 0) > 0 ? "approved" : "pending"}>{t("compDaysPill")}</Pill>
+        {/* Bottom bar */}
+        <div className="prof-hero__bottom">
+          <div className="prof-hero__social">
+            {teacherDoc?.phone && (
+              <a href={`tel:${teacherDoc.phone}`} className="prof-social-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" strokeWidth="2" /></svg>
+                {teacherDoc.phone}
+              </a>
+            )}
+            {(teacherDoc?.experienceYears > 0) && (
+              <span className="prof-social-btn" style={{ cursor: "default" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="2"/></svg>
+                {teacherDoc.experienceYears} {t("profYear")}
+              </span>
+            )}
           </div>
-          <div className="kpi">
-            <div>
-              <div className="muted tiny">{t("onboarding")}</div>
-              <b>{teacherDoc?.onboarded ? `✓ ${t("completed")}` : `⏳ ${t("pending")}`}</b>
-            </div>
-            <Pill kind={teacherDoc?.onboarded ? "approved" : "rejected"}>onboarding</Pill>
+          <div className="prof-hero__actions">
+            <Btn onClick={() => navigate("admin/users")}><Icon name="user" /> {t("back")}</Btn>
+            <Btn kind="ghost" onClick={() => setReloadNonce(x => x + 1)}><Icon name="refresh" /></Btn>
           </div>
-          <div className="kpi"><div><div className="muted tiny">{t("rejected")}</div><b>{fmtPoints(rejected.length)}</b></div><Pill kind="rejected">{t("rejected")}</Pill></div>
         </div>
-
-        <div className="sep"></div>
-
-        <div className="h2">{t("editSection")}</div>
-        <div className="grid2">
-          <div>
-            <div className="label">{t("fullName")}</div>
-            <Input value={edit.displayName} onChange={(e) => setEdit(v => ({ ...v, displayName: e.target.value }))} />
-          </div>
-          <div>
-            <div className="label">{t("roleLabel")}</div>
-            <Select value={edit.role} onChange={(e) => setEdit(v => ({ ...v, role: e.target.value }))}>
-              <option value="teacher">teacher</option>
-              <option value="admin">admin</option>
-            </Select>
-          </div>
-
-          <div>
-            <div className="label">{t("school")}</div>
-            <Input value={edit.school} onChange={(e) => setEdit(v => ({ ...v, school: e.target.value }))} />
-          </div>
-          <div>
-            <div className="label">{t("subject")}</div>
-            <Input value={edit.subject} onChange={(e) => setEdit(v => ({ ...v, subject: e.target.value }))} />
-          </div>
-
-          <div>
-            <div className="label">{t("expYears")}</div>
-            <Input type="number" min="0" max="80" value={edit.experienceYears} onChange={(e) => setEdit(v => ({ ...v, experienceYears: e.target.value }))} />
-          </div>
-          <div>
-            <div className="label">{t("phone")}</div>
-            <Input value={edit.phone} onChange={(e) => setEdit(v => ({ ...v, phone: e.target.value }))} />
-          </div>
-
-          <div>
-            <div className="label">{t("city")}</div>
-            <Input value={edit.city} onChange={(e) => setEdit(v => ({ ...v, city: e.target.value }))} />
-          </div>
-          <div>
-            <div className="label">{t("position")}</div>
-            <Input value={edit.position} onChange={(e) => setEdit(v => ({ ...v, position: e.target.value }))} />
-          </div>
-
-          <div style={{ gridColumn: "1/-1" }}>
-            <div className="label">{t("avatarUrl")}</div>
-            <Input value={edit.avatarUrl} onChange={(e) => setEdit(v => ({ ...v, avatarUrl: e.target.value }))} placeholder="https://..." />
-            <div className="help">Админ может вставить URL вручную. (Upload в Storage — у владельца аккаунта.)</div>
-          </div>
-
-          <div>
-            <div className="label">{t("totalPoints")}</div>
-            <Input type="number" min="0" max="9999999" value={edit.totalPoints} onChange={(e) => setEdit(v => ({ ...v, totalPoints: e.target.value }))} />
-          </div>
-          <div />
-        </div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-          <Btn kind="primary" onClick={saveTeacher} disabled={st.loading}>{t("save")}</Btn>
-          <Btn onClick={() => setEdit(v => ({ ...v, avatarUrl: "" }))}>{t("clearAvatar")}</Btn>
-          <Btn onClick={() => setReloadNonce(x => x + 1)}>{t("refresh")}</Btn>
-        </div>
-
-        {loadingLocal && <div className="sep"></div>}
-        {loadingLocal && <p className="p">{t("loadingSubs")}</p>}
       </div>
 
-      <div className="glass card">
-        <div className="h2">{t("teacherSubs")}</div>
-        <div className="sep"></div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Pill kind="approved">approved: {approved.length}</Pill>
-          <Pill kind="pending">pending: {pending.length}</Pill>
-          <Pill kind="rejected">rejected: {rejected.length}</Pill>
+      {/* ══ Stats row ══ */}
+      <div className="prof-stats">
+        <div className="prof-stat glass card" style={{ "--di": 1 }}>
+          <div className="prof-stat__icon prof-stat__icon--green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+          <div className="prof-stat__num">{fmtPoints(teacherDoc?.totalPoints || 0)}</div>
+          <div className="prof-stat__label">{t("totalPoints")}</div>
+          <div className="prof-stat__bar"><div className="prof-stat__fill" style={{ width: `${tLvl.pct}%` }} /></div>
         </div>
+        <div className="prof-stat glass card" style={{ "--di": 2 }}>
+          <div className="prof-stat__icon prof-stat__icon--blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+          <div className="prof-stat__num">{fmtPoints(approvedPts)}</div>
+          <div className="prof-stat__label">{t("approved")}</div>
+          <div className="prof-stat__hint">{approved.length} {t("profTabSubs").toLowerCase()}</div>
+        </div>
+        <div className="prof-stat glass card" style={{ "--di": 3 }}>
+          <div className="prof-stat__icon prof-stat__icon--amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          </div>
+          <div className="prof-stat__num">{pending.length}</div>
+          <div className="prof-stat__label">{t("pending")}</div>
+          <div className="prof-stat__hint">{t("profApprovalRate")}: {aprPct}%</div>
+        </div>
+        <div className="prof-stat glass card" style={{ "--di": 4 }}>
+          <div className="prof-stat__icon prof-stat__icon--purple">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          </div>
+          <div className="prof-stat__num">{Number(teacherDoc?.compDays || 0)}</div>
+          <div className="prof-stat__label">{t("compDays")}</div>
+          <div className="prof-stat__hint">{t("dayShort")}</div>
+        </div>
+      </div>
 
-        <div className="sep"></div>
+      {/* ══ Tabs ══ */}
+      <div className="prof-tabs">
+        <AtTabBtn id="overview" icon="info" label={t("profileOverview")} />
+        <AtTabBtn id="edit" icon="settings" label={t("editSection")} />
+        <AtTabBtn id="subs" icon="file" label={t("profTabSubs")} count={subs.length} />
+      </div>
 
-        <div className="heatwrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Дата</th>
-                <th>Тип</th>
-                <th>Title</th>
-                <th>Pts</th>
-                <th>Status</th>
-                <th>Evidence</th>
-                <th>{t("action")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {subs.map(s => (
-                <tr key={s.id}>
-                  <td className="tiny">{s.eventDate}</td>
-                  <td className="tiny">{s.typeName}</td>
-                  <td className="tiny">
-                    <b>{s.title}</b>
-                    {s.description ? <div className="muted tiny">{s.description}</div> : null}
-                  </td>
-                  <td className="tiny"><b>{fmtPoints(s.points)}</b></td>
-                  <td className="tiny"><Pill kind={s.status}>{s.status}</Pill></td>
-                  <td className="tiny">
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">{t("link")}</a> : null}
-                      {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">{t("file")}</a> : null}
-                      {!s.evidenceLink && !s.evidenceFileUrl ? <span className="muted tiny">—</span> : null}
-                    </div>
-                  </td>
-                  <td className="tiny">
-                    {s.status === "pending" ? (
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /> {t("approve")}</Btn>
-                        <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /> {t("reject")}</Btn>
+      {/* Tab: overview */}
+      {atTab === "overview" && (
+        <div className="glass card prof-card" style={{ "--di": 5 }}>
+          <div className="h2">{t("profAbout")}</div>
+          <div className="sep"></div>
+          <div className="at-info-grid">
+            <div className="at-info-item">
+              <div className="at-info-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 21a8 8 0 10-16 0" stroke="currentColor" strokeWidth="2"/><path d="M12 13a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" strokeWidth="2"/></svg>
+              </div>
+              <div>
+                <div className="at-info-label">{t("fullName")}</div>
+                <div className="at-info-value">{teacherDoc?.displayName || "—"}</div>
+              </div>
+            </div>
+            <div className="at-info-item">
+              <div className="at-info-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2"/></svg>
+              </div>
+              <div>
+                <div className="at-info-label">{t("profSchool")}</div>
+                <div className="at-info-value">{teacherDoc?.school || t("profNoSchool")}</div>
+              </div>
+            </div>
+            <div className="at-info-item">
+              <div className="at-info-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2"/></svg>
+              </div>
+              <div>
+                <div className="at-info-label">{t("profSubject")}</div>
+                <div className="at-info-value">{teacherDoc?.subject || t("profNoSubject")}</div>
+              </div>
+            </div>
+            <div className="at-info-item">
+              <div className="at-info-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="2"/></svg>
+              </div>
+              <div>
+                <div className="at-info-label">{t("profExperience")}</div>
+                <div className="at-info-value">{teacherDoc?.experienceYears || 0} {t("profYear")}</div>
+              </div>
+            </div>
+            <div className="at-info-item">
+              <div className="at-info-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2"/></svg>
+              </div>
+              <div>
+                <div className="at-info-label">{t("profCity")}</div>
+                <div className="at-info-value">{teacherDoc?.city || "—"}</div>
+              </div>
+            </div>
+            <div className="at-info-item">
+              <div className="at-info-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V6l-8-3-8 3v6c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2"/></svg>
+              </div>
+              <div>
+                <div className="at-info-label">{t("roleLabel")}</div>
+                <div className="at-info-value">{teacherDoc?.role || "teacher"}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent submissions preview */}
+          {subs.length > 0 && (
+            <>
+              <div className="sep"></div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="h2">{t("recentSubs")}</div>
+                <Btn kind="ghost" onClick={() => setAtTab("subs")} style={{ fontSize: 12 }}>{t("profTabSubs")} →</Btn>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                {subs.slice(0, 4).map(s => (
+                  <div key={s.id} className="at-sub-preview">
+                    <div className="at-sub-preview__left">
+                      <Pill kind={s.status}>{s.status}</Pill>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13 }}>{s.title}</div>
+                        <div className="muted tiny">{s.typeName} · {s.eventDate}</div>
                       </div>
-                    ) : <span className="muted tiny">—</span>}
-                  </td>
-                </tr>
-              ))}
-              {!subs.length && <tr><td colSpan="7" className="tiny muted">{t("noSubs")}</td></tr>}
-            </tbody>
-          </table>
+                    </div>
+                    <div className="at-sub-preview__pts">+{fmtPoints(s.points)}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* Tab: edit */}
+      {atTab === "edit" && (
+        <div className="glass card prof-card" style={{ "--di": 5 }}>
+          <div className="h2">{t("editSection")}</div>
+          <div className="sep"></div>
+          <div className="grid2">
+            <div>
+              <div className="label">{t("fullName")}</div>
+              <Input value={edit.displayName} onChange={(e) => setEdit(v => ({ ...v, displayName: e.target.value }))} />
+            </div>
+            <div>
+              <div className="label">{t("roleLabel")}</div>
+              <Select value={edit.role} onChange={(e) => setEdit(v => ({ ...v, role: e.target.value }))}>
+                <option value="teacher">teacher</option>
+                <option value="admin">admin</option>
+              </Select>
+            </div>
+            <div>
+              <div className="label">{t("school")}</div>
+              <Input value={edit.school} onChange={(e) => setEdit(v => ({ ...v, school: e.target.value }))} />
+            </div>
+            <div>
+              <div className="label">{t("subject")}</div>
+              <Input value={edit.subject} onChange={(e) => setEdit(v => ({ ...v, subject: e.target.value }))} />
+            </div>
+            <div>
+              <div className="label">{t("expYears")}</div>
+              <Input type="number" min="0" max="80" value={edit.experienceYears} onChange={(e) => setEdit(v => ({ ...v, experienceYears: e.target.value }))} />
+            </div>
+            <div>
+              <div className="label">{t("phone")}</div>
+              <Input value={edit.phone} onChange={(e) => setEdit(v => ({ ...v, phone: e.target.value }))} />
+            </div>
+            <div>
+              <div className="label">{t("city")}</div>
+              <Input value={edit.city} onChange={(e) => setEdit(v => ({ ...v, city: e.target.value }))} />
+            </div>
+            <div>
+              <div className="label">{t("position")}</div>
+              <Input value={edit.position} onChange={(e) => setEdit(v => ({ ...v, position: e.target.value }))} />
+            </div>
+            <div style={{ gridColumn: "1/-1" }}>
+              <div className="label">{t("avatarUrl")}</div>
+              <Input value={edit.avatarUrl} onChange={(e) => setEdit(v => ({ ...v, avatarUrl: e.target.value }))} placeholder="https://..." />
+              <div className="help">{t("avatarHelp")}</div>
+            </div>
+            <div>
+              <div className="label">{t("totalPoints")}</div>
+              <Input type="number" min="0" max="9999999" value={edit.totalPoints} onChange={(e) => setEdit(v => ({ ...v, totalPoints: e.target.value }))} />
+            </div>
+            <div />
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+            <Btn kind="primary" onClick={saveTeacher} disabled={st.loading}><Icon name="check" /> {t("save")}</Btn>
+            <Btn onClick={() => setEdit(v => ({ ...v, avatarUrl: "" }))}>{t("clearAvatar")}</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: submissions */}
+      {atTab === "subs" && (
+        <div className="glass card prof-card" style={{ "--di": 5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+            <div className="h2">{t("teacherSubs")}</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Pill kind="approved">{t("approved")}: {approved.length}</Pill>
+              <Pill kind="pending">{t("pending")}: {pending.length}</Pill>
+              <Pill kind="rejected">{t("rejected")}: {rejected.length}</Pill>
+            </div>
+          </div>
+          <div className="sep"></div>
+
+          {loadingLocal && <p className="p">{t("loadingSubs")}</p>}
+
+          <DataCards
+            emptyText={t("noSubs")}
+            columns={[
+              { key: "eventDate", label: t("date") },
+              { key: "typeName", label: t("type") },
+              { key: "title", label: t("title"), render: s => (
+                <div>
+                  <b>{s.title}</b>
+                  {s.description ? <div className="muted tiny">{s.description}</div> : null}
+                </div>
+              )},
+              { key: "points", label: t("points"), render: s => <b>{fmtPoints(s.points)}</b> },
+              { key: "status", label: t("status"), render: s => <Pill kind={s.status}>{s.status}</Pill> },
+              { key: "evidence", label: "Evidence", render: s => (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">{t("link")}</a> : null}
+                  {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">{t("file")}</a> : null}
+                  {!s.evidenceLink && !s.evidenceFileUrl ? <span className="muted tiny">—</span> : null}
+                </div>
+              )},
+              { key: "action", label: t("action"), render: s => s.status === "pending" ? (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /></Btn>
+                  <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /></Btn>
+                </div>
+              ) : <span className="muted tiny">—</span> }
+            ]}
+            rows={subs.map(s => ({ ...s, __key: s.id }))}
+          />
+        </div>
+      )}
     </div>
   );
 }

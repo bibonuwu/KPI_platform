@@ -345,6 +345,8 @@ export const T = {
   dpApproved: { kz: "Мақұлданды", ru: "Одобрено", en: "Approved" },
   dpRejected: { kz: "Қабылданбады", ru: "Отклонено", en: "Rejected" },
   dpPending: { kz: "Қарастырылуда", ru: "На рассмотрении", en: "Under consideration" },
+  downloadWord: { kz: "Word жүктеу", ru: "Скачать Word", en: "Download Word" },
+  downloadPdf: { kz: "PDF жүктеу", ru: "Скачать PDF", en: "Download PDF" },
 
   // ===== ADMIN APPROVALS =====
   approvalsTitle: { kz: "Мақұлдау", ru: "Одобрения", en: "Approvals" },
@@ -381,6 +383,10 @@ export const T = {
   listTab: { kz: "Тізім", ru: "Список", en: "List" },
   newDocument: { kz: "Жаңа құжат", ru: "Новый документ", en: "New document" },
   selectRecipient: { kz: "— Таңдаңыз —", ru: "— Выберите —", en: "— Select —" },
+  selectRecipients: { kz: "— Алушыларды таңдаңыз —", ru: "— Выберите получателей —", en: "— Select recipients —" },
+  clearAll: { kz: "Тазалау", ru: "Очистить", en: "Clear" },
+  selectAll: { kz: "Барлығы", ru: "Выбрать все", en: "Select all" },
+  deselectAll: { kz: "Алып тастау", ru: "Снять все", en: "Deselect" },
   subjectLabel2: { kz: "Тақырып", ru: "Тема", en: "Subject" },
   subjectPlaceholder: { kz: "Мысалы: Ескерту...", ru: "Уведомление о...", en: "e.g.: Notification..." },
   docText: { kz: "Мәтін", ru: "Текст документа", en: "Document text" },
@@ -394,8 +400,8 @@ export const T = {
   signaturePill: { kz: "Қол қою", ru: "Подпись", en: "Signature" },
 
   // ===== ADMIN TYPES =====
-  typesTitle: { kz: "Типтер", ru: "Типы KPI", en: "KPI Types" },
-  typesDesc: { kz: "KPI-типтер тізімі. Active мұғалімдер үшін қолжетімділікті басқарады.", ru: "Список KPI-типов. Active управляет доступностью для учителей.", en: "KPI types list. Active controls availability for teachers." },
+  typesTitle: { kz: "KPI Типтері", ru: "Типы KPI", en: "KPI Types" },
+  typesDesc: { kz: "KPI-типтер тізімі. Белсенді/белсенді емес күйді басқару, қосу, өңдеу, жою.", ru: "Управление типами KPI. Активация, добавление, редактирование, удаление.", en: "Manage KPI types. Toggle active state, add, edit, delete." },
   seedDefaults: { kz: "Seed default types", ru: "Seed default types", en: "Seed default types" },
   noTypes: { kz: "Типтер жоқ", ru: "Нет типов", en: "No types" },
   name: { kz: "Аты", ru: "Name", en: "Name" },
@@ -404,6 +410,25 @@ export const T = {
   fillFields: { kz: "Section/subsection/name толтырыңыз", ru: "Заполните section/subsection/name", en: "Fill section/subsection/name" },
   typeAdded: { kz: "Тип қосылды", ru: "Тип добавлен", en: "Type added" },
   updated: { kz: "Жаңартылды", ru: "Обновлено", en: "Updated" },
+  typeSection: { kz: "Бөлім", ru: "Раздел", en: "Section" },
+  typeSubsection: { kz: "Подбөлім", ru: "Подраздел", en: "Subsection" },
+  typeName: { kz: "Атауы", ru: "Название", en: "Name" },
+  typePoints: { kz: "Ұпай", ru: "Баллы", en: "Points" },
+  typeActiveCol: { kz: "Белсенді", ru: "Активен", en: "Active" },
+  typeActive: { kz: "белсенді", ru: "активных", en: "active" },
+  typeTotal: { kz: "барлығы", ru: "всего", en: "total" },
+  typeSearchPlaceholder: { kz: "Бөлім / подбөлім / атау іздеу...", ru: "Поиск по разделу / подразделу / названию...", en: "Search section / subsection / name..." },
+  typeAllSections: { kz: "Барлық бөлімдер", ru: "Все разделы", en: "All sections" },
+  typeDeleteTitle: { kz: "Типті жою", ru: "Удалить тип", en: "Delete type" },
+  typeDeleteWarning: { kz: "Бұл типті жою мұғалімдер үшін оны қолжетімсіз етеді.", ru: "Удаление типа сделает его недоступным для учителей.", en: "Deleting this type will make it unavailable for teachers." },
+  typeDeleted: { kz: "Тип жойылды", ru: "Тип удалён", en: "Type deleted" },
+  typeEditTitle: { kz: "Типті өңдеу", ru: "Редактировать тип", en: "Edit type" },
+  typeAddBtn: { kz: "Қосу", ru: "Добавить", en: "Add" },
+  typeSectionPlaceholder: { kz: "мыс. Оқыту сапасы", ru: "напр. Качество обучения", en: "e.g. Teaching Quality" },
+  typeSubsectionPlaceholder: { kz: "мыс. Сабақ", ru: "напр. Уроки", en: "e.g. Lessons" },
+  typeNamePlaceholder: { kz: "мыс. Ашық сабақ", ru: "напр. Открытый урок", en: "e.g. Open lesson" },
+  typeSeedAdded: { kz: "Қосылды", ru: "Добавлено", en: "Added" },
+  typeSeedNone: { kz: "Ештеңе қосылмады", ru: "Ничего не добавлено", en: "Nothing added" },
 
   // ===== ADMIN USERS =====
   usersTitle: { kz: "Қызметкерлер", ru: "Сотрудники", en: "Employees" },
@@ -449,6 +474,7 @@ export const T = {
   positionRemoved: { kz: "Лауазым жойылды", ru: "Должность удалена", en: "Position removed" },
   defaultPositions: { kz: "Стандартты лауазымдар", ru: "Стандартные должности", en: "Default positions" },
   customPositions: { kz: "Арнайы лауазымдар", ru: "Пользовательские должности", en: "Custom positions" },
+  searchPositionPlaceholder: { kz: "Лауазым іздеу...", ru: "Поиск должности...", en: "Search position..." },
   selectUserHint: { kz: "Тізімнен қызметкерді таңдаңыз", ru: "Выберите сотрудника из списка", en: "Select an employee from the list" },
   usersTabUsers: { kz: "Қызметкерлер", ru: "Сотрудники", en: "Employees" },
   usersTabHistory: { kz: "Өзгерістер тарихы", ru: "История изменений", en: "Change history" },
@@ -486,6 +512,22 @@ export const T = {
   teacherSubs: { kz: "Мұғалімнің өтінімдері", ru: "Заявки учителя", en: "Teacher submissions" },
   noSubs: { kz: "Өтінім жоқ", ru: "Нет заявок", en: "No submissions" },
   action: { kz: "Әрекет", ru: "Действие", en: "Action" },
+
+  // ===== MODERN PROFILE =====
+  profJoined: { kz: "Тіркелген", ru: "На платформе", en: "Joined" },
+  profSchool: { kz: "Мектеп", ru: "Школа", en: "School" },
+  profSubject: { kz: "Пән", ru: "Предмет", en: "Subject" },
+  profExperience: { kz: "Тәжірибе", ru: "Стаж", en: "Experience" },
+  profCity: { kz: "Қала", ru: "Город", en: "City" },
+  profPosition: { kz: "Лауазым", ru: "Должность", en: "Position" },
+  profApprovalRate: { kz: "Мақұлдау пайызы", ru: "% одобрения", en: "Approval rate" },
+  profQuickActions: { kz: "Жылдам әрекеттер", ru: "Быстрые действия", en: "Quick actions" },
+  profInfo: { kz: "Ақпарат", ru: "Информация", en: "Info" },
+  profAbout: { kz: "Мәліметтер", ru: "Сведения", en: "About" },
+  profNoSchool: { kz: "Мектеп көрсетілмеген", ru: "Школа не указана", en: "School not specified" },
+  profNoSubject: { kz: "Пән көрсетілмеген", ru: "Предмет не указан", en: "Subject not specified" },
+  profYear: { kz: "жыл", ru: "лет", en: "yrs" },
+  profTabSubs: { kz: "Өтінімдер", ru: "Заявки", en: "Submissions" },
 
   // ===== NEWS PAGE =====
   newsTitle: { kz: "Жаңалықтар", ru: "Новости", en: "News" },
@@ -677,6 +719,13 @@ export const T = {
   accHighContrast: { kz: "Жоғары контраст", ru: "Высокий контраст", en: "High contrast" },
   accHighContrastDesc: { kz: "Мәтін мен фон арасындағы контрастты күшейтеді", ru: "Усиливает контраст между текстом и фоном", en: "Increases contrast between text and background" },
   accSaved: { kz: "Баптаулар сақталды", ru: "Настройки сохранены", en: "Settings saved" },
+  docPreview: { kz: "Құжат көрінісі", ru: "Предпросмотр документа", en: "Document preview" },
+  docPreviewHint: { kz: "Мәліметтерді толтырыңыз — құжат автоматты жаңарады", ru: "Заполните данные — документ обновится автоматически", en: "Fill in the data — document updates automatically" },
+  officialLetter: { kz: "Ресми хат", ru: "Официальное письмо", en: "Official letter" },
+  collapseList: { kz: "Тізімді жию", ru: "Свернуть список", en: "Collapse list" },
+  expandList: { kz: "Тізімді ашу", ru: "Развернуть список", en: "Expand list" },
+  fromLabel: { kz: "Кімнен", ru: "От кого", en: "From" },
+  toLabel: { kz: "Кімге", ru: "Кому", en: "To" },
 };
 
 /**
