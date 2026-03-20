@@ -279,6 +279,9 @@ const store = {
     // news feed
     news: [],
 
+    // announcements (admin banners)
+    announcements: [],
+
     // ui
     statsRangeMode: "14d",
     statsView: "mine",
@@ -313,7 +316,7 @@ function toggleTheme() {
   applyTheme(next);
   const u = store.state.userDoc;
   if (u) {
-    updateDoc(doc(db, "users", u.uid), { preferredTheme: next }).catch(() => {});
+    updateDoc(doc(db, "users", u.uid), { preferredTheme: next }).catch(() => { });
   }
 }
 
@@ -338,7 +341,7 @@ async function saveAccessibilityToFirestore(uid, acc) {
 const ROUTES = [
   "login", "onboarding", "dashboard", "profile", "rating", "stats", "add",
   "requests", "documents", "news", "support",
-  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support"
+  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support", "admin/announcements"
 ];
 
 function parseRoute() {
@@ -420,6 +423,7 @@ async function render() {
   mount("mount-topbar-right", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
   mount("mount-bottomnav", <ErrorBoundary name="bottomnav"><BottomNav /></ErrorBoundary>);
   mount("mount-overlays", <ErrorBoundary name="overlays"><Overlays /></ErrorBoundary>);
+  mount("mount-announcements", <ErrorBoundary name="announcements"><AnnouncementBanner /></ErrorBoundary>);
 
   // Pages (only active route)
   // If still booting (auth state not yet known), show loader instead of page
@@ -446,6 +450,7 @@ async function render() {
   mount("mount-admin-users", show("admin/users") ? <ErrorBoundary name="admin/users">{booting ? <LoadingScreen /> : <PageAdminUsers />}</ErrorBoundary> : null);
   mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen /> : <PageAdminTeacher />}</ErrorBoundary> : null);
   mount("mount-admin-support", show("admin/support") ? <ErrorBoundary name="admin/support">{booting ? <LoadingScreen /> : <PageAdminSupport />}</ErrorBoundary> : null);
+  mount("mount-admin-announcements", show("admin/announcements") ? <ErrorBoundary name="admin/announcements">{booting ? <LoadingScreen /> : <PageAdminAnnouncements />}</ErrorBoundary> : null);
 }
 
 function setupMobileDrawer() {
@@ -939,7 +944,7 @@ const NEWS_FONTS = [
   { key: "'Times New Roman', serif", label: "Times" },
   { key: "'Trebuchet MS', sans-serif", label: "Trebuchet" },
 ];
-const NEWS_MOODS = ["😊","😂","😍","🔥","👏","💪","🎉","😎","🤔","😢","❤️","👍"];
+const NEWS_MOODS = ["😊", "😂", "😍", "🔥", "👏", "💪", "🎉", "😎", "🤔", "😢", "❤️", "👍"];
 
 /** Parse simple **bold** and *italic* markers in text */
 function renderRichDesc(text) {
@@ -1017,6 +1022,10 @@ async function deleteNewsPost(newsId) {
   await deleteDoc(doc(db, "news", newsId));
 }
 
+async function toggleNewsPin(newsId, currentlyPinned) {
+  await updateDoc(doc(db, "news", newsId), { pinned: !currentlyPinned });
+}
+
 /** ---------- support tickets ---------- */
 async function fetchAllTickets() {
   const qy = query(collection(db, "tickets"), orderBy("createdAt", "desc"), limit(500));
@@ -1042,6 +1051,26 @@ async function createTicket({ uid, authorName, authorEmail, subject, message, pr
 }
 async function updateTicketStatus(ticketId, newStatus) {
   await updateDoc(doc(db, "tickets", ticketId), { status: newStatus });
+}
+
+/** ---------- announcements (admin → all users banner) ---------- */
+async function fetchAnnouncements() {
+  const qy = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(100));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function createAnnouncement({ emoji, text, link, startDate, endDate }) {
+  await addDoc(collection(db, "announcements"), {
+    emoji: safeText(emoji),
+    text: safeText(text),
+    link: safeText(link),
+    startDate: startDate || "",
+    endDate: endDate || "",
+    createdAt: serverTimestamp()
+  });
+}
+async function deleteAnnouncement(id) {
+  await deleteDoc(doc(db, "announcements", id));
 }
 
 /** ---------- ui components ---------- */
@@ -1071,6 +1100,7 @@ function Icon({ name }) {
     case "briefcase": return <svg {...common}><rect {...s} x="2" y="7" width="20" height="14" rx="2" /><path {...s} d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" /></svg>;
     case "settings": return <svg {...common}><circle {...s} cx="12" cy="12" r="3" /><path {...s} d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001.08 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1.08z" /></svg>;
     case "refresh": return <svg {...common}><path {...s} d="M23 4v6h-6" /><path {...s} d="M1 20v-6h6" /><path {...s} d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" /></svg>;
+    case "bell": return <svg {...common}><path {...s} d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path {...s} d="M13.73 21a2 2 0 01-3.46 0" /></svg>;
     default: return null;
   }
 }
@@ -1254,6 +1284,7 @@ function SidebarNav() {
     { p: "admin/types", tKey: "navKpiTypes", i: "file" },
     { p: "admin/users", tKey: "navUsers", i: "user" },
     { p: "admin/support", tKey: "navSupport", i: "bug" },
+    { p: "admin/announcements", tKey: "navAnnouncements", i: "bell" },
   ];
 
   // Flyout group badges (sum of children)
@@ -1315,19 +1346,6 @@ function SidebarNav() {
         </>
       )}
 
-      {u && (
-        <>
-          <div className="navsec">{t("navAccount")}</div>
-          <div
-            className="navlink"
-            role="button"
-            tabIndex={0}
-            onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast(t("loggedOut"), "ok"); navigate("login"); }}
-          >
-            <Icon name="logout" /> {t("navLogout")}
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -3067,7 +3085,7 @@ function PageDashboard() {
               {spark.map((v, i) => (
                 <div key={i} className="dash-spark__bar-wrap">
                   <div className="dash-spark__bar" style={{ "--h": `${(v / sparkMax) * 100}%`, "--delay": `${i * 0.07}s` }} />
-                  <div className="dash-spark__day">{["Пн","Вт","Ср","Чт","Пт","Сб","Вс"][(new Date(now - (6 - i) * 86400000)).getDay() === 0 ? 6 : (new Date(now - (6 - i) * 86400000)).getDay() - 1]}</div>
+                  <div className="dash-spark__day">{["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][(new Date(now - (6 - i) * 86400000)).getDay() === 0 ? 6 : (new Date(now - (6 - i) * 86400000)).getDay() - 1]}</div>
                 </div>
               ))}
             </div>
@@ -3330,18 +3348,18 @@ function PageProfile() {
             </div>
             <div className="prof-hero__meta-row">
               <span className="prof-hero__meta-item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2"/><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" /><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" /></svg>
                 {u.email}
               </span>
               {u.school && (
                 <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2" /></svg>
                   {u.school}
                 </span>
               )}
               {u.subject && (
                 <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2" /></svg>
                   {u.subject}
                 </span>
               )}
@@ -3367,7 +3385,7 @@ function PageProfile() {
             {u.instagram && (
               <a href={`https://instagram.com/${u.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
-                Instagram
+                {u.instagram.startsWith("@") ? u.instagram : `@${u.instagram}`}
               </a>
             )}
             {u.youtube && (
@@ -3394,7 +3412,7 @@ function PageProfile() {
       <div className="prof-stats">
         <div className="prof-stat glass card" style={{ "--di": 1 }}>
           <div className="prof-stat__icon prof-stat__icon--green">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
           <div className="prof-stat__num">{fmtPoints(u.totalPoints)}</div>
           <div className="prof-stat__label">{t("totalPoints")}</div>
@@ -3403,7 +3421,7 @@ function PageProfile() {
         </div>
         <div className="prof-stat glass card" style={{ "--di": 2 }}>
           <div className="prof-stat__icon prof-stat__icon--blue">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="2"/><path d="M14 2v6h6" stroke="currentColor" strokeWidth="2"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="2" /><path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" /></svg>
           </div>
           <div className="prof-stat__num">{subs.length}</div>
           <div className="prof-stat__label">{t("submissions")}</div>
@@ -3415,7 +3433,7 @@ function PageProfile() {
         </div>
         <div className="prof-stat glass card" style={{ "--di": 3 }}>
           <div className="prof-stat__icon prof-stat__icon--amber">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
           <div className="prof-stat__num">{fmtPoints(approvedPts)}</div>
           <div className="prof-stat__label">{t("approvedPts")}</div>
@@ -3423,7 +3441,7 @@ function PageProfile() {
         </div>
         <div className="prof-stat glass card" style={{ "--di": 4 }}>
           <div className="prof-stat__icon prof-stat__icon--purple">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           </div>
           <div className="prof-stat__num">{fmtPoints(u.compDays || 0)}</div>
           <div className="prof-stat__label">{t("compDays")}</div>
@@ -5670,26 +5688,26 @@ function PageAdminDocuments() {
                           </button>
                         </div>
                         <div style={{ overflow: "hidden", maxHeight: isOpen ? g.users.length * 60 : 0, opacity: isOpen ? 1 : 0, transition: "max-height .25s ease, opacity .2s ease" }}>
-                        {g.users.map(x => {
-                          const isSel = toUids.includes(x.uid);
-                          const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
-                          return (
-                            <div key={x.uid} className={`pos-item${isSel ? " active" : ""}`} onClick={() => toggleUid(x.uid)} style={{ padding: "6px 10px", gap: 8 }}>
-                              {x.avatarUrl ? (
-                                <img src={x.avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                              ) : (
-                                <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${grpColor}18`, color: grpColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{initials}</div>
-                              )}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.displayName || x.email}</div>
-                                {x.position && <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.position}</div>}
+                          {g.users.map(x => {
+                            const isSel = toUids.includes(x.uid);
+                            const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                            return (
+                              <div key={x.uid} className={`pos-item${isSel ? " active" : ""}`} onClick={() => toggleUid(x.uid)} style={{ padding: "6px 10px", gap: 8 }}>
+                                {x.avatarUrl ? (
+                                  <img src={x.avatarUrl} alt="" style={{ width: 28, height: 28, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                                ) : (
+                                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${grpColor}18`, color: grpColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{initials}</div>
+                                )}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, fontWeight: isSel ? 700 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.displayName || x.email}</div>
+                                  {x.position && <div style={{ fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.position}</div>}
+                                </div>
+                                <div style={{ width: 18, height: 18, borderRadius: 4, border: isSel ? "none" : "2px solid var(--border)", background: isSel ? "var(--accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all .15s" }}>
+                                  {isSel && <Icon name="check" />}
+                                </div>
                               </div>
-                              <div style={{ width: 18, height: 18, borderRadius: 4, border: isSel ? "none" : "2px solid var(--border)", background: isSel ? "var(--accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all .15s" }}>
-                                {isSel && <Icon name="check" />}
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -6158,7 +6176,7 @@ function PageAdminUsers() {
   const u = st.userDoc;
 
   useEffect(() => {
-    fetchCustomPositions().then(setCustomPos).catch(() => {});
+    fetchCustomPositions().then(setCustomPos).catch(() => { });
   }, []);
 
   const loadLogs = async () => {
@@ -6923,24 +6941,24 @@ function PageAdminTeacher() {
             </div>
             <div className="prof-hero__meta-row">
               <span className="prof-hero__meta-item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2"/><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" /><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" /></svg>
                 {teacherDoc?.email || uid}
               </span>
               {teacherDoc?.school && (
                 <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2" /></svg>
                   {teacherDoc.school}
                 </span>
               )}
               {teacherDoc?.subject && (
                 <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2" /></svg>
                   {teacherDoc.subject}
                 </span>
               )}
               {teacherDoc?.city && (
                 <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" /></svg>
                   {teacherDoc.city}
                 </span>
               )}
@@ -6970,7 +6988,7 @@ function PageAdminTeacher() {
             )}
             {(teacherDoc?.experienceYears > 0) && (
               <span className="prof-social-btn" style={{ cursor: "default" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="2" /></svg>
                 {teacherDoc.experienceYears} {t("profYear")}
               </span>
             )}
@@ -6986,7 +7004,7 @@ function PageAdminTeacher() {
       <div className="prof-stats">
         <div className="prof-stat glass card" style={{ "--di": 1 }}>
           <div className="prof-stat__icon prof-stat__icon--green">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
           <div className="prof-stat__num">{fmtPoints(teacherDoc?.totalPoints || 0)}</div>
           <div className="prof-stat__label">{t("totalPoints")}</div>
@@ -6994,7 +7012,7 @@ function PageAdminTeacher() {
         </div>
         <div className="prof-stat glass card" style={{ "--di": 2 }}>
           <div className="prof-stat__icon prof-stat__icon--blue">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </div>
           <div className="prof-stat__num">{fmtPoints(approvedPts)}</div>
           <div className="prof-stat__label">{t("approved")}</div>
@@ -7002,7 +7020,7 @@ function PageAdminTeacher() {
         </div>
         <div className="prof-stat glass card" style={{ "--di": 3 }}>
           <div className="prof-stat__icon prof-stat__icon--amber">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" /><path d="M12 6v6l4 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           </div>
           <div className="prof-stat__num">{pending.length}</div>
           <div className="prof-stat__label">{t("pending")}</div>
@@ -7010,7 +7028,7 @@ function PageAdminTeacher() {
         </div>
         <div className="prof-stat glass card" style={{ "--di": 4 }}>
           <div className="prof-stat__icon prof-stat__icon--purple">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
           </div>
           <div className="prof-stat__num">{Number(teacherDoc?.compDays || 0)}</div>
           <div className="prof-stat__label">{t("compDays")}</div>
@@ -7033,7 +7051,7 @@ function PageAdminTeacher() {
           <div className="at-info-grid">
             <div className="at-info-item">
               <div className="at-info-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 21a8 8 0 10-16 0" stroke="currentColor" strokeWidth="2"/><path d="M12 13a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 21a8 8 0 10-16 0" stroke="currentColor" strokeWidth="2" /><path d="M12 13a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" strokeWidth="2" /></svg>
               </div>
               <div>
                 <div className="at-info-label">{t("fullName")}</div>
@@ -7042,7 +7060,7 @@ function PageAdminTeacher() {
             </div>
             <div className="at-info-item">
               <div className="at-info-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2" /></svg>
               </div>
               <div>
                 <div className="at-info-label">{t("profSchool")}</div>
@@ -7051,7 +7069,7 @@ function PageAdminTeacher() {
             </div>
             <div className="at-info-item">
               <div className="at-info-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2" /></svg>
               </div>
               <div>
                 <div className="at-info-label">{t("profSubject")}</div>
@@ -7060,7 +7078,7 @@ function PageAdminTeacher() {
             </div>
             <div className="at-info-item">
               <div className="at-info-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="2" /></svg>
               </div>
               <div>
                 <div className="at-info-label">{t("profExperience")}</div>
@@ -7069,7 +7087,7 @@ function PageAdminTeacher() {
             </div>
             <div className="at-info-item">
               <div className="at-info-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" /></svg>
               </div>
               <div>
                 <div className="at-info-label">{t("profCity")}</div>
@@ -7078,7 +7096,7 @@ function PageAdminTeacher() {
             </div>
             <div className="at-info-item">
               <div className="at-info-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V6l-8-3-8 3v6c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2"/></svg>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V6l-8-3-8 3v6c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" /></svg>
               </div>
               <div>
                 <div className="at-info-label">{t("roleLabel")}</div>
@@ -7193,27 +7211,33 @@ function PageAdminTeacher() {
             columns={[
               { key: "eventDate", label: t("date") },
               { key: "typeName", label: t("type") },
-              { key: "title", label: t("title"), render: s => (
-                <div>
-                  <b>{s.title}</b>
-                  {s.description ? <div className="muted tiny">{s.description}</div> : null}
-                </div>
-              )},
+              {
+                key: "title", label: t("title"), render: s => (
+                  <div>
+                    <b>{s.title}</b>
+                    {s.description ? <div className="muted tiny">{s.description}</div> : null}
+                  </div>
+                )
+              },
               { key: "points", label: t("points"), render: s => <b>{fmtPoints(s.points)}</b> },
               { key: "status", label: t("status"), render: s => <Pill kind={s.status}>{s.status}</Pill> },
-              { key: "evidence", label: "Evidence", render: s => (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">{t("link")}</a> : null}
-                  {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">{t("file")}</a> : null}
-                  {!s.evidenceLink && !s.evidenceFileUrl ? <span className="muted tiny">—</span> : null}
-                </div>
-              )},
-              { key: "action", label: t("action"), render: s => s.status === "pending" ? (
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /></Btn>
-                  <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /></Btn>
-                </div>
-              ) : <span className="muted tiny">—</span> }
+              {
+                key: "evidence", label: "Evidence", render: s => (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">{t("link")}</a> : null}
+                    {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">{t("file")}</a> : null}
+                    {!s.evidenceLink && !s.evidenceFileUrl ? <span className="muted tiny">—</span> : null}
+                  </div>
+                )
+              },
+              {
+                key: "action", label: t("action"), render: s => s.status === "pending" ? (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /></Btn>
+                    <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /></Btn>
+                  </div>
+                ) : <span className="muted tiny">—</span>
+              }
             ]}
             rows={subs.map(s => ({ ...s, __key: s.id }))}
           />
@@ -7309,7 +7333,13 @@ function NewsCard({ item, user, index }) {
   };
 
   return (
-    <div className="news-card" style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}>
+    <div className={`news-card${item.pinned ? " news-card--pinned" : ""}`} style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}>
+      {item.pinned && (
+        <div className="news-pinned-banner">
+          <svg className="news-pinned-banner__icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+          <span>{t("pinned")}</span>
+        </div>
+      )}
       <div className="news-card__body">
         <div className="news-card__meta">
           {item.avatarUrl
@@ -7321,6 +7351,16 @@ function NewsCard({ item, user, index }) {
             <div className="tiny muted">{timeAgo}</div>
           </div>
           <span className={`news-pill news-pill--${item.category}`}>{catLabel}</span>
+          {user?.role === "admin" && (
+            <button className="news-pin-btn" title={item.pinned ? t("unpin") : t("pin")} onClick={async () => {
+              await toggleNewsPin(item.id, !!item.pinned);
+              const updated = await fetchNewsAll();
+              setState({ news: updated });
+              toast(item.pinned ? t("unpinned") : t("pinnedDone"), "ok");
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={item.pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+            </button>
+          )}
           {isOwner && (
             <button className="news-del-btn" title={t("delete")} onClick={async () => {
               if (!window.confirm(t("deleteNewsConfirm"))) return;
@@ -7503,7 +7543,8 @@ function PageNews() {
     } finally { setSubmitting(false); }
   };
 
-  const filtered = filter === "all" ? localNews : localNews.filter(n => n.category === filter);
+  const filteredRaw = filter === "all" ? localNews : localNews.filter(n => n.category === filter);
+  const filtered = [...filteredRaw].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   // Sidebar data
   const totalLikes = localNews.reduce((s, n) => s + (n.likes || []).length, 0);
@@ -7557,8 +7598,8 @@ function PageNews() {
             <div className="field" style={{ gridColumn: "1/-1" }}>
               <label className="label">{t("description")}</label>
               <div className="news-desc-toolbar">
-                <button type="button" className="news-tb-btn" title="Bold" onClick={() => wrapSelection("**","**")}><b>B</b></button>
-                <button type="button" className="news-tb-btn news-tb-btn--i" title="Italic" onClick={() => wrapSelection("*","*")}><i>I</i></button>
+                <button type="button" className="news-tb-btn" title="Bold" onClick={() => wrapSelection("**", "**")}><b>B</b></button>
+                <button type="button" className="news-tb-btn news-tb-btn--i" title="Italic" onClick={() => wrapSelection("*", "*")}><i>I</i></button>
                 <span className="news-tb-sep" />
                 <select className="news-tb-font" value={fontFamily} onChange={e => setFontFamily(e.target.value)}>
                   {NEWS_FONTS.map(f => <option key={f.key} value={f.key} style={{ fontFamily: f.key || "inherit" }}>{f.label}</option>)}
@@ -7988,11 +8029,198 @@ function PageAdminSupport() {
   );
 }
 
+/** ---------- admin announcements page ---------- */
+const EMOJI_OPTIONS = ["📢", "🎉", "⚠️", "📅", "🏆", "📚", "🔔", "💡", "🎓", "⭐", "🚀", "❗", "✅", "📝", "🎯", "💪"];
+
+function PageAdminAnnouncements() {
+  const st = useStore();
+  const u = st.userDoc;
+  const announcements = st.announcements || [];
+  const [emoji, setEmoji] = useState("📢");
+  const [text, setText] = useState("");
+  const [link, setLink] = useState("");
+  const [linkText, setLinkText] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+
+  if (!canAccess("admin/announcements", u)) return <Guard />;
+
+  const handleCreate = async () => {
+    if (!text.trim()) { toast(t("annTextRequired"), "error"); return; }
+    if (!startDate || !endDate) { toast(t("annDatesRequired"), "error"); return; }
+    if (new Date(endDate) < new Date(startDate)) { toast(t("annEndBeforeStart"), "error"); return; }
+    setSending(true);
+    try {
+      await createAnnouncement({ emoji, text: text.trim(), link: (link.trim() ? (linkText.trim() || link.trim()) + "||" + link.trim() : ""), startDate, endDate });
+      const fresh = await fetchAnnouncements();
+      setState({ announcements: fresh });
+      setText(""); setLink(""); setLinkText(""); setStartDate(""); setEndDate("");
+      toast(t("annCreated"), "ok");
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    } finally { setSending(false); }
+  };
+
+  const handleDelete = async (id) => {
+    setDeleting(id);
+    try {
+      await deleteAnnouncement(id);
+      const fresh = await fetchAnnouncements();
+      setState({ announcements: fresh });
+      toast(t("annDeleted"), "ok");
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    } finally { setDeleting(null); }
+  };
+
+  const now = new Date().toISOString().slice(0, 10);
+  const isActive = (a) => a.startDate <= now && a.endDate >= now;
+
+  return (
+    <div className="page-admin-announcements fade-in">
+      <h1 className="h1">{t("annPageTitle")}</h1>
+      <p className="p muted">{t("annPageDesc")}</p>
+
+      <div className="ann-columns">
+        {/* Left: Create form */}
+        <div className="ann-col-left">
+          <div className="ann-form glass slide-up">
+            <h2 className="h2">{t("annNewTitle")}</h2>
+
+            <label className="label">{t("annEmojiLabel")}</label>
+            <div className="ann-emoji-grid">
+              {EMOJI_OPTIONS.map(e => (
+                <button key={e} type="button" className={`ann-emoji-btn ${emoji === e ? "ann-emoji-btn--active" : ""}`} onClick={() => setEmoji(e)}>{e}</button>
+              ))}
+            </div>
+
+            <label className="label">{t("annTextLabel")}</label>
+            <Textarea value={text} onChange={e => setText(e.target.value)} placeholder={t("annTextPlaceholder")} rows={2} />
+
+            <div className="ann-row">
+              <div className="ann-field">
+                <label className="label">{t("annLinkLabel")}</label>
+                <Input value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." />
+              </div>
+              <div className="ann-field">
+                <label className="label">{t("annLinkTextLabel")}</label>
+                <Input value={linkText} onChange={e => setLinkText(e.target.value)} placeholder={t("annLinkTextPlaceholder")} />
+              </div>
+            </div>
+
+            <div className="ann-row">
+              <div className="ann-field">
+                <label className="label">{t("annStartDate")}</label>
+                <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+              </div>
+              <div className="ann-field">
+                <label className="label">{t("annEndDate")}</label>
+                <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Preview */}
+            {text.trim() && (
+              <div className="ann-preview">
+                <label className="label">{t("preview")}</label>
+                <div className="ann-banner-preview">
+                  <span className="ann-banner__emoji">{emoji}</span>
+                  <span className="ann-banner__text">{text}</span>
+                  {link.trim() && <a className="ann-banner__link" href={link} target="_blank" rel="noopener noreferrer">{linkText || link}</a>}
+                </div>
+              </div>
+            )}
+
+            <Btn kind="primary" onClick={handleCreate} disabled={sending} style={{ marginTop: 12 }}>
+              {sending ? "..." : t("send")}
+            </Btn>
+          </div>
+        </div>
+
+        {/* Right: List */}
+        <div className="ann-col-right">
+          <h2 className="h2">{t("annListTitle")} ({announcements.length})</h2>
+          {announcements.length === 0 ? (
+            <p className="p muted">{t("annEmpty")}</p>
+          ) : (
+            <div className="ann-list">
+              {announcements.map((a, i) => {
+                const active = isActive(a);
+                const parsedLink = (a.link || "").includes("||") ? a.link.split("||") : [a.link, a.link];
+                return (
+                  <div key={a.id} className={`ann-card glass fade-in ${active ? "ann-card--active" : "ann-card--inactive"}`} style={{ animationDelay: `${i * 0.04}s` }}>
+                    <div className="ann-card__top">
+                      <span className="ann-card__emoji">{a.emoji}</span>
+                      <span className="ann-card__text">{a.text}</span>
+                      <Pill kind={active ? "approved" : "rejected"}>{active ? t("annActive") : t("annInactive")}</Pill>
+                    </div>
+                    {a.link && (
+                      <div className="ann-card__link tiny">
+                        <a href={parsedLink[1]} target="_blank" rel="noopener noreferrer">{parsedLink[0]}</a>
+                      </div>
+                    )}
+                    <div className="ann-card__meta tiny muted">
+                      {a.startDate} — {a.endDate}
+                      {a.createdAt?.seconds && <span> · {new Date(a.createdAt.seconds * 1000).toLocaleDateString()}</span>}
+                    </div>
+                    <button className="ann-card__del" onClick={() => handleDelete(a.id)} disabled={deleting === a.id} title={t("delete")}>
+                      {deleting === a.id ? "..." : <Icon name="x" />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** ---------- announcement banner (shown to all users) ---------- */
+function AnnouncementBanner() {
+  const st = useStore();
+  const announcements = st.announcements || [];
+  const [dismissed, setDismissed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("kpi_ann_dismissed") || "[]"); } catch { return []; }
+  });
+
+  const now = new Date().toISOString().slice(0, 10);
+  const active = announcements.filter(a => a.startDate <= now && a.endDate >= now && !dismissed.includes(a.id));
+
+  const dismiss = (id) => {
+    const next = [...dismissed, id];
+    setDismissed(next);
+    try { localStorage.setItem("kpi_ann_dismissed", JSON.stringify(next)); } catch { }
+  };
+
+  if (!active.length || !st.userDoc) return null;
+
+  return (
+    <div className="ann-banners-wrap">
+      {active.map(a => {
+        const parsedLink = (a.link || "").includes("||") ? a.link.split("||") : [a.link, a.link];
+        return (
+          <div key={a.id} className="ann-banner slide-down">
+            <div className="ann-banner__content">
+              <span className="ann-banner__emoji">{a.emoji}</span>
+              <span className="ann-banner__text">{a.text}</span>
+              {a.link && <a className="ann-banner__link" href={parsedLink[1]} target="_blank" rel="noopener noreferrer">{parsedLink[0]}</a>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 async function hydrateForUser(userDoc) {
   if (!userDoc) return;
   try {
     if (userDoc.role === "admin") {
-      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData, ticketsData] = await Promise.all([
+      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData, ticketsData, announcementsData] = await Promise.all([
         fetchTypesAll(),
         fetchUsersAll(),
         fetchPendingSubmissions(),
@@ -8001,7 +8229,8 @@ async function hydrateForUser(userDoc) {
         fetchAdminRecentRequests(),
         fetchAllDocuments(),
         fetchNewsAll(),
-        fetchAllTickets()
+        fetchAllTickets(),
+        fetchAnnouncements()
       ]);
       setState({
         types,
@@ -8013,6 +8242,7 @@ async function hydrateForUser(userDoc) {
         allDocuments: allDocs,
         news: newsData,
         allTickets: ticketsData,
+        announcements: announcementsData,
         mySubmissions: [],
         myRequests: [],
         myDocuments: [],
@@ -8020,7 +8250,7 @@ async function hydrateForUser(userDoc) {
       });
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
-      const [types, my, myReq, myDocs, users, recent, newsData, myTix] = await Promise.all([
+      const [types, my, myReq, myDocs, users, recent, newsData, myTix, announcementsData] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
@@ -8028,7 +8258,8 @@ async function hydrateForUser(userDoc) {
         fetchUsersAll(),
         fetchAdminRecentSubs(),
         fetchNewsAll(),
-        fetchMyTickets(userDoc.uid)
+        fetchMyTickets(userDoc.uid),
+        fetchAnnouncements()
       ]);
       setState({
         types,
@@ -8039,6 +8270,7 @@ async function hydrateForUser(userDoc) {
         adminRecentSubs: recent,
         news: newsData,
         myTickets: myTix,
+        announcements: announcementsData,
         pendingSubmissions: [],
         pendingRequests: [],
         adminRecentRequests: [],
@@ -8088,7 +8320,8 @@ async function bootstrap() {
           allDocuments: [],
           news: [],
           myTickets: [],
-          allTickets: []
+          allTickets: [],
+          announcements: []
         });
         setState({ booting: false });
         render();
