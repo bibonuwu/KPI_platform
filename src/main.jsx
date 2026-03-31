@@ -275,6 +275,8 @@ const store = {
     // documents (admin → teacher)
     myDocuments: [],
     allDocuments: [],
+    // teacher personal documents (uploaded by teacher)
+    myTeacherDocs: [],
 
     // news feed
     news: [],
@@ -828,6 +830,28 @@ async function signDocument(docId, sigUrl) {
 }
 async function markDocumentViewed(docId) {
   await updateDoc(doc(db, "documents", docId), { status: "viewed" });
+}
+
+// ---- teacher personal documents (teacher_documents collection) ----
+async function fetchMyTeacherDocs(uid) {
+  const qy = query(collection(db, "teacher_documents"), where("uid", "==", uid), orderBy("createdAt", "desc"));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function createMyTeacherDoc({ uid, title, description, fileUrl, fileName }) {
+  await addDoc(collection(db, "teacher_documents"), {
+    uid,
+    title: safeText(title),
+    description: safeText(description),
+    fileUrl: safeText(fileUrl),
+    fileName: safeText(fileName),
+    createdAt: serverTimestamp()
+  });
+}
+async function uploadTeacherDocFile(uid, file) {
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+  return uploadFile(`teacher_documents/${uid}/${ts}_${safeName}`, file);
 }
 
 async function decideTeacherRequest(reqId, adminUid, action, pointsDelta) {
@@ -1468,7 +1492,7 @@ function TopbarRight() {
       {u ? (
         <>
           <Pill kind={u.role === "admin" ? "pending" : "approved"}>{u.role}</Pill>
-          <div className="tiny" style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div className="tiny" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             <b>{u.displayName || t("unnamed")}</b>
           </div>
           <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast(t("loggedOut")); navigate("login"); }}>
@@ -1684,7 +1708,7 @@ function TeacherProfileModal() {
         <div className="tp-info-list">
           {tc.subject && <div className="tp-info-row"><span className="tp-info-icon">📚</span><span>{tc.subject}</span></div>}
           {tc.city && <div className="tp-info-row"><span className="tp-info-icon">📍</span><span>{tc.city}</span></div>}
-          {tc.email && <div className="tp-info-row"><span className="tp-info-icon">✉️</span><span>{tc.email}</span></div>}
+          {tc.email && <div className="tp-info-row"><span className="tp-info-icon">✉️</span><span>{tc.email}</span><a href={`https://teams.microsoft.com/l/chat/0/0?users=${tc.email}`} target="_blank" rel="noopener noreferrer" className="tp-teams-btn" title="Teams Chat">💬</a></div>}
           {tc.phone && <div className="tp-info-row"><span className="tp-info-icon">📞</span><span>{tc.phone}</span></div>}
           {tc.experienceYears > 0 && <div className="tp-info-row"><span className="tp-info-icon">⏳</span><span>{tc.experienceYears} {t("yearsShort")}</span></div>}
         </div>
@@ -4335,13 +4359,12 @@ function PageRequests() {
   return (
     <>
       {/* Modal: view document for a specific request */}
-      {viewReq && (
-        <div className="modalback" onClick={() => setViewReq(null)}>
-          <div className="modal glass" onClick={e => e.stopPropagation()} style={{ maxHeight: "-webkit-fill-available", overflowY: "auto" }}>
-            <div className="modal__head">
-              <div className="h2">{t("document")}</div>
-              <button className="iconbtn" onClick={() => setViewReq(null)}><Icon name="x" /></button>
-            </div>
+      {viewReq && createPortal(
+        <div className="tp-overlay" onClick={() => setViewReq(null)}>
+          <div className="tp-card" onClick={e => e.stopPropagation()} style={{ width: "700px", maxWidth: "95vw", maxHeight: "95vh", overflowY: "auto" }}>
+            <button className="tp-close" onClick={() => setViewReq(null)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
             <DocumentPreview
               request={viewReq}
               user={u}
@@ -4350,7 +4373,8 @@ function PageRequests() {
               showDownload
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <div className="grid2">
@@ -5242,7 +5266,7 @@ function PageAdminRequests() {
   );
 }
 
-/** ---------- PageDocuments (teacher inbox) ---------- */
+/** ---------- PageDocuments (teacher inbox + my documents) ---------- */
 function PageDocuments() {
   const st = useStore();
   // All hooks before any conditional returns
@@ -5252,12 +5276,20 @@ function PageDocuments() {
   const [signingDoc, setSigningDoc] = useState(null);
   const [viewDoc, setViewDoc] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("sign"); // "sign" | "my"
+
+  // My documents upload form state
+  const [docTitle, setDocTitle] = useState("");
+  const [docDesc, setDocDesc] = useState("");
+  const [docFile, setDocFile] = useState(null);
 
   const u = st.userDoc;
   if (!u) return <Guard />;
   if (!canAccess("documents", u)) return <Guard />;
 
   const docs = st.myDocuments || [];
+  const myTDocs = st.myTeacherDocs || [];
+  const unsignedCount = docs.filter(d => d.status !== "signed").length;
 
   const getPos = (e) => {
     const c = canvasRef.current;
@@ -5265,8 +5297,8 @@ function PageDocuments() {
     const rect = c.getBoundingClientRect();
     const scaleX = c.width / rect.width;
     const scaleY = c.height / rect.height;
-    const t = e.touches ? e.touches[0] : e;
-    return [(t.clientX - rect.left) * scaleX, (t.clientY - rect.top) * scaleY];
+    const tch = e.touches ? e.touches[0] : e;
+    return [(tch.clientX - rect.left) * scaleX, (tch.clientY - rect.top) * scaleY];
   };
   const onDown = (e) => {
     e.preventDefault();
@@ -5282,8 +5314,8 @@ function PageDocuments() {
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const [x, y] = getPos(e);
-    ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.strokeStyle = "#1a1d2e"; ctx.lineTo(x, y); ctx.stroke();
+    ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#ffffff"; ctx.lineTo(x, y); ctx.stroke();
     setSigned(true);
   };
   const onUp = () => setDrawing(false);
@@ -5324,71 +5356,153 @@ function PageDocuments() {
     }
   };
 
+  // ---- My documents upload ----
+  const submitMyDoc = async (e) => {
+    e.preventDefault();
+    if (!safeText(docTitle)) { toast(t("enterDocName"), "error"); return; }
+    if (!docFile) { toast(t("attachFile"), "error"); return; }
+    try {
+      setState({ loading: true });
+      const fileUrl = await uploadTeacherDocFile(u.uid, docFile);
+      await createMyTeacherDoc({ uid: u.uid, title: docTitle, description: docDesc, fileUrl, fileName: docFile.name });
+      toast(t("docAdded"), "ok");
+      const fresh = await fetchMyTeacherDocs(u.uid);
+      setState({ myTeacherDocs: fresh });
+      setDocTitle(""); setDocDesc(""); setDocFile(null);
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || t("error"), "error");
+    } finally { setState({ loading: false }); }
+  };
+
+  const refreshMyDocs = async () => {
+    try {
+      setState({ loading: true });
+      const fresh = await fetchMyTeacherDocs(u.uid);
+      setState({ myTeacherDocs: fresh });
+      toast(t("updated"), "ok");
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    } finally { setState({ loading: false }); }
+  };
+
   const statusLabel = (s) => s === "signed" ? t("statusSigned") : s === "viewed" ? t("statusViewed") : t("statusNew");
   const statusColor = (s) => s === "signed" ? "approved" : s === "viewed" ? "pending" : "rejected";
 
   return (
     <>
-      {(viewDoc || signingDoc) && (
-        <div className="modal-backdrop" onClick={() => { setViewDoc(null); setSigningDoc(null); setSigned(false); }}>
-          <div className="modal glass" style={{ maxWidth: 520, width: "95vw" }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <div className="h2">{signingDoc ? t("signDocTitle") : t("document")}</div>
-              <Btn onClick={() => { setViewDoc(null); setSigningDoc(null); setSigned(false); }}>✕</Btn>
-            </div>
-
-            {(viewDoc || signingDoc) && (() => {
+      {/* View/Sign document modal */}
+      {(viewDoc || signingDoc) && createPortal(
+        <div className="tp-overlay" onClick={() => { setViewDoc(null); setSigningDoc(null); setSigned(false); }}>
+          <div className="tp-card" onClick={e => e.stopPropagation()} style={{
+            width: signingDoc && !signingDoc.signatureUrl ? "1100px" : "700px",
+            maxWidth: "95vw", maxHeight: "95vh", overflowY: "auto"
+          }}>
+            <button className="tp-close" onClick={() => { setViewDoc(null); setSigningDoc(null); setSigned(false); }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+            {(() => {
               const d = signingDoc || viewDoc;
               const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : ymd();
+              const needsSign = signingDoc && !signingDoc.signatureUrl;
               return (
-                <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 20, background: "#fff", color: "#1a1d2e", marginBottom: 16 }}>
-                  <div style={{ textAlign: "center", marginBottom: 12 }}>
-                    <img src="/logo-nis.png" alt="NIS" style={{ width: 48, height: 48, objectFit: "contain" }} />
-                    <div style={{ fontWeight: 700, fontSize: 13, marginTop: 4 }}>{t("nisOrg")}</div>
+                <div style={needsSign ? { display: "flex", gap: 24, flexWrap: "wrap" } : undefined}>
+                  {/* Document preview (left side) */}
+                  <div style={needsSign ? { flex: "1 1 380px", minWidth: 0 } : undefined}>
+                    <div className="doc-preview">
+                      <div className="doc-preview__regnum">No. {(d.id || "").slice(-6).toUpperCase() || "——"}</div>
+                      <div className="doc-preview__header">
+                        <img src="/logo-nis.png" alt="NIS" className="doc-preview__logo" />
+                        <div className="doc-preview__org">{t("nisOrg")}</div>
+                      </div>
+                      <div className="doc-preview__title">{d.title}</div>
+                      <div className="doc-preview__body">
+                        <div className="doc-preview__field">
+                          <span className="doc-preview__field-label">{t("recipient")}:</span>
+                          <span className="doc-preview__field-value">{d.toName || d.toEmail || u.displayName || u.email}</span>
+                        </div>
+                        {d.body && (
+                          <div className="doc-preview__field">
+                            <span className="doc-preview__field-label">{t("docDescLabel")}:</span>
+                            <span className="doc-preview__field-value" style={{ whiteSpace: "pre-wrap" }}>{d.body}</span>
+                          </div>
+                        )}
+                        <div className="doc-preview__field">
+                          <span className="doc-preview__field-label">{t("date")}:</span>
+                          <span className="doc-preview__field-value">{dateStr}</span>
+                        </div>
+                        <div className="doc-preview__field">
+                          <span className="doc-preview__field-label">{t("statusLabel")}:</span>
+                          <span className="doc-preview__field-value"><Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill></span>
+                        </div>
+                        {d.requireSignature && (
+                          <div className="doc-preview__field">
+                            <span className="doc-preview__field-label">{t("needsSignature")}:</span>
+                            <span className="doc-preview__field-value">{d.status === "signed" ? t("statusSigned") : t("reqPending")}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="doc-preview__signature">
+                        <div className="doc-preview__sig-block">
+                          {d.signatureUrl ? <img src={d.signatureUrl} alt="Подпись" className="doc-preview__sig-img" /> : <div className="doc-preview__sig-line" />}
+                          <div className="doc-preview__sig-label">{t("employeeSign")}</div>
+                          <div className="doc-preview__sig-name">{u.displayName || ""}</div>
+                        </div>
+                        <div className="doc-preview__sig-block">
+                          {d.adminSignatureUrl ? <img src={d.adminSignatureUrl} alt="Admin" className="doc-preview__sig-img" /> : <div className="doc-preview__sig-line" />}
+                          <div className="doc-preview__sig-label">{t("directorSign")}</div>
+                        </div>
+                      </div>
+                      <div className="doc-preview__date">{t("date")}: {dateStr}</div>
+                      {d.status === "signed" && (
+                        <div className="doc-preview__stamp">
+                          <img src="/logo-nis.png" alt="" style={{ width: 30, height: 30, objectFit: "contain", opacity: .4, marginBottom: 4 }} />
+                          <div>{t("statusSigned")}</div>
+                        </div>
+                      )}
+                      {!needsSign && (
+                        <div style={{ marginTop: 20, textAlign: "center", display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }} className="doc-preview__actions">
+                          <Btn kind="primary" onClick={() => window.print()}><Icon name="file" /> {t("preview")}</Btn>
+                          {d.requireSignature && d.status !== "signed" && (
+                            <Btn kind="primary" onClick={() => { setSigningDoc(d); setViewDoc(null); setSigned(false); clearSig(); }}>{t("signDoc")}</Btn>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ fontWeight: 800, fontSize: 16, textAlign: "center", marginBottom: 16, borderBottom: "2px solid #87BC2E", paddingBottom: 12 }}>{d.title}</div>
-                  <p style={{ fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", margin: "0 0 16px" }}>{d.body}</p>
-                  <div style={{ fontSize: 12, color: "#64748b" }}>{t("recipient")}: <b>{d.toName || d.toEmail}</b></div>
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>{t("date")}: {dateStr}</div>
-                  {d.signatureUrl && (
-                    <div style={{ marginTop: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
-                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>{t("signature")}:</div>
-                      <img src={d.signatureUrl} alt="Подпись" style={{ maxWidth: 180, border: "1px solid #e2e8f0", borderRadius: 6, padding: 4, background: "#fff" }} />
+
+                  {/* Signature pad (right side) */}
+                  {needsSign && (
+                    <div style={{ flex: "1 1 280px", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                      <div className="glass card" style={{ padding: 20 }}>
+                        <div className="h2" style={{ marginBottom: 12 }}>{t("putSignature")}</div>
+                        <canvas
+                          ref={canvasRef}
+                          width={800} height={200}
+                          className="signature-pad"
+                          style={{ width: "100%", height: 140, display: "block", cursor: "crosshair", marginBottom: 12, borderRadius: 10, border: "2px dashed var(--border)" }}
+                          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+                          onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+                        />
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <Btn onClick={clearSig}>{t("clear")}</Btn>
+                          <Btn kind="primary" onClick={submitSign} disabled={saving || !signed}>
+                            {saving ? t("loading") : t("signBtn")}
+                          </Btn>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
               );
             })()}
-
-            {signingDoc && !signingDoc.signatureUrl && (
-              <>
-                <div className="h2" style={{ marginBottom: 8 }}>{t("putSignature")}</div>
-                <canvas
-                  ref={canvasRef}
-                  width={800} height={200}
-                  className="signature-pad"
-                  style={{ width: "100%", height: 120, display: "block", cursor: "crosshair", marginBottom: 10 }}
-                  onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-                  onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
-                />
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <Btn onClick={clearSig}>{t("clear")}</Btn>
-                  <Btn kind="primary" onClick={submitSign} disabled={saving || !signed}>
-                    {saving ? t("loading") : t("signBtn")}
-                  </Btn>
-                </div>
-              </>
-            )}
-            {viewDoc && viewDoc.requireSignature && viewDoc.status !== "signed" && (
-              <div style={{ marginTop: 12 }}>
-                <Btn kind="primary" onClick={() => { setSigningDoc(viewDoc); setViewDoc(null); }}>{t("signDoc")}</Btn>
-              </div>
-            )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <div className="page-wrap">
+        {/* Header */}
         <div className="glass card" style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
@@ -5399,34 +5513,99 @@ function PageDocuments() {
           </div>
         </div>
 
-        {docs.length === 0 ? (
-          <div className="glass card" style={{ textAlign: "center", color: "var(--muted)", padding: 40 }}>
-            {t("noDocuments")}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {docs.map(d => {
-              const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
-              return (
-                <div key={d.id} className="glass card" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.title}</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.body}</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                      <Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill>
-                      {d.requireSignature && d.status !== "signed" && <Pill kind="pending">{t("needsSignature")}</Pill>}
-                      <span className="tiny muted">{dateStr}</span>
+        {/* Tabs */}
+        <div className="prof-tabs" style={{ marginBottom: 16 }}>
+          <button className={`prof-tab${activeTab === "sign" ? " prof-tab--active" : ""}`} onClick={() => setActiveTab("sign")}>
+            <Icon name="file" /> {t("tabToSign")} {unsignedCount > 0 && <span className="at-tab-count">{unsignedCount}</span>}
+          </button>
+          <button className={`prof-tab${activeTab === "my" ? " prof-tab--active" : ""}`} onClick={() => setActiveTab("my")}>
+            <Icon name="plus" /> {t("tabMyDocs")} {myTDocs.length > 0 && <span className="at-tab-count">{myTDocs.length}</span>}
+          </button>
+        </div>
+
+        {/* Tab: Documents to sign (from admin) */}
+        {activeTab === "sign" && (
+          <>
+            {docs.length === 0 ? (
+              <div className="glass card" style={{ textAlign: "center", color: "var(--muted)", padding: 40 }}>
+                {t("noDocuments")}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {docs.map(d => {
+                  const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+                  return (
+                    <div key={d.id} className="glass card" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.title}</div>
+                        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.body}</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          <Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill>
+                          {d.requireSignature && d.status !== "signed" && <Pill kind="pending">{t("needsSignature")}</Pill>}
+                          <span className="tiny muted">{dateStr}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                        <Btn onClick={() => openDoc(d)}>{t("view")}</Btn>
+                        {d.requireSignature && d.status !== "signed" && (
+                          <Btn kind="primary" onClick={() => { setSigningDoc(d); setSigned(false); clearSig(); }}>{t("signDoc")}</Btn>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                    <Btn onClick={() => openDoc(d)}>{t("view")}</Btn>
-                    {d.requireSignature && d.status !== "signed" && (
-                      <Btn kind="primary" onClick={() => { setSigningDoc(d); setSigned(false); clearSig(); }}>{t("signDoc")}</Btn>
-                    )}
-                  </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Tab: My documents (teacher uploads) */}
+        {activeTab === "my" && (
+          <div className="grid2">
+            <div className="glass card">
+              <div className="h2">{t("myDocsTitle")}</div>
+              <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>{t("myDocsDesc")}</div>
+              <div className="sep"></div>
+
+              <form onSubmit={submitMyDoc}>
+                <div className="label">{t("docNameLabel")}</div>
+                <Input value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder={t("docNamePlaceholder")} required />
+
+                <div className="label">{t("docDescLabel")}</div>
+                <Textarea value={docDesc} onChange={(e) => setDocDesc(e.target.value)} placeholder={t("docDescPlaceholder")} />
+
+                <div className="label">{t("docFileLabel")}</div>
+                <Input type="file" accept=".pdf,.doc,.docx,image/png,image/jpeg" onChange={(e) => setDocFile(e.target.files?.[0] || null)} required />
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                  <Btn kind="primary" type="submit" disabled={st.loading}>{t("uploadBtn")}</Btn>
+                  <Btn type="button" onClick={refreshMyDocs} disabled={st.loading}>{t("refresh")}</Btn>
                 </div>
-              );
-            })}
+              </form>
+            </div>
+
+            <div className="glass card">
+              <div className="h2">{t("uploadedDocs")}</div>
+              <div className="sep"></div>
+
+              {myTDocs.length === 0 && <p className="muted">{t("noMyDocs")}</p>}
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {myTDocs.map(d => {
+                  const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+                  return (
+                    <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700 }}>{d.title}</div>
+                        {d.description && <div className="muted tiny">{d.description}</div>}
+                        <div className="muted tiny">{d.fileName || "файл"} · {dateStr}</div>
+                      </div>
+                      {d.fileUrl && <a className="btn" href={d.fileUrl} target="_blank" rel="noreferrer">{t("openDoc")}</a>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -6800,6 +6979,25 @@ function PageAdminTeacher() {
     return () => { alive = false; };
   }, [uid, reloadNonce]);
 
+  // Teacher personal documents
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!uid) { if (alive) setTeacherDocs([]); return; }
+      try {
+        setLoadingDocs(true);
+        const arr = await fetchMyTeacherDocs(uid);
+        if (alive) setTeacherDocs(arr);
+      } catch (e) {
+        console.error(e);
+        if (alive) setTeacherDocs([]);
+      } finally {
+        if (alive) setLoadingDocs(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [uid, reloadNonce]);
+
   // Access checks AFTER hooks
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
@@ -6834,7 +7032,9 @@ function PageAdminTeacher() {
     );
   }
 
-  const [atTab, setAtTab] = useState("overview"); // overview | edit | subs
+  const [atTab, setAtTab] = useState("overview"); // overview | edit | subs | docs
+  const [teacherDocs, setTeacherDocs] = useState([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
 
   const approved = subs.filter(s => s.status === "approved");
   const pending = subs.filter(s => s.status === "pending");
@@ -7041,6 +7241,7 @@ function PageAdminTeacher() {
         <AtTabBtn id="overview" icon="info" label={t("profileOverview")} />
         <AtTabBtn id="edit" icon="settings" label={t("editSection")} />
         <AtTabBtn id="subs" icon="file" label={t("profTabSubs")} count={subs.length} />
+        <AtTabBtn id="docs" icon="shield" label={t("teacherDocsTitle")} count={teacherDocs.length} />
       </div>
 
       {/* Tab: overview */}
@@ -7243,6 +7444,36 @@ function PageAdminTeacher() {
           />
         </div>
       )}
+
+      {/* Tab: teacher documents */}
+      {atTab === "docs" && (
+        <div className="glass card prof-card" style={{ "--di": 5 }}>
+          <div className="h2">{t("teacherDocsTitle")}</div>
+          <div className="sep"></div>
+
+          {loadingDocs && <p className="p">{t("loading")}</p>}
+
+          {!loadingDocs && teacherDocs.length === 0 && (
+            <div style={{ textAlign: "center", color: "var(--muted)", padding: 24 }}>{t("noTeacherDocs")}</div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {teacherDocs.map(d => {
+              const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+              return (
+                <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "12px 16px", border: "1px solid var(--border)", borderRadius: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{d.title}</div>
+                    {d.description && <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{d.description}</div>}
+                    <div className="muted tiny" style={{ marginTop: 4 }}>{d.fileName || "файл"} · {dateStr}</div>
+                  </div>
+                  {d.fileUrl && <a className="btn" href={d.fileUrl} target="_blank" rel="noreferrer">{t("openDoc")}</a>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -7336,7 +7567,7 @@ function NewsCard({ item, user, index }) {
     <div className={`news-card${item.pinned ? " news-card--pinned" : ""}`} style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}>
       {item.pinned && (
         <div className="news-pinned-banner">
-          <svg className="news-pinned-banner__icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+          <svg className="news-pinned-banner__icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" /></svg>
           <span>{t("pinned")}</span>
         </div>
       )}
@@ -7358,7 +7589,7 @@ function NewsCard({ item, user, index }) {
               setState({ news: updated });
               toast(item.pinned ? t("unpinned") : t("pinnedDone"), "ok");
             }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill={item.pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill={item.pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" /></svg>
             </button>
           )}
           {isOwner && (
@@ -8250,11 +8481,12 @@ async function hydrateForUser(userDoc) {
       });
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
-      const [types, my, myReq, myDocs, users, recent, newsData, myTix, announcementsData] = await Promise.all([
+      const [types, my, myReq, myDocs, myTDocs, users, recent, newsData, myTix, announcementsData] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
         fetchDocumentsForTeacher(userDoc.uid),
+        fetchMyTeacherDocs(userDoc.uid),
         fetchUsersAll(),
         fetchAdminRecentSubs(),
         fetchNewsAll(),
@@ -8266,6 +8498,7 @@ async function hydrateForUser(userDoc) {
         mySubmissions: my,
         myRequests: myReq,
         myDocuments: myDocs,
+        myTeacherDocs: myTDocs,
         users,
         adminRecentSubs: recent,
         news: newsData,
@@ -8318,6 +8551,7 @@ async function bootstrap() {
           adminRecentRequests: [],
           myDocuments: [],
           allDocuments: [],
+          myTeacherDocs: [],
           news: [],
           myTickets: [],
           allTickets: [],

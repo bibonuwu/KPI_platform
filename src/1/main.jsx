@@ -103,6 +103,9 @@ const store = {
     pendingRequests: [],
     adminRecentRequests: [],
 
+    // teacher personal documents
+    myDocuments: [],
+
     // ui
     statsRangeMode: "14d",
     statsView: "mine",
@@ -137,7 +140,7 @@ function toggleTheme() {
 /** ---------- router ---------- */
 const ROUTES = [
   "login", "profile", "rating", "stats", "add",
-  "requests",
+  "requests", "documents",
   "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher"
 ];
 
@@ -166,7 +169,7 @@ function canAccess(path, userDoc) {
   const role = userDoc.role || "teacher";
   if (role === "teacher") {
     if (path.startsWith("admin/")) return false;
-    return ["profile", "rating", "stats", "add", "requests"].includes(path);
+    return ["profile", "rating", "stats", "add", "requests", "documents"].includes(path);
   }
   if (role === "admin") {
     if (path === "add") return false;
@@ -231,6 +234,7 @@ async function render() {
   mount("mount-stats", show("stats") ? <ErrorBoundary name="stats">{booting ? <LoadingScreen /> : <PageStats />}</ErrorBoundary> : null);
   mount("mount-add", show("add") ? <ErrorBoundary name="add">{booting ? <LoadingScreen /> : <PageAdd />}</ErrorBoundary> : null);
   mount("mount-requests", show("requests") ? <ErrorBoundary name="requests">{booting ? <LoadingScreen /> : <PageRequests />}</ErrorBoundary> : null);
+  mount("mount-documents", show("documents") ? <ErrorBoundary name="documents">{booting ? <LoadingScreen /> : <PageDocuments />}</ErrorBoundary> : null);
 
   mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary> : null);
   mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary> : null);
@@ -508,6 +512,28 @@ async function fetchAdminRecentRequests() {
   return res.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+// ---- teacher personal documents ----
+async function fetchTeacherDocuments(uid) {
+  const qy = query(collection(db, "teacher_documents"), where("uid", "==", uid), orderBy("createdAt", "desc"));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function createTeacherDocument({ uid, title, description, fileUrl, fileName }) {
+  await addDoc(collection(db, "teacher_documents"), {
+    uid,
+    title: safeText(title),
+    description: safeText(description),
+    fileUrl: safeText(fileUrl),
+    fileName: safeText(fileName),
+    createdAt: serverTimestamp()
+  });
+}
+async function uploadTeacherDocFile(uid, file) {
+  const ts = Date.now();
+  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
+  return uploadFile(`teacher_documents/${uid}/${ts}_${safeName}`, file);
+}
+
 async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note }) {
   const k = REQUEST_KINDS.find(x => x.key === kind) || REQUEST_KINDS[0];
   const from = safeText(dateFrom);
@@ -728,6 +754,7 @@ function SidebarNav() {
     { p: "rating", t: "Рейтинг", i: "rank" },
     { p: "stats", t: "Статистика", i: "chart" },
     { p: "requests", t: "Заявления", i: "file" },
+    { p: "documents", t: "Документы", i: "file" },
     { p: "add", t: "Добавить KPI", i: "plus" },
   ];
   const adminMain = [
@@ -1883,6 +1910,202 @@ function PageRequests() {
   );
 }
 
+function PageDocuments() {
+  const st = useStore();
+  const u = st.userDoc;
+  if (!u) return <Guard />;
+  if (!canAccess("documents", u)) return <Guard />;
+
+  const [tab, setTab] = useState("sign"); // "sign" | "my"
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [file, setFile] = useState(null);
+  const myDocs = st.myDocuments || [];
+
+  // Documents from admin that need signing (from existing `documents` collection)
+  const [adminDocs, setAdminDocs] = useState([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoadingDocs(true);
+        const qy = query(collection(db, "documents"), where("toUid", "==", u.uid), orderBy("createdAt", "desc"));
+        const res = await getDocs(qy);
+        const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (alive) setAdminDocs(arr);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (alive) setLoadingDocs(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [u.uid]);
+
+  async function refreshMyDocs() {
+    try {
+      setState({ loading: true });
+      const docs = await fetchTeacherDocuments(u.uid);
+      setState({ myDocuments: docs });
+      toast("Обновлено", "ok");
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || "Ошибка обновления", "error");
+    } finally { setState({ loading: false }); }
+  }
+
+  async function submitDoc(e) {
+    e.preventDefault();
+    try {
+      if (!safeText(title)) { toast("Введите название документа", "error"); return; }
+      if (!file) { toast("Прикрепите файл", "error"); return; }
+
+      setState({ loading: true });
+      const fileUrl = await uploadTeacherDocFile(u.uid, file);
+      await createTeacherDocument({ uid: u.uid, title, description, fileUrl, fileName: file.name });
+      toast("Документ добавлен", "ok");
+
+      const docs = await fetchTeacherDocuments(u.uid);
+      setState({ myDocuments: docs });
+      setTitle(""); setDescription(""); setFile(null);
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || "Ошибка загрузки", "error");
+    } finally { setState({ loading: false }); }
+  }
+
+  const signedDocs = adminDocs.filter(d => d.status === "signed");
+  const unsignedDocs = adminDocs.filter(d => d.status !== "signed");
+
+  return (
+    <div className="grid2">
+      <div className="glass card">
+        <div className="h1">Документы</div>
+        <p className="p">Документы на подпись от администрации и ваши личные документы.</p>
+        <div className="sep"></div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <Btn kind={tab === "sign" ? "primary" : "ghost"} onClick={() => setTab("sign")}>
+            Документы на подпись {unsignedDocs.length > 0 && <Pill kind="pending">{unsignedDocs.length}</Pill>}
+          </Btn>
+          <Btn kind={tab === "my" ? "primary" : "ghost"} onClick={() => setTab("my")}>
+            Мои документы
+          </Btn>
+        </div>
+
+        {tab === "sign" && (
+          <>
+            <div className="h2">Документы на подпись</div>
+            {loadingDocs && <p className="p">Загрузка...</p>}
+
+            {!loadingDocs && unsignedDocs.length === 0 && signedDocs.length === 0 && (
+              <p className="muted">Нет документов от администрации.</p>
+            )}
+
+            {unsignedDocs.length > 0 && (
+              <>
+                <div className="label" style={{ marginTop: 8 }}>Ожидают подписи ({unsignedDocs.length})</div>
+                {unsignedDocs.map(d => (
+                  <div key={d.id} className="kpi" style={{ marginBottom: 8, flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+                    <div>
+                      <b>{d.title || "Без названия"}</b>
+                      <div className="muted tiny">{d.body ? d.body.slice(0, 120) + (d.body.length > 120 ? "..." : "") : ""}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <Pill kind="pending">Ожидает подписи</Pill>
+                      {d.fileUrl && <a className="btn" href={d.fileUrl} target="_blank" rel="noreferrer">Скачать</a>}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {signedDocs.length > 0 && (
+              <>
+                <div className="sep"></div>
+                <div className="label">Подписанные ({signedDocs.length})</div>
+                {signedDocs.map(d => (
+                  <div key={d.id} className="kpi" style={{ marginBottom: 8 }}>
+                    <div>
+                      <b>{d.title || "Без названия"}</b>
+                      <div className="muted tiny">{d.body ? d.body.slice(0, 80) + "..." : ""}</div>
+                    </div>
+                    <Pill kind="approved">Подписано</Pill>
+                  </div>
+                ))}
+              </>
+            )}
+          </>
+        )}
+
+        {tab === "my" && (
+          <>
+            <div className="h2">Мои документы</div>
+            <p className="p">Загрузите свои документы (сертификаты, грамоты, дипломы и т.д.).</p>
+            <div className="sep"></div>
+
+            <form onSubmit={submitDoc}>
+              <div className="label">Название документа</div>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Например: Сертификат курсов повышения квалификации" required />
+
+              <div className="label">Описание (необязательно)</div>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Краткое описание документа..." />
+
+              <div className="label">Файл</div>
+              <Input type="file" accept=".pdf,.doc,.docx,image/png,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} required />
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                <Btn kind="primary" type="submit" disabled={st.loading}>Загрузить</Btn>
+                <Btn type="button" onClick={refreshMyDocs} disabled={st.loading}>Обновить</Btn>
+              </div>
+            </form>
+          </>
+        )}
+      </div>
+
+      {tab === "my" && (
+        <div className="glass card">
+          <div className="h2">Загруженные документы</div>
+          <div className="sep"></div>
+
+          {myDocs.length === 0 && <p className="muted">Пока нет загруженных документов.</p>}
+
+          {myDocs.map(d => (
+            <div key={d.id} className="kpi" style={{ marginBottom: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <b>{d.title}</b>
+                {d.description && <div className="muted tiny">{d.description}</div>}
+                <div className="muted tiny">{d.fileName || "файл"}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {d.fileUrl && <a className="btn" href={d.fileUrl} target="_blank" rel="noreferrer">Открыть</a>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "sign" && adminDocs.length > 0 && (
+        <div className="glass card">
+          <div className="h2">Сводка</div>
+          <div className="sep"></div>
+          <div className="grid2">
+            <div className="kpi">
+              <div><div className="muted tiny">Всего документов</div><b style={{ fontSize: 22 }}>{adminDocs.length}</b></div>
+            </div>
+            <div className="kpi">
+              <div><div className="muted tiny">Подписано</div><b style={{ fontSize: 22 }}>{signedDocs.length}</b></div>
+              <Pill kind="approved">OK</Pill>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ratingTrend(usersSorted) {
   const prev = JSON.parse(localStorage.getItem("rating_snapshot") || "[]");
   const prevPos = new Map(prev.map((x, i) => [x.uid, i + 1]));
@@ -3015,10 +3238,57 @@ function PageAdminTeacher() {
           </table>
         </div>
       </div>
+
+      <TeacherDocsPanel uid={uid} />
     </div>
   );
 }
 
+function TeacherDocsPanel({ uid }) {
+  const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!uid) return;
+      try {
+        setLoading(true);
+        const arr = await fetchTeacherDocuments(uid);
+        if (alive) setDocs(arr);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [uid]);
+
+  return (
+    <div className="glass card">
+      <div className="h2">Документы учителя</div>
+      <div className="sep"></div>
+
+      {loading && <p className="p">Загрузка документов...</p>}
+
+      {!loading && docs.length === 0 && <p className="muted">Нет загруженных документов.</p>}
+
+      {docs.map(d => (
+        <div key={d.id} className="kpi" style={{ marginBottom: 10 }}>
+          <div style={{ minWidth: 0 }}>
+            <b>{d.title}</b>
+            {d.description && <div className="muted tiny">{d.description}</div>}
+            <div className="muted tiny">{d.fileName || "файл"}</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {d.fileUrl && <a className="btn" href={d.fileUrl} target="_blank" rel="noreferrer">Открыть</a>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 async function hydrateForUser(userDoc) {
   if (!userDoc) return;
@@ -3044,10 +3314,11 @@ async function hydrateForUser(userDoc) {
       });
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
-      const [types, my, myReq, users, recent] = await Promise.all([
+      const [types, my, myReq, myDocs, users, recent] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
+        fetchTeacherDocuments(userDoc.uid),
         fetchUsersAll(),
         fetchAdminRecentSubs()
       ]);
@@ -3055,6 +3326,7 @@ async function hydrateForUser(userDoc) {
         types,
         mySubmissions: my,
         myRequests: myReq,
+        myDocuments: myDocs,
         users,
         adminRecentSubs: recent,
         pendingSubmissions: [],
@@ -3096,7 +3368,8 @@ async function bootstrap() {
           adminRecentSubs: [],
           myRequests: [],
           pendingRequests: [],
-          adminRecentRequests: []
+          adminRecentRequests: [],
+          myDocuments: []
         });
         setState({ booting: false });
         render();

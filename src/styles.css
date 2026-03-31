@@ -5334,6 +5334,7 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
 
 /* ── Publish form ── */
 .news-form-card {
+  margin-bottom: 13px;
   border: none;
   background: var(--card-bg);
   border-radius: var(--radius);
@@ -5623,19 +5624,41 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
 
 /* ── Pinned card ── */
 @keyframes pinned-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(135, 188, 46, .15), 0 0 0 1px rgba(135, 188, 46, .2), var(--shadow); }
-  50%      { box-shadow: 0 0 18px rgba(135, 188, 46, .25), 0 0 0 1.5px rgba(135, 188, 46, .35), var(--shadow); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(135, 188, 46, .15), 0 0 0 1px rgba(135, 188, 46, .2), var(--shadow);
+  }
+
+  50% {
+    box-shadow: 0 0 18px rgba(135, 188, 46, .25), 0 0 0 1.5px rgba(135, 188, 46, .35), var(--shadow);
+  }
 }
 
 @keyframes pinned-shimmer {
-  0%   { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes pin-bounce {
-  0%, 100% { transform: rotate(-30deg) translateY(0); }
-  40%      { transform: rotate(-30deg) translateY(-2px); }
-  60%      { transform: rotate(-30deg) translateY(-1px); }
+
+  0%,
+  100% {
+    transform: rotate(-30deg) translateY(0);
+  }
+
+  40% {
+    transform: rotate(-30deg) translateY(-2px);
+  }
+
+  60% {
+    transform: rotate(-30deg) translateY(-1px);
+  }
 }
 
 .news-card--pinned {
@@ -5649,12 +5672,10 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(
-    135deg,
-    rgba(135, 188, 46, .04) 0%,
-    rgba(135, 188, 46, .08) 40%,
-    rgba(135, 188, 46, .02) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(135, 188, 46, .04) 0%,
+      rgba(135, 188, 46, .08) 40%,
+      rgba(135, 188, 46, .02) 100%);
   pointer-events: none;
   z-index: 0;
 }
@@ -5672,12 +5693,10 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   color: #5a8c1a;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(
-    90deg,
-    rgba(135, 188, 46, .08),
-    rgba(135, 188, 46, .14) 50%,
-    rgba(135, 188, 46, .08)
-  );
+  background: linear-gradient(90deg,
+      rgba(135, 188, 46, .08),
+      rgba(135, 188, 46, .14) 50%,
+      rgba(135, 188, 46, .08));
   border-bottom: 1px solid rgba(135, 188, 46, .15);
 }
 
@@ -5685,14 +5704,12 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(135, 188, 46, .18) 45%,
-    rgba(255, 255, 255, .22) 50%,
-    rgba(135, 188, 46, .18) 55%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(135, 188, 46, .18) 45%,
+      rgba(255, 255, 255, .22) 50%,
+      rgba(135, 188, 46, .18) 55%,
+      transparent 100%);
   background-size: 200% 100%;
   animation: pinned-shimmer 3.5s ease-in-out infinite;
   pointer-events: none;
@@ -5717,14 +5734,17 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   opacity: 0;
   transition: opacity .2s, color .15s, background .15s, transform .2s;
 }
+
 .news-card:hover .news-pin-btn {
   opacity: 1;
 }
+
 .news-pin-btn:hover {
   color: var(--accent);
   background: rgba(135, 188, 46, .12);
   transform: scale(1.15);
 }
+
 .news-pin-btn:active {
   transform: scale(.9);
 }
@@ -6963,6 +6983,18 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   font-size: 14px;
 }
 
+.tp-teams-btn {
+  margin-left: auto;
+  font-size: 18px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.tp-teams-btn:hover {
+  transform: scale(1.25);
+}
+
 .tp-info-icon {
   width: 24px;
   text-align: center;
@@ -7684,6 +7716,7 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
 .page-admin-announcements {
   max-width: 100%;
 }
+
 .ann-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -7691,15 +7724,18 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   margin-top: 16px;
   align-items: start;
 }
+
 @media (max-width: 860px) {
   .ann-columns {
     grid-template-columns: 1fr;
   }
 }
+
 .ann-col-left,
 .ann-col-right {
   min-width: 0;
 }
+
 .ann-form {
   padding: 24px;
   border-radius: var(--radius);

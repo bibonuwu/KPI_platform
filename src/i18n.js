@@ -327,6 +327,26 @@ export const T = {
   signBtn: { kz: "Қол қою", ru: "Подписать", en: "Sign" },
   docSigned: { kz: "Құжатқа қол қойылды", ru: "Документ подписан", en: "Document signed" },
 
+  // ===== MY DOCUMENTS (teacher uploads) =====
+  tabToSign: { kz: "Қол қоюға", ru: "На подпись", en: "To sign" },
+  tabMyDocs: { kz: "Менің құжаттарым", ru: "Мои документы", en: "My documents" },
+  myDocsTitle: { kz: "Менің құжаттарым", ru: "Мои документы", en: "My documents" },
+  myDocsDesc: { kz: "Сертификаттар, грамоталар, дипломдар жүктеңіз", ru: "Загрузите сертификаты, грамоты, дипломы и т.д.", en: "Upload certificates, diplomas, awards etc." },
+  docNameLabel: { kz: "Құжат атауы", ru: "Название документа", en: "Document title" },
+  docNamePlaceholder: { kz: "Мысалы: Біліктілік арттыру сертификаты", ru: "Например: Сертификат курсов повышения квалификации", en: "E.g.: Professional development certificate" },
+  docDescLabel: { kz: "Сипаттама (міндетті емес)", ru: "Описание (необязательно)", en: "Description (optional)" },
+  docDescPlaceholder: { kz: "Құжат туралы қысқаша сипаттама...", ru: "Краткое описание документа...", en: "Brief document description..." },
+  docFileLabel: { kz: "Файл", ru: "Файл", en: "File" },
+  uploadBtn: { kz: "Жүктеу", ru: "Загрузить", en: "Upload" },
+  uploadedDocs: { kz: "Жүктелген құжаттар", ru: "Загруженные документы", en: "Uploaded documents" },
+  noMyDocs: { kz: "Жүктелген құжат жоқ", ru: "Нет загруженных документов", en: "No uploaded documents" },
+  docAdded: { kz: "Құжат қосылды", ru: "Документ добавлен", en: "Document added" },
+  enterDocName: { kz: "Құжат атауын енгізіңіз", ru: "Введите название документа", en: "Enter document title" },
+  attachFile: { kz: "Файл тіркеңіз", ru: "Прикрепите файл", en: "Attach a file" },
+  openDoc: { kz: "Ашу", ru: "Открыть", en: "Open" },
+  teacherDocsTitle: { kz: "Мұғалімнің құжаттары", ru: "Документы учителя", en: "Teacher documents" },
+  noTeacherDocs: { kz: "Жүктелген құжат жоқ", ru: "Нет загруженных документов", en: "No uploaded documents" },
+
   // ===== DOCUMENT PREVIEW =====
   toSchoolPrincipal: { kz: "Мектеп басшылығына", ru: "Мектеп басшылығына", en: "To school principal" },
   statement: { kz: "Өтініш", ru: "Заявление", en: "Statement" },
