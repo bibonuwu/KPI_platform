@@ -1,22 +1,9 @@
 services:
-  pocketbase:
-    build: ./pb
-    container_name: kpi-pocketbase
-    volumes:
-      - pb_data:/pb/pb_data
-      - ./pb_migrations:/pb/pb_migrations
-    expose:
-      - "8090"
-    restart: unless-stopped
-
   kpi-platform:
     build: .
     container_name: kpi-platform
     ports:
       - "8080:80"
-    depends_on:
-      - pocketbase
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
-
-volumes:
-  pb_data:
