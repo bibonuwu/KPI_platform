@@ -352,9 +352,14 @@ function updateRouteVisibility(path) {
 
 /** ---------- React mount/render layer ---------- */
 const __roots = new Map();
+const __mountedContent = new Map(); // track which mount points have content
 function mount(id, el) {
   const node = document.getElementById(id);
   if (!node) return;
+  // Skip re-rendering null if this mount point was already null (or never mounted)
+  const hadContent = __mountedContent.get(id);
+  if (el === null && hadContent === false) return;
+  __mountedContent.set(id, el !== null);
   let root = __roots.get(id);
   if (!root) {
     root = createRoot(node);
@@ -1491,10 +1496,10 @@ function ForcePasswordChange() {
   const [newPwd2, setNewPwd2] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Show ONLY for teachers who just completed onboarding (needsPasswordChange flag set during onboarding)
-  // Existing teachers who onboarded before this feature won't have this flag → no overlay
+  // Show ONLY for teachers who just completed onboarding (flag in localStorage)
+  const needsPwdChange = (() => { try { return localStorage.getItem("kpi_needsPwdChange") === "1"; } catch (e) { return false; } })();
   if (!u || u.role === "admin") return null;
-  if (u.needsPasswordChange !== true) return null;
+  if (!needsPwdChange) return null;
 
   const handleChange = async () => {
     if (newPwd.length < 6) { toast(t("pwdMinLength"), "error"); return; }
@@ -1507,8 +1512,8 @@ function ForcePasswordChange() {
         passwordConfirm: newPwd,
         oldPassword: newPwd
       });
-      await updateProfile(u.id, { needsPasswordChange: false, passwordChanged: true });
-      setState({ userDoc: { ...u, needsPasswordChange: false, passwordChanged: true } });
+      try { localStorage.removeItem("kpi_needsPwdChange"); } catch (e) { }
+      setState({ userDoc: { ...u } }); // trigger re-render
       toast(t("pwdChangedRedirect"), "ok");
     } catch (e) {
       console.error(e);
@@ -2421,10 +2426,10 @@ function PageOnboarding() {
       const blob = await new Promise(res => c.toBlob(res, "image/png"));
       const formData = new FormData();
       formData.append("onboarded", true);
-      formData.append("onboardedAt", new Date().toISOString());
-      formData.append("needsPasswordChange", true);
       formData.append("signature", new File([blob], "sig.png", { type: "image/png" }));
       await pb.collection("users").update(u.id, formData);
+      // Flag for password change overlay (stored in localStorage, not PocketBase)
+      try { localStorage.setItem("kpi_needsPwdChange", "1"); } catch (e) { }
       const freshUser = await ensureUserDoc();
       setState({ userDoc: freshUser });
       toast(t("onbCompleted"), "ok");
@@ -2578,9 +2583,9 @@ function PageOnboarding() {
             <div className="onb-done-card__checks">
               <div className="onb-done-check"><span>✓</span> {t("onbDocsRead")}</div>
               <div className="onb-done-check"><span>✓</span> {t("onbSignDone")}</div>
-              {u.onboardedAt && (
+              {u.updated && (
                 <div className="onb-done-check">
-                  <span>📅</span> {t("date")}: {new Date(u.onboardedAt).toLocaleDateString("ru-RU")}
+                  <span>📅</span> {t("date")}: {new Date(u.updated).toLocaleDateString("ru-RU")}
                 </div>
               )}
             </div>
@@ -8282,19 +8287,24 @@ function AnnouncementBanner() {
 
 async function hydrateForUser(userDoc) {
   if (!userDoc) return;
+  // Wrap each fetch so one failure doesn't break all data loading
+  const safe = (fn, fallback = []) => fn().catch(e => { console.warn("hydrate fetch failed:", e?.message); return fallback; });
+  let hasError = false;
+  const onErr = (e) => { if (!hasError) { hasError = true; console.error(e); toast(e?.message || t("error"), "error"); } return []; };
+
   try {
     if (userDoc.role === "admin") {
       const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData, ticketsData, announcementsData] = await Promise.all([
-        fetchTypesAll(),
-        fetchUsersAll(),
-        fetchPendingSubmissions(),
-        fetchAdminRecentSubs(),
-        fetchPendingRequests(),
-        fetchAdminRecentRequests(),
-        fetchAllDocuments(),
-        fetchNewsAll(),
-        fetchAllTickets(),
-        fetchAnnouncements()
+        safe(() => fetchTypesAll()),
+        safe(() => fetchUsersAll()),
+        safe(() => fetchPendingSubmissions()),
+        safe(() => fetchAdminRecentSubs()),
+        safe(() => fetchPendingRequests()),
+        safe(() => fetchAdminRecentRequests()),
+        safe(() => fetchAllDocuments()),
+        safe(() => fetchNewsAll()),
+        safe(() => fetchAllTickets()),
+        safe(() => fetchAnnouncements())
       ]);
       setState({
         types,
@@ -8315,16 +8325,16 @@ async function hydrateForUser(userDoc) {
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
       const [types, my, myReq, myDocs, myTDocs, users, recent, newsData, myTix, announcementsData] = await Promise.all([
-        fetchTypesActive(),
-        fetchMySubmissions(userDoc.uid),
-        fetchMyRequests(userDoc.uid),
-        fetchDocumentsForTeacher(userDoc.uid),
-        fetchMyTeacherDocs(userDoc.uid),
-        fetchUsersAll(),
-        fetchAdminRecentSubs(),
-        fetchNewsAll(),
-        fetchMyTickets(userDoc.uid),
-        fetchAnnouncements()
+        safe(() => fetchTypesActive()),
+        safe(() => fetchMySubmissions(userDoc.uid)),
+        safe(() => fetchMyRequests(userDoc.uid)),
+        safe(() => fetchDocumentsForTeacher(userDoc.uid)),
+        safe(() => fetchMyTeacherDocs(userDoc.uid)),
+        safe(() => fetchUsersAll()),
+        safe(() => fetchAdminRecentSubs()),
+        safe(() => fetchNewsAll()),
+        safe(() => fetchMyTickets(userDoc.uid)),
+        safe(() => fetchAnnouncements())
       ]);
       setState({
         types,
@@ -8345,8 +8355,7 @@ async function hydrateForUser(userDoc) {
       });
     }
   } catch (e) {
-    console.error(e);
-    toast(e?.message || t("error"), "error");
+    onErr(e);
   }
 }
 
