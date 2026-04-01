@@ -1,6 +1,6 @@
 services:
   pocketbase:
-    image: ghcr.io/muchobien/pocketbase:0.26.6
+    build: ./pb
     container_name: kpi-pocketbase
     volumes:
       - pb_data:/pb/pb_data
