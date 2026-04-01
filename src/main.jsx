@@ -6,68 +6,31 @@ import { createPortal } from "react-dom";
 import "./styles.css";
 import { t, getLang, setLang } from "./i18n.js";
 
-/** Firebase CDN imports (required) */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import {
-  getAuth,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  signOut,
-  OAuthProvider,
-  updatePassword,
-  reauthenticateWithCredential,
-  EmailAuthProvider,
-  sendPasswordResetEmail
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  addDoc,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp,
-  runTransaction,
-  increment,
-  arrayUnion,
-  arrayRemove
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-import {
-  getStorage,
-  ref,
-  uploadBytes,
-  getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
+/** PocketBase SDK */
+import pb, { getFileUrl } from "./pb.js";
 
-/** Firebase config (given) */
-const firebaseConfig = {
-  apiKey: "AIzaSyCekqSbjlZDcTw7DB3vr_FLBFXsv9ooCt4",
-  authDomain: "kpiplatform-85ef9.firebaseapp.com",
-  projectId: "kpiplatform-85ef9",
-  storageBucket: "kpiplatform-85ef9.firebasestorage.app",
-  messagingSenderId: "1020879305293",
-  appId: "1:1020879305293:web:07d435100d116ae998fa04"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-// Microsoft Entra ID (Azure AD) tenant limitation for Microsoft OAuth sign-in.
-// - "common" allows both personal Microsoft accounts and Azure AD accounts (default in Firebase).
-// - For ONLY your Azure AD tenant, set to tenant GUID or domain like: "contoso.onmicrosoft.com".
-const MICROSOFT_TENANT = "common";
+/** Record normalizers — add backward-compatible URL properties from PocketBase file fields */
+function normalizeUser(rec) {
+  return { ...rec, uid: rec.id, avatarUrl: getFileUrl(rec, "avatar"), signatureUrl: getFileUrl(rec, "signature") };
+}
+function normalizeSub(rec) {
+  return { ...rec, evidenceFileUrl: getFileUrl(rec, "evidenceFile") };
+}
+function normalizeReq(rec) {
+  return { ...rec, evidenceFileUrl: getFileUrl(rec, "evidenceFile") };
+}
+function normalizeDoc(rec) {
+  return { ...rec, signatureUrl: getFileUrl(rec, "signatureFile") };
+}
+function normalizeTeacherDoc(rec) {
+  return { ...rec, fileUrl: getFileUrl(rec, "file") };
+}
+function normalizeNews(rec) {
+  return { ...rec, photoUrl: getFileUrl(rec, "photo"), coverUrl: getFileUrl(rec, "cover"), avatarUrl: rec.authorAvatar || "" };
+}
+function normalizeComment(rec) {
+  return { ...rec, avatarUrl: rec.authorAvatar || "" };
+}
 
 /** Default KPI Types (required) */
 const DEFAULT_TYPES = [
@@ -318,7 +281,7 @@ function toggleTheme() {
   applyTheme(next);
   const u = store.state.userDoc;
   if (u) {
-    updateDoc(doc(db, "users", u.uid), { preferredTheme: next }).catch(() => { });
+    pb.collection("users").update(u.id, { preferredTheme: next }).catch(() => { });
   }
 }
 
@@ -333,9 +296,9 @@ function applyAccessibility(acc) {
   el.setAttribute("data-high-contrast", acc.highContrast ? "true" : "false");
   setState({ accessibility: { ...acc } });
 }
-async function saveAccessibilityToFirestore(uid, acc) {
+async function saveAccessibility(uid, acc) {
   try {
-    await updateDoc(doc(db, "users", uid), { accessibility: acc });
+    await pb.collection("users").update(uid, { accessibility: acc });
   } catch (e) { console.warn("Accessibility save failed:", e); }
 }
 
@@ -493,10 +456,7 @@ function ymd(d = new Date()) {
   return `${y}-${m}-${dd}`;
 }
 function tsKey(x) {
-  const t = x?.createdAt;
-  const sec = t?.seconds ?? 0;
-  const ns = t?.nanoseconds ?? 0;
-  return sec * 1_000_000_000 + ns;
+  return new Date(x?.created || 0).getTime();
 }
 function sum(arr, fn) { return arr.reduce((a, x) => a + (Number(fn(x)) || 0), 0); }
 function lastDays(n) {
@@ -545,83 +505,52 @@ function toast(msg, kind = "info") {
   setTimeout(() => setState({ toasts: store.state.toasts.filter(t => t.id !== id) }), 3200);
 }
 
-/** ---------- firestore api ---------- */
-async function ensureUserDoc(uid, email) {
-  const refU = doc(db, "users", uid);
-  const snap = await getDoc(refU);
-  if (snap.exists()) {
-    const data = snap.data() || {};
-    const patch = {};
-    if (!data.uid) patch.uid = uid;
-    if (typeof data.compDays !== "number") patch.compDays = 0;
-    if (Object.keys(patch).length) {
-      try { await setDoc(refU, patch, { merge: true }); } catch (e) { }
-    }
-    return { id: snap.id, ...data, ...patch, uid: (data.uid || patch.uid || snap.id) };
-  }
-  // Check preUsers for pre-populated name/position
-  let preDisplayName = "";
-  let prePosition = "";
-  if (email) {
+/** ---------- PocketBase api ---------- */
+async function ensureUserDoc() {
+  const user = pb.authStore.model;
+  if (!user) return null;
+  if (!user.displayName) {
+    let preName = "", prePosition = "";
     try {
-      const preSnap = await getDoc(doc(db, "preUsers", email.toLowerCase()));
-      if (preSnap.exists()) {
-        preDisplayName = preSnap.data().displayName || "";
-        prePosition = preSnap.data().position || "";
-      }
+      const pre = await pb.collection("preUsers").getFirstListItem(`email="${user.email.toLowerCase()}"`);
+      preName = pre.displayName || "";
+      prePosition = pre.position || "";
     } catch (_) { }
+    const patch = {};
+    if (preName) patch.displayName = preName;
+    if (prePosition) patch.position = prePosition;
+    if (Object.keys(patch).length) {
+      const updated = await pb.collection("users").update(user.id, patch);
+      return normalizeUser(updated);
+    }
   }
-
-  const base = {
-    uid, email: email || "",
-    displayName: preDisplayName,
-    role: "teacher",
-    school: "",
-    subject: "",
-    experienceYears: 0,
-    phone: "",
-    city: "",
-    position: prePosition,
-    avatarUrl: "",
-    totalPoints: 0,
-    compDays: 0,
-    createdAt: serverTimestamp()
-  };
-  await setDoc(refU, base, { merge: true });
-  const snap2 = await getDoc(refU);
-  const data2 = snap2.data() || {}; return { id: snap2.id, ...data2, uid: data2.uid || snap2.id };
+  return normalizeUser(user);
 }
 
 async function hasAnyAdmin() {
-  const qy = query(collection(db, "users"), where("role", "==", "admin"), limit(1));
-  const res = await getDocs(qy);
-  return res.docs.length > 0;
+  try {
+    const res = await pb.collection("users").getList(1, 1, { filter: 'role="admin"' });
+    return res.totalItems > 0;
+  } catch { return false; }
 }
 
 async function fetchTypesAll() {
-  const res = await getDocs(collection(db, "types"));
-  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a, b) => {
-    const s = (a.section || "").localeCompare(b.section || "", "ru"); if (s) return s;
-    const ss = (a.subsection || "").localeCompare(b.subsection || "", "ru"); if (ss) return ss;
-    return (a.name || "").localeCompare(b.name || "", "ru");
-  });
+  const arr = await pb.collection("types").getFullList({ sort: "section,subsection,name" });
   return arr;
 }
 async function fetchTypesActive() {
-  const all = await fetchTypesAll();
-  return all.filter(t => t.active);
+  return await pb.collection("types").getFullList({ filter: "active=true", sort: "section,subsection,name" });
 }
 async function seedDefaultTypes() {
   const existing = await fetchTypesAll();
   const key = (t) => `${(t.section || "").toLowerCase()}||${(t.subsection || "").toLowerCase()}||${(t.name || "").toLowerCase()}`;
   const have = new Set(existing.map(key));
   const missing = DEFAULT_TYPES.filter(t => !have.has(key(t)));
-  for (const t of missing) await addDoc(collection(db, "types"), t);
+  for (const t of missing) await pb.collection("types").create(t);
   return { added: missing.length };
 }
 async function addType(p) {
-  await addDoc(collection(db, "types"), {
+  await pb.collection("types").create({
     section: safeText(p.section),
     subsection: safeText(p.subsection),
     name: safeText(p.name),
@@ -630,48 +559,35 @@ async function addType(p) {
   });
 }
 async function toggleType(id, active) {
-  await updateDoc(doc(db, "types", id), { active: !!active });
+  await pb.collection("types").update(id, { active: !!active });
 }
 async function deleteTypeDoc(id) {
-  await deleteDoc(doc(db, "types", id));
+  await pb.collection("types").delete(id);
 }
 async function updateType(id, data) {
-  await updateDoc(doc(db, "types", id), data);
+  await pb.collection("types").update(id, data);
 }
 
 async function fetchUsersAll() {
-  const qy = query(collection(db, "users"), orderBy("totalPoints", "desc"), limit(2000));
-  const res = await getDocs(qy);
-  return res.docs.map(d => {
-    const data = d.data() || {};
-    return { id: d.id, ...data, uid: data.uid || d.id };
-  });
+  const arr = await pb.collection("users").getFullList({ sort: "-totalPoints" });
+  return arr.map(normalizeUser);
 }
 
-
-// avoid where+orderBy composite indexes (sort client-side)
 async function fetchMySubmissions(uid) {
-  const qy = query(collection(db, "submissions"), where("uid", "==", uid));
-  const res = await getDocs(qy);
-  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a, b) => tsKey(b) - tsKey(a));
-  return arr;
+  const arr = await pb.collection("submissions").getFullList({ filter: `uid="${uid}"`, sort: "-created" });
+  return arr.map(normalizeSub);
 }
 async function fetchPendingSubmissions() {
-  const qy = query(collection(db, "submissions"), where("status", "==", "pending"));
-  const res = await getDocs(qy);
-  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a, b) => tsKey(b) - tsKey(a));
-  return arr;
+  const arr = await pb.collection("submissions").getFullList({ filter: 'status="pending"', sort: "-created" });
+  return arr.map(normalizeSub);
 }
 async function fetchAdminRecentSubs() {
-  const qy = query(collection(db, "submissions"), orderBy("createdAt", "desc"), limit(5000));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  const arr = await pb.collection("submissions").getFullList({ sort: "-created" });
+  return arr.map(normalizeSub);
 }
 
-async function createSubmission({ uid, type, title, description, eventDate, evidenceLink, evidenceFileUrl }) {
-  await addDoc(collection(db, "submissions"), {
+async function createSubmission({ uid, type, title, description, eventDate, evidenceLink, evidenceFile }) {
+  const data = {
     uid,
     typeId: type.id,
     typeName: type.name,
@@ -682,25 +598,31 @@ async function createSubmission({ uid, type, title, description, eventDate, evid
     description: safeText(description),
     eventDate: safeText(eventDate),
     evidenceLink: safeText(evidenceLink),
-    evidenceFileUrl: safeText(evidenceFileUrl),
-    status: "pending",
-    createdAt: serverTimestamp()
-  });
+    status: "pending"
+  };
+  if (evidenceFile) {
+    const formData = new FormData();
+    for (const [k, v] of Object.entries(data)) formData.append(k, v);
+    formData.append("evidenceFile", evidenceFile);
+    await pb.collection("submissions").create(formData);
+  } else {
+    await pb.collection("submissions").create(data);
+  }
 }
 async function approveSubmission(subId, adminUid) {
-  const sRef = doc(db, "submissions", subId);
-  await runTransaction(db, async (tx) => {
-    const sSnap = await tx.get(sRef);
-    if (!sSnap.exists()) throw new Error("Заявка не найдена");
-    const s = sSnap.data();
-    if (s.status !== "pending") return;
-    const uRef = doc(db, "users", s.uid);
-    tx.update(sRef, { status: "approved", decidedAt: serverTimestamp(), decidedBy: adminUid });
-    tx.update(uRef, { totalPoints: increment(Number(s.points) || 0) });
+  const sub = await pb.collection("submissions").getOne(subId);
+  if (sub.status !== "pending") return;
+  await pb.collection("submissions").update(subId, {
+    status: "approved",
+    decidedAt: new Date().toISOString(),
+    decidedBy: adminUid
+  });
+  await pb.collection("users").update(sub.uid, {
+    "totalPoints+": Number(sub.points) || 0
   });
 }
 async function rejectSubmission(subId, adminUid) {
-  await updateDoc(doc(db, "submissions", subId), { status: "rejected", decidedAt: serverTimestamp(), decidedBy: adminUid });
+  await pb.collection("submissions").update(subId, { status: "rejected", decidedAt: new Date().toISOString(), decidedBy: adminUid });
 }
 
 /** ---------- teacher statements / requests ---------- */
@@ -725,31 +647,24 @@ function dateRangeDays(fromYmd, toYmd) {
 }
 
 async function fetchMyRequests(uid) {
-  const qy = query(collection(db, "requests"), where("uid", "==", uid));
-  const res = await getDocs(qy);
-  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a, b) => tsKey(b) - tsKey(a));
-  return arr;
+  const arr = await pb.collection("requests").getFullList({ filter: `uid="${uid}"`, sort: "-created" });
+  return arr.map(normalizeReq);
 }
 async function fetchPendingRequests() {
-  const qy = query(collection(db, "requests"), where("status", "==", "pending"));
-  const res = await getDocs(qy);
-  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a, b) => tsKey(b) - tsKey(a));
-  return arr;
+  const arr = await pb.collection("requests").getFullList({ filter: 'status="pending"', sort: "-created" });
+  return arr.map(normalizeReq);
 }
 async function fetchAdminRecentRequests() {
-  const qy = query(collection(db, "requests"), orderBy("createdAt", "desc"), limit(5000));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  const arr = await pb.collection("requests").getFullList({ sort: "-created" });
+  return arr.map(normalizeReq);
 }
 
-async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, evidenceFileUrl }) {
+async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, evidenceFile }) {
   const k = REQUEST_KINDS.find(x => x.key === kind) || REQUEST_KINDS[0];
   const from = safeText(dateFrom);
   const to = safeText(dateTo) || from;
   const days = dateRangeDays(from, to);
-  await addDoc(collection(db, "requests"), {
+  const data = {
     uid,
     kind: k.key,
     kindLabel: t(k.tKey),
@@ -758,20 +673,26 @@ async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, evidenc
     dateTo: to,
     days,
     note: safeText(note),
-    evidenceFileUrl: safeText(evidenceFileUrl),
     status: "pending",
     pointsDelta: 0,
-    compDaysDelta: 0,
-    createdAt: serverTimestamp()
-  });
+    compDaysDelta: 0
+  };
+  if (evidenceFile) {
+    const formData = new FormData();
+    for (const [key, val] of Object.entries(data)) formData.append(key, val);
+    formData.append("evidenceFile", evidenceFile);
+    await pb.collection("requests").create(formData);
+  } else {
+    await pb.collection("requests").create(data);
+  }
 }
 
 /* -------- Online presence -------- */
 async function setUserOnline(uid, isOnline) {
   try {
-    await updateDoc(doc(db, "users", uid), {
+    await pb.collection("users").update(uid, {
       online: isOnline,
-      lastSeen: serverTimestamp()
+      lastSeen: new Date().toISOString()
     });
   } catch (e) {
     console.warn("Presence update failed:", e);
@@ -781,21 +702,21 @@ async function setUserOnline(uid, isOnline) {
 /* -------- Delete user + their data -------- */
 async function deleteUserAndData(uid) {
   const [subs, reqs, docs] = await Promise.all([
-    getDocs(query(collection(db, "submissions"), where("uid", "==", uid))),
-    getDocs(query(collection(db, "requests"), where("uid", "==", uid))),
-    getDocs(query(collection(db, "documents"), where("toUid", "==", uid)))
+    pb.collection("submissions").getFullList({ filter: `uid="${uid}"` }),
+    pb.collection("requests").getFullList({ filter: `uid="${uid}"` }),
+    pb.collection("documents").getFullList({ filter: `toUid="${uid}"` })
   ]);
   await Promise.all([
-    ...subs.docs.map(d => deleteDoc(d.ref)),
-    ...reqs.docs.map(d => deleteDoc(d.ref)),
-    ...docs.docs.map(d => deleteDoc(d.ref)),
-    deleteDoc(doc(db, "users", uid))
+    ...subs.map(d => pb.collection("submissions").delete(d.id)),
+    ...reqs.map(d => pb.collection("requests").delete(d.id)),
+    ...docs.map(d => pb.collection("documents").delete(d.id)),
+    pb.collection("users").delete(uid)
   ]);
 }
 
 /* -------- Documents (admin → teacher) -------- */
 async function createDocument({ fromUid, toUid, toEmail, toName, title, body, requireSignature }) {
-  await addDoc(collection(db, "documents"), {
+  await pb.collection("documents").create({
     fromUid,
     toUid,
     toEmail: safeText(toEmail),
@@ -803,151 +724,133 @@ async function createDocument({ fromUid, toUid, toEmail, toName, title, body, re
     title: safeText(title),
     body: safeText(body),
     requireSignature: !!requireSignature,
-    status: "sent",
-    signatureUrl: null,
-    signedAt: null,
-    createdAt: serverTimestamp()
+    status: "sent"
   });
 }
 async function fetchDocumentsForTeacher(uid) {
-  const qy = query(collection(db, "documents"), where("toUid", "==", uid));
-  const res = await getDocs(qy);
-  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a, b) => tsKey(b) - tsKey(a));
-  return arr;
+  const arr = await pb.collection("documents").getFullList({ filter: `toUid="${uid}"`, sort: "-created" });
+  return arr.map(normalizeDoc);
 }
 async function fetchAllDocuments() {
-  const qy = query(collection(db, "documents"), orderBy("createdAt", "desc"), limit(5000));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  const arr = await pb.collection("documents").getFullList({ sort: "-created" });
+  return arr.map(normalizeDoc);
 }
-async function signDocument(docId, sigUrl) {
-  await updateDoc(doc(db, "documents", docId), {
-    status: "signed",
-    signatureUrl: safeText(sigUrl),
-    signedAt: serverTimestamp()
-  });
+async function signDocument(docId, signatureBlob) {
+  const formData = new FormData();
+  formData.append("status", "signed");
+  formData.append("signedAt", new Date().toISOString());
+  if (signatureBlob) formData.append("signatureFile", signatureBlob);
+  await pb.collection("documents").update(docId, formData);
 }
 async function markDocumentViewed(docId) {
-  await updateDoc(doc(db, "documents", docId), { status: "viewed" });
+  await pb.collection("documents").update(docId, { status: "viewed" });
 }
 
 // ---- teacher personal documents (teacher_documents collection) ----
 async function fetchMyTeacherDocs(uid) {
-  const qy = query(collection(db, "teacher_documents"), where("uid", "==", uid), orderBy("createdAt", "desc"));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  const arr = await pb.collection("teacher_documents").getFullList({ filter: `uid="${uid}"`, sort: "-created" });
+  return arr.map(normalizeTeacherDoc);
 }
-async function createMyTeacherDoc({ uid, title, description, fileUrl, fileName }) {
-  await addDoc(collection(db, "teacher_documents"), {
-    uid,
-    title: safeText(title),
-    description: safeText(description),
-    fileUrl: safeText(fileUrl),
-    fileName: safeText(fileName),
-    createdAt: serverTimestamp()
-  });
+async function createMyTeacherDoc({ uid, title, description, file, fileName }) {
+  const formData = new FormData();
+  formData.append("uid", uid);
+  formData.append("title", safeText(title));
+  formData.append("description", safeText(description));
+  formData.append("fileName", safeText(fileName));
+  if (file) formData.append("file", file);
+  await pb.collection("teacher_documents").create(formData);
 }
 async function uploadTeacherDocFile(uid, file) {
-  const ts = Date.now();
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-  return uploadFile(`teacher_documents/${uid}/${ts}_${safeName}`, file);
+  // PocketBase handles files as record fields, return the file itself for FormData usage
+  return file;
 }
 
 async function decideTeacherRequest(reqId, adminUid, action, pointsDelta) {
-  const rRef = doc(db, "requests", reqId);
-  await runTransaction(db, async (tx) => {
-    const rSnap = await tx.get(rRef);
-    if (!rSnap.exists()) throw new Error("Заявление не найдено");
-    const r = rSnap.data() || {};
-    if (r.status !== "pending") return;
+  const r = await pb.collection("requests").getOne(reqId);
+  if (r.status !== "pending") return;
 
-    const uRef = doc(db, "users", r.uid);
-    const uSnap = await tx.get(uRef);
-    if (!uSnap.exists()) throw new Error("Пользователь не найден");
-    const u = uSnap.data() || {};
+  const u = await pb.collection("users").getOne(r.uid);
 
-    if (action === "reject") {
-      tx.update(rRef, { status: "rejected", decidedAt: serverTimestamp(), decidedBy: adminUid, pointsDelta: 0, compDaysDelta: 0 });
-      return;
-    }
-
-    const deltaPts = Number(pointsDelta) || 0;
-    const days = Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo);
-    const mode = r.compMode || "none";
-    const compDelta = mode === "earn" ? days : mode === "use" ? -days : 0;
-    const curComp = Number(u.compDays) || 0;
-    if (curComp + compDelta < 0) {
-      throw new Error(`Недостаточно отгулов: нужно ${Math.abs(compDelta)}, есть ${curComp}`);
-    }
-
-    tx.update(rRef, {
-      status: "approved",
-      decidedAt: serverTimestamp(),
+  if (action === "reject") {
+    await pb.collection("requests").update(reqId, {
+      status: "rejected",
+      decidedAt: new Date().toISOString(),
       decidedBy: adminUid,
-      pointsDelta: deltaPts,
-      compDaysDelta: compDelta
+      pointsDelta: 0,
+      compDaysDelta: 0
     });
-    const patch = {};
-    if (deltaPts) patch.totalPoints = increment(deltaPts);
-    if (compDelta) patch.compDays = increment(compDelta);
-    if (Object.keys(patch).length) tx.update(uRef, patch);
+    return;
+  }
+
+  const deltaPts = Number(pointsDelta) || 0;
+  const days = Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo);
+  const mode = r.compMode || "none";
+  const compDelta = mode === "earn" ? days : mode === "use" ? -days : 0;
+  const curComp = Number(u.compDays) || 0;
+  if (curComp + compDelta < 0) {
+    throw new Error(`Недостаточно отгулов: нужно ${Math.abs(compDelta)}, есть ${curComp}`);
+  }
+
+  await pb.collection("requests").update(reqId, {
+    status: "approved",
+    decidedAt: new Date().toISOString(),
+    decidedBy: adminUid,
+    pointsDelta: deltaPts,
+    compDaysDelta: compDelta
   });
+  const patch = {};
+  if (deltaPts) patch["totalPoints+"] = deltaPts;
+  if (compDelta) patch["compDays+"] = compDelta;
+  if (Object.keys(patch).length) await pb.collection("users").update(r.uid, patch);
 }
 
 async function setRole(uid, role) {
-  await updateDoc(doc(db, "users", uid), { role });
+  await pb.collection("users").update(uid, { role });
 }
 async function setPosition(uid, position) {
-  await updateDoc(doc(db, "users", uid), { position });
+  await pb.collection("users").update(uid, { position });
 }
 async function logAdminAction({ action, targetUid, targetName, details }) {
   try {
     const u = store.state.userDoc;
-    await addDoc(collection(db, "admin_logs"), {
+    await pb.collection("admin_logs").create({
       action,
       targetUid: targetUid || "",
       targetName: targetName || "",
       details: details || "",
-      adminUid: u?.uid || "",
-      adminName: u?.displayName || u?.email || "",
-      createdAt: serverTimestamp()
+      adminUid: u?.id || "",
+      adminName: u?.displayName || u?.email || ""
     });
   } catch (e) { console.error("logAdminAction error:", e); }
 }
 async function fetchAdminLogs(limitN = 200) {
-  const qy = query(collection(db, "admin_logs"), orderBy("createdAt", "desc"), limit(limitN));
-  const snap = await getDocs(qy);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const res = await pb.collection("admin_logs").getList(1, limitN, { sort: "-created" });
+  return res.items;
 }
 async function updateProfile(uid, patch) {
-  await updateDoc(doc(db, "users", uid), patch);
+  await pb.collection("users").update(uid, patch);
 }
 async function fetchCustomPositions() {
-  const snap = await getDoc(doc(db, "settings", "positions"));
-  if (snap.exists()) return snap.data().list || [];
-  return [];
+  try {
+    const rec = await pb.collection("settings").getFirstListItem('key="positions"');
+    return rec.value?.list || [];
+  } catch { return []; }
 }
 async function saveCustomPositions(list) {
-  await setDoc(doc(db, "settings", "positions"), { list });
+  try {
+    const rec = await pb.collection("settings").getFirstListItem('key="positions"');
+    await pb.collection("settings").update(rec.id, { value: { list } });
+  } catch {
+    await pb.collection("settings").create({ key: "positions", value: { list } });
+  }
 }
 
-/** ---------- storage ---------- */
-async function uploadFile(path, file) {
-  const r = ref(storage, path);
-  const buf = await file.arrayBuffer();
-  await uploadBytes(r, new Uint8Array(buf), { contentType: file.type || "application/octet-stream" });
-  return await getDownloadURL(r);
-}
-async function uploadEvidence(uid, file) {
-  const ts = Date.now();
-  const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-  return uploadFile(`evidence/${uid}/${ts}_${safeName}`, file);
-}
+/** ---------- file upload helpers ---------- */
 async function uploadAvatar(uid, blob) {
-  const ts = Date.now();
-  const f = new File([blob], "avatar.png", { type: blob.type || "image/png" });
-  return uploadFile(`avatars/${uid}/${ts}_avatar.png`, f);
+  const formData = new FormData();
+  formData.append("avatar", new File([blob], "avatar.png", { type: blob.type || "image/png" }));
+  const updated = await pb.collection("users").update(uid, formData);
+  return getFileUrl(updated, "avatar");
 }
 
 /** ---------- news api ---------- */
@@ -993,108 +896,100 @@ function newsCatLabel(key) {
 }
 
 async function fetchNewsAll() {
-  const qy = query(collection(db, "news"), orderBy("createdAt", "desc"), limit(300));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  const arr = await pb.collection("news").getFullList({ sort: "-created" });
+  return arr.map(normalizeNews);
 }
 
-async function createNewsPost({ uid, authorName, authorRole, avatarUrl, category, title, description, photoUrl, coverUrl, link, mood, fontFamily }) {
-  await addDoc(collection(db, "news"), {
-    uid,
-    authorName: safeText(authorName),
-    authorRole: safeText(authorRole),
-    avatarUrl: safeText(avatarUrl),
-    category: safeText(category),
-    title: safeText(title),
-    description: safeText(description),
-    photoUrl: safeText(photoUrl),
-    coverUrl: safeText(coverUrl),
-    link: safeText(link),
-    mood: safeText(mood || ""),
-    fontFamily: safeText(fontFamily || ""),
-    likes: [],
-    createdAt: serverTimestamp()
-  });
+async function createNewsPost({ uid, authorName, authorRole, avatarUrl, category, title, description, photoFile, coverFile, link, mood, fontFamily }) {
+  const formData = new FormData();
+  formData.append("uid", uid);
+  formData.append("authorName", safeText(authorName));
+  formData.append("authorRole", safeText(authorRole));
+  formData.append("authorAvatar", safeText(avatarUrl));
+  formData.append("category", safeText(category));
+  formData.append("title", safeText(title));
+  formData.append("description", safeText(description));
+  formData.append("link", safeText(link));
+  formData.append("mood", safeText(mood || ""));
+  formData.append("fontFamily", safeText(fontFamily || ""));
+  formData.append("likes", JSON.stringify([]));
+  formData.append("pinned", false);
+  if (photoFile) formData.append("photo", photoFile);
+  if (coverFile) formData.append("cover", coverFile);
+  await pb.collection("news").create(formData);
 }
 
 async function toggleNewsLike(newsId, uid, currentLikes) {
   const hasLiked = (currentLikes || []).includes(uid);
   if (hasLiked) {
-    await updateDoc(doc(db, "news", newsId), { likes: arrayRemove(uid) });
+    await pb.collection("news").update(newsId, { "likes-": [uid] });
   } else {
-    await updateDoc(doc(db, "news", newsId), { likes: arrayUnion(uid) });
+    await pb.collection("news").update(newsId, { "likes+": [uid] });
   }
 }
 
 async function fetchNewsComments(newsId) {
-  const qy = query(collection(db, "news", newsId, "comments"), orderBy("createdAt", "asc"));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  const arr = await pb.collection("comments").getFullList({ filter: `newsId="${newsId}"`, sort: "created" });
+  return arr.map(normalizeComment);
 }
 
 async function addNewsComment(newsId, { uid, authorName, avatarUrl, text }) {
-  await addDoc(collection(db, "news", newsId, "comments"), {
+  await pb.collection("comments").create({
+    newsId,
     uid,
     authorName: safeText(authorName),
-    avatarUrl: safeText(avatarUrl),
-    text: safeText(text),
-    createdAt: serverTimestamp()
+    authorAvatar: safeText(avatarUrl),
+    text: safeText(text)
   });
 }
 
 async function deleteNewsPost(newsId) {
-  await deleteDoc(doc(db, "news", newsId));
+  const comments = await pb.collection("comments").getFullList({ filter: `newsId="${newsId}"` });
+  await Promise.all(comments.map(c => pb.collection("comments").delete(c.id)));
+  await pb.collection("news").delete(newsId);
 }
 
 async function toggleNewsPin(newsId, currentlyPinned) {
-  await updateDoc(doc(db, "news", newsId), { pinned: !currentlyPinned });
+  await pb.collection("news").update(newsId, { pinned: !currentlyPinned });
 }
 
 /** ---------- support tickets ---------- */
 async function fetchAllTickets() {
-  const qy = query(collection(db, "tickets"), orderBy("createdAt", "desc"), limit(500));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  return await pb.collection("tickets").getFullList({ sort: "-created" });
 }
 async function fetchMyTickets(uid) {
-  const qy = query(collection(db, "tickets"), where("uid", "==", uid));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return await pb.collection("tickets").getFullList({ filter: `uid="${uid}"`, sort: "-created" });
 }
 async function createTicket({ uid, authorName, authorEmail, subject, message, priority }) {
-  await addDoc(collection(db, "tickets"), {
+  await pb.collection("tickets").create({
     uid,
     authorName: safeText(authorName),
     authorEmail: safeText(authorEmail),
     subject: safeText(subject),
     message: safeText(message),
     priority: priority || "medium",
-    status: "new",
-    createdAt: serverTimestamp()
+    status: "new"
   });
 }
 async function updateTicketStatus(ticketId, newStatus) {
-  await updateDoc(doc(db, "tickets", ticketId), { status: newStatus });
+  await pb.collection("tickets").update(ticketId, { status: newStatus });
 }
 
 /** ---------- announcements (admin → all users banner) ---------- */
 async function fetchAnnouncements() {
-  const qy = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(100));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  return await pb.collection("announcements").getFullList({ sort: "-created" });
 }
 async function createAnnouncement({ emoji, text, link, startDate, endDate }) {
-  await addDoc(collection(db, "announcements"), {
+  await pb.collection("announcements").create({
     emoji: safeText(emoji),
     text: safeText(text),
     link: safeText(link),
     startDate: startDate || "",
-    endDate: endDate || "",
-    createdAt: serverTimestamp()
+    endDate: endDate || ""
   });
 }
 async function deleteAnnouncement(id) {
-  await deleteDoc(doc(db, "announcements", id));
+  await pb.collection("announcements").delete(id);
 }
 
 /** ---------- ui components ---------- */
@@ -1426,7 +1321,7 @@ function AccessibilityModal() {
   const toggle = (key) => {
     const next = { ...acc, [key]: !acc[key] };
     applyAccessibility(next);
-    if (u) saveAccessibilityToFirestore(u.uid, next);
+    if (u) saveAccessibility(u.id, next);
   };
   const close = () => setState({ showAccessibilityModal: false });
   const rows = [
@@ -1495,7 +1390,7 @@ function TopbarRight() {
           <div className="tiny" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             <b>{u.displayName || t("unnamed")}</b>
           </div>
-          <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast(t("loggedOut")); navigate("login"); }}>
+          <Btn kind="ghost" onClick={async () => { if (pb.authStore.model) await setUserOnline(pb.authStore.model.id, false); pb.authStore.clear(); toast(t("loggedOut")); navigate("login"); }}>
             <Icon name="logout" /> {t("navLogout")}
           </Btn>
         </>
@@ -1604,21 +1499,20 @@ function ForcePasswordChange() {
   const handleChange = async () => {
     if (newPwd.length < 6) { toast(t("pwdMinLength"), "error"); return; }
     if (newPwd !== newPwd2) { toast(t("pwdMismatch"), "error"); return; }
-    const user = auth.currentUser;
-    if (!user) { toast(t("noSession"), "error"); return; }
+    if (!pb.authStore.model) { toast(t("noSession"), "error"); return; }
     setSaving(true);
     try {
-      await updatePassword(user, newPwd);
-      await updateProfile(u.uid, { needsPasswordChange: false, passwordChanged: true });
-      // Force state update so overlay disappears immediately
+      await pb.collection("users").update(pb.authStore.model.id, {
+        password: newPwd,
+        passwordConfirm: newPwd,
+        oldPassword: newPwd
+      });
+      await updateProfile(u.id, { needsPasswordChange: false, passwordChanged: true });
       setState({ userDoc: { ...u, needsPasswordChange: false, passwordChanged: true } });
       toast(t("pwdChangedRedirect"), "ok");
     } catch (e) {
       console.error(e);
-      const code = e?.code || "";
-      if (code === "auth/requires-recent-login") toast(t("reloginNeeded"), "error");
-      else if (code === "auth/too-many-requests") toast(t("tooManyAttempts"), "error");
-      else toast(e?.message || t("pwdChangeError"), "error");
+      toast(e?.message || t("pwdChangeError"), "error");
     } finally { setSaving(false); }
   };
 
@@ -1839,9 +1733,8 @@ function CropModal({ file, onClose }) {
       const blob = await new Promise(res => out.toBlob(res, "image/png", 0.92));
       if (!blob) throw new Error(t("saveError"));
 
-      const avatarUrl = await uploadAvatar(u.uid, blob);
-      await updateProfile(u.uid, { avatarUrl });
-      const fresh = await ensureUserDoc(u.uid, u.email);
+      await uploadAvatar(u.uid, blob);
+      const fresh = await ensureUserDoc();
       setState({ userDoc: fresh });
       toast(t("avatarUpdated"), "ok");
       onClose();
@@ -2526,9 +2419,13 @@ function PageOnboarding() {
       setSaving(true);
       const c = canvasRef.current;
       const blob = await new Promise(res => c.toBlob(res, "image/png"));
-      const sigUrl = await uploadFile(`signatures/${u.uid}/${Date.now()}_onboarding.png`, new File([blob], "sig.png", { type: "image/png" }));
-      await updateProfile(u.uid, { onboarded: true, onboardedAt: serverTimestamp(), signatureUrl: sigUrl, needsPasswordChange: true });
-      const freshUser = await ensureUserDoc(u.uid, u.email);
+      const formData = new FormData();
+      formData.append("onboarded", true);
+      formData.append("onboardedAt", new Date().toISOString());
+      formData.append("needsPasswordChange", true);
+      formData.append("signature", new File([blob], "sig.png", { type: "image/png" }));
+      await pb.collection("users").update(u.id, formData);
+      const freshUser = await ensureUserDoc();
       setState({ userDoc: freshUser });
       toast(t("onbCompleted"), "ok");
       // After onboarding, redirect to dashboard — ForcePasswordChange overlay will appear
@@ -2683,7 +2580,7 @@ function PageOnboarding() {
               <div className="onb-done-check"><span>✓</span> {t("onbSignDone")}</div>
               {u.onboardedAt && (
                 <div className="onb-done-check">
-                  <span>📅</span> {t("date")}: {new Date(u.onboardedAt.seconds * 1000).toLocaleDateString("ru-RU")}
+                  <span>📅</span> {t("date")}: {new Date(u.onboardedAt).toLocaleDateString("ru-RU")}
                 </div>
               )}
             </div>
@@ -2810,26 +2707,11 @@ function PageLogin() {
     e.preventDefault();
     try {
       setState({ loading: true });
-      await signInWithEmailAndPassword(auth, email, pass);
+      await pb.collection("users").authWithPassword(email, pass);
       toast(t("loginWelcome"), "ok");
     } catch (err) {
       console.error(err);
       toast(err?.message || t("loginError"), "error");
-    } finally { setState({ loading: false }); }
-  }
-
-  async function signInMicrosoft() {
-    try {
-      setState({ loading: true });
-      const provider = new OAuthProvider("microsoft.com");
-      provider.setCustomParameters({ prompt: "select_account", tenant: MICROSOFT_TENANT });
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
-      if (isMobile) { await signInWithRedirect(auth, provider); return; }
-      await signInWithPopup(auth, provider);
-      toast("Добро пожаловать!", "ok");
-    } catch (err) {
-      console.error(err);
-      toast(err?.message || "Ошибка входа через Microsoft", "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -2896,24 +2778,6 @@ function PageLogin() {
             <div className="login-form-title">{t("loginHeading")}</div>
             <div className="login-form-sub">{t("loginSubtext")}</div>
           </div>
-
-          {/* Microsoft btn — primary CTA */}
-          <button
-            className="login-ms-btn"
-            onClick={signInMicrosoft}
-            disabled={st.loading}
-            type="button"
-          >
-            <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
-              <path d="M1 1h9v9H1z" fill="#f25022" />
-              <path d="M11 1h9v9h-9z" fill="#7fba00" />
-              <path d="M1 11h9v9H1z" fill="#00a4ef" />
-              <path d="M11 11h9v9h-9z" fill="#ffb900" />
-            </svg>
-            {st.loading ? t("loading") : t("msSignIn")}
-          </button>
-
-          <div className="login-divider"><span>{t("or")}</span></div>
 
           <form onSubmit={submit}>
             <div className="login-field">
@@ -2986,8 +2850,8 @@ function PageDashboard() {
   // Recent submissions (last 5)
   const recent = [...(isAdmin ? allSubs : subs)]
     .sort((a, b) => {
-      const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-      const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+      const da = new Date(a.created || 0);
+      const db = new Date(b.created || 0);
       return db - da;
     })
     .slice(0, 5);
@@ -3001,7 +2865,7 @@ function PageDashboard() {
     const dayEnd = new Date(dayStart.getTime() + 86400000);
     const pts = (isAdmin ? allSubs : subs)
       .filter(s => {
-        const d = s.createdAt?.toDate ? s.createdAt.toDate() : new Date(s.createdAt || 0);
+        const d = new Date(s.created || 0);
         return d >= dayStart && d < dayEnd && s.status === "approved";
       })
       .reduce((sum, s) => sum + (Number(s.points) || 0), 0);
@@ -3185,7 +3049,7 @@ function PageDashboard() {
             <div className="dash-recent">
               {recent.map((s, idx) => {
                 const tp = types.find(x => x.id === s.typeId);
-                const d = s.createdAt?.toDate ? s.createdAt.toDate() : new Date(s.createdAt || 0);
+                const d = new Date(s.created || 0);
                 return (
                   <div key={s.id || idx} className="dash-recent__row" style={{ "--delay": `${idx * 0.08}s` }}>
                     <div className="dash-recent__dot" />
@@ -3235,12 +3099,10 @@ function PageProfile() {
   const rejected = subs.filter(s => s.status === "rejected");
 
   // --- Security / password change ---
-  const authUser = st.authUser;
-  const isPasswordProvider = !!(authUser?.providerData || []).some(p => p?.providerId === "password");
+  const isPasswordProvider = true; // PocketBase always uses password auth
 
   async function changePassword() {
-    const user = auth.currentUser;
-    if (!user) { toast(t("noSession"), "error"); return; }
+    if (!pb.authStore.model) { toast(t("noSession"), "error"); return; }
 
     const next = String(pw.next || "");
     const next2 = String(pw.next2 || "");
@@ -3248,37 +3110,29 @@ function PageProfile() {
 
     if (next.length < 6) { toast(t("pwdMinLength"), "error"); return; }
     if (next !== next2) { toast(t("pwdMismatch"), "error"); return; }
-    if (isPasswordProvider && !current) { toast(t("enterCurPwd"), "error"); return; }
+    if (!current) { toast(t("enterCurPwd"), "error"); return; }
 
     try {
       setState({ loading: true });
-
-      // For email/password accounts we can re-auth with current password
-      if (isPasswordProvider) {
-        const email = user.email || "";
-        const cred = EmailAuthProvider.credential(email, current);
-        await reauthenticateWithCredential(user, cred);
-      }
-
-      await updatePassword(user, next);
+      await pb.collection("users").update(pb.authStore.model.id, {
+        oldPassword: current,
+        password: next,
+        passwordConfirm: next
+      });
       toast(t("pwdChanged"), "ok");
       setPw({ current: "", next: "", next2: "" });
     } catch (e) {
       console.error(e);
-      const code = e?.code || "";
-      if (code === "auth/wrong-password" || code === "auth/invalid-credential") toast(t("wrongCurPwd"), "error");
-      else if (code === "auth/requires-recent-login") toast(t("reloginNeeded"), "error");
-      else if (code === "auth/too-many-requests") toast(t("tooManyAttempts"), "error");
-      else toast(e?.message || t("pwdChangeError"), "error");
+      toast(e?.message || t("pwdChangeError"), "error");
     } finally { setState({ loading: false }); }
   }
 
   async function resetPasswordEmail() {
     try {
-      const email = (auth.currentUser?.email || u.email || "").trim();
+      const email = (pb.authStore.model?.email || u.email || "").trim();
       if (!email) { toast(t("noEmail"), "error"); return; }
       setState({ loading: true });
-      await sendPasswordResetEmail(auth, email);
+      await pb.collection("users").requestPasswordReset(email);
       toast(t("resetSent"), "ok");
     } catch (e) {
       console.error(e);
@@ -3289,7 +3143,7 @@ function PageProfile() {
   async function save() {
     try {
       setState({ loading: true });
-      await updateProfile(u.uid, {
+      await updateProfile(u.id, {
         displayName: safeText(form.displayName),
         school: safeText(form.school),
         subject: safeText(form.subject),
@@ -3300,7 +3154,7 @@ function PageProfile() {
         instagram: safeText(form.instagram),
         youtube: safeText(form.youtube)
       });
-      const fresh = await ensureUserDoc(u.uid, u.email);
+      const fresh = await ensureUserDoc();
       setState({ userDoc: fresh });
       toast(t("profileUpdated"), "ok");
       setOpen(false);
@@ -3821,15 +3675,11 @@ const BOOK_QUIZ_LIBRARY = [
 ];
 
 async function fetchMyBookQuizAttempts(uid) {
-  const qy = query(collection(db, "bookQuizAttempts"), where("uid", "==", uid));
-  const res = await getDocs(qy);
-  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a, b) => tsKey(b) - tsKey(a));
-  return arr;
+  return await pb.collection("bookQuizAttempts").getFullList({ filter: `uid="${uid}"`, sort: "-created" });
 }
 
 async function createBookQuizAttempt(data) {
-  await addDoc(collection(db, "bookQuizAttempts"), {
+  await pb.collection("bookQuizAttempts").create({
     uid: data.uid,
     bookKey: safeText(data.bookKey),
     bookTitle: safeText(data.bookTitle),
@@ -3840,13 +3690,12 @@ async function createBookQuizAttempt(data) {
     passed: !!data.passed,
     cooldownUntil: safeText(data.cooldownUntil),
     thresholdPercent: Number(data.thresholdPercent) || 70,
-    pointsCandidate: Number(data.pointsCandidate) || 0,
-    createdAt: serverTimestamp()
+    pointsCandidate: Number(data.pointsCandidate) || 0
   });
 }
 
 async function createBookQuizRewardSubmission({ uid, book, result }) {
-  await addDoc(collection(db, "submissions"), {
+  await pb.collection("submissions").create({
     uid,
     typeId: `book_quiz:${book.id}`,
     typeName: "Книжный тест (NIS-пен бірге оқиық)",
@@ -3857,13 +3706,11 @@ async function createBookQuizRewardSubmission({ uid, book, result }) {
     description: `Результат теста: ${result.correct}/${result.total} (${result.percent}%). Порог: ${book.thresholdPercent || 70}%`,
     eventDate: ymd(),
     evidenceLink: "",
-    evidenceFileUrl: "",
     quizBookKey: book.id,
     quizScorePercent: Number(result.percent) || 0,
     quizCorrectCount: Number(result.correct) || 0,
     quizTotalCount: Number(result.total) || 0,
-    status: "pending",
-    createdAt: serverTimestamp()
+    status: "pending"
   });
 }
 
@@ -4052,10 +3899,7 @@ function PageAdd() {
       if (!safeText(evidenceLink) && !file) { toast("Добавьте ссылку и/или файл", "error"); return; }
 
       setState({ loading: true });
-      let evidenceFileUrl = "";
-      if (file) evidenceFileUrl = await uploadEvidence(u.uid, file);
-
-      await createSubmission({ uid: u.uid, type, title, description, eventDate, evidenceLink, evidenceFileUrl });
+      await createSubmission({ uid: u.uid, type, title, description, eventDate, evidenceLink, evidenceFile: file || null });
       toast("Заявка отправлена на проверку", "ok");
 
       const my = await fetchMySubmissions(u.uid);
@@ -4312,7 +4156,7 @@ function PageRequests() {
       setState({ loading: true });
       const [myReq, fresh] = await Promise.all([
         fetchMyRequests(u.uid),
-        ensureUserDoc(u.uid, u.email)
+        ensureUserDoc()
       ]);
       setState({ myRequests: myReq, userDoc: fresh });
       toast(t("dataUpdated"), "ok");
@@ -4333,7 +4177,7 @@ function PageRequests() {
       if (dt.getTime() < df.getTime()) { toast(t("invalidDateRange"), "error"); return; }
 
       setState({ loading: true });
-      await createTeacherRequest({ uid: u.uid, kind, dateFrom: f, dateTo: to, note, evidenceFileUrl: "" });
+      await createTeacherRequest({ uid: u.uid, kind, dateFrom: f, dateTo: to, note, evidenceFile: null });
       toast(t("requestSent"), "ok");
       const myReq = await fetchMyRequests(u.uid);
       setState({ myRequests: myReq });
@@ -5339,11 +5183,8 @@ function PageDocuments() {
       setSaving(true);
       const c = canvasRef.current;
       const blob = await new Promise(res => c.toBlob(res, "image/png"));
-      const sigUrl = await uploadFile(
-        `doc_signatures/${u.uid}/${signingDoc.id}_${Date.now()}.png`,
-        new File([blob], "sig.png", { type: "image/png" })
-      );
-      await signDocument(signingDoc.id, sigUrl);
+      const sigFile = new File([blob], "sig.png", { type: "image/png" });
+      await signDocument(signingDoc.id, sigFile);
       const fresh = await fetchDocumentsForTeacher(u.uid);
       setState({ myDocuments: fresh });
       toast(t("docSigned"), "ok");
@@ -5363,8 +5204,7 @@ function PageDocuments() {
     if (!docFile) { toast(t("attachFile"), "error"); return; }
     try {
       setState({ loading: true });
-      const fileUrl = await uploadTeacherDocFile(u.uid, docFile);
-      await createMyTeacherDoc({ uid: u.uid, title: docTitle, description: docDesc, fileUrl, fileName: docFile.name });
+      await createMyTeacherDoc({ uid: u.uid, title: docTitle, description: docDesc, file: docFile, fileName: docFile.name });
       toast(t("docAdded"), "ok");
       const fresh = await fetchMyTeacherDocs(u.uid);
       setState({ myTeacherDocs: fresh });
@@ -5403,7 +5243,7 @@ function PageDocuments() {
             </button>
             {(() => {
               const d = signingDoc || viewDoc;
-              const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : ymd();
+              const dateStr = d.created ? new Date(d.created).toLocaleDateString("ru-RU") : ymd();
               const needsSign = signingDoc && !signingDoc.signatureUrl;
               return (
                 <div style={needsSign ? { display: "flex", gap: 24, flexWrap: "wrap" } : undefined}>
@@ -5533,7 +5373,7 @@ function PageDocuments() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {docs.map(d => {
-                  const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+                  const dateStr = d.created ? new Date(d.created).toLocaleDateString("ru-RU") : "—";
                   return (
                     <div key={d.id} className="glass card" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -5592,7 +5432,7 @@ function PageDocuments() {
 
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {myTDocs.map(d => {
-                  const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+                  const dateStr = d.created ? new Date(d.created).toLocaleDateString("ru-RU") : "—";
                   return (
                     <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -6003,7 +5843,7 @@ function PageAdminDocuments() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {filteredDocs.map(d => {
-                const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+                const dateStr = d.created ? new Date(d.created).toLocaleDateString("ru-RU") : "—";
                 const recipient = allUsers.find(x => x.uid === d.toUid);
                 return (
                   <div key={d.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
@@ -6839,7 +6679,7 @@ function PageAdminUsers() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {filteredLogs.map(l => {
-                  const dateStr = l.createdAt ? new Date(l.createdAt.seconds * 1000).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "\u2014";
+                  const dateStr = l.created ? new Date(l.created).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "\u2014";
                   const actionLabel = l.action === "role_change" ? t("actionRoleChange") : l.action === "position_change" ? t("actionPositionChange") : l.action === "user_delete" ? t("actionUserDelete") : l.action;
                   const actionColor = l.action === "user_delete" ? "rejected" : l.action === "role_change" ? "pending" : "approved";
                   const initials = (l.targetName || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -6918,12 +6758,8 @@ function PageAdminTeacher() {
       }
       try {
         setTeacherErr(null);
-        const snap = await getDoc(doc(db, "users", uid));
-        if (!snap.exists()) {
-          throw new Error(`users/${uid} not found`);
-        }
-        const data = snap.data() || {};
-        const t = { id: snap.id, ...data, uid: data.uid || snap.id };
+        const rec = await pb.collection("users").getOne(uid);
+        const t = normalizeUser(rec);
         if (alive) setTeacherDoc(t);
       } catch (e) {
         console.error(e);
@@ -6964,9 +6800,7 @@ function PageAdminTeacher() {
       }
       try {
         setLoadingLocal(true);
-        const qy = query(collection(db, "submissions"), where("uid", "==", uid));
-        const res = await getDocs(qy);
-        const arr = res.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => tsKey(b) - tsKey(a));
+        const arr = (await pb.collection("submissions").getFullList({ filter: `uid="${uid}"`, sort: "-created" })).map(normalizeSub);
         if (alive) setSubs(arr);
       } catch (e) {
         console.error(e);
@@ -7046,7 +6880,7 @@ function PageAdminTeacher() {
   async function saveTeacher() {
     try {
       setState({ loading: true });
-      await updateDoc(doc(db, "users", uid), {
+      await pb.collection("users").update(uid, {
         displayName: safeText(edit.displayName),
         role: edit.role === "admin" ? "admin" : "teacher",
         school: safeText(edit.school),
@@ -7055,7 +6889,6 @@ function PageAdminTeacher() {
         phone: safeText(edit.phone),
         city: safeText(edit.city),
         position: safeText(edit.position),
-        avatarUrl: safeText(edit.avatarUrl),
         totalPoints: Number(edit.totalPoints) || 0
       });
       const users = await fetchUsersAll();
@@ -7459,7 +7292,7 @@ function PageAdminTeacher() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {teacherDocs.map(d => {
-              const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+              const dateStr = d.created ? new Date(d.created).toLocaleDateString("ru-RU") : "—";
               return (
                 <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "12px 16px", border: "1px solid var(--border)", borderRadius: 10 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -7492,8 +7325,8 @@ function NewsCard({ item, user, index }) {
   const [expanded, setExpanded] = useState(false);
 
   const catLabel = (() => { const c = NEWS_CATEGORIES.find(c => c.key === item.category); return c ? t(c.tKey) : item.category; })();
-  const dateStr = item.createdAt?.seconds
-    ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "numeric" })
+  const dateStr = item.created
+    ? new Date(item.created).toLocaleDateString("ru-RU", { day: "2-digit", month: "short", year: "numeric" })
     : "";
 
   const handleLike = async () => {
@@ -7544,8 +7377,8 @@ function NewsCard({ item, user, index }) {
   const descLong = desc.length > 200;
 
   const timeAgo = (() => {
-    if (!item.createdAt?.seconds) return dateStr;
-    const diff = Math.floor((Date.now() / 1000) - item.createdAt.seconds);
+    if (!item.created) return dateStr;
+    const diff = Math.floor((Date.now() - new Date(item.created).getTime()) / 1000);
     if (diff < 60) return t("justNow");
     if (diff < 3600) return `${Math.floor(diff / 60)} ${t("minAgo")}`;
     if (diff < 86400) return `${Math.floor(diff / 3600)} ${t("hAgo")}`;
@@ -7753,15 +7586,13 @@ function PageNews() {
     if (!validateFile(photo, "Фото")) return;
     setSubmitting(true);
     try {
-      let photoUrl = "";
-      if (photo) photoUrl = await uploadFile(`news/${u.uid}/${Date.now()}_photo`, photo);
       await createNewsPost({
         uid: u.uid,
         authorName: u.displayName || u.email || t("anonymous"),
         authorRole: u.role,
-        avatarUrl: u.avatarUrl || "",
+        avatarUrl: getFileUrl(u, "avatar") || "",
         category, title: title.trim(), description: description.trim(),
-        photoUrl, coverUrl: "", link: link.trim(),
+        photoFile: photo || null, coverFile: null, link: link.trim(),
         mood, fontFamily,
       });
       toast(t("newsPublished"), "ok");
@@ -8084,7 +7915,7 @@ function PageSupport() {
                     <div className="support-ticket-body">{tk.message}</div>
                     <div className="support-ticket-footer">
                       <Pill kind={statusPill(tk.status)}>{statusLabel(tk.status)}</Pill>
-                      <span className="tiny muted">{tk.createdAt?.seconds ? new Date(tk.createdAt.seconds * 1000).toLocaleDateString() : ""}</span>
+                      <span className="tiny muted">{tk.created ? new Date(tk.created).toLocaleDateString() : ""}</span>
                     </div>
                   </div>
                 ))}
@@ -8224,7 +8055,7 @@ function PageAdminSupport() {
                   <div className="admin-ticket-left-strip" />
                   <div style={{ flex: 1 }}>
                     <div className="admin-ticket-subject">{tk.subject}</div>
-                    <div className="tiny muted">{userName(tk.uid)} · {tk.createdAt?.seconds ? new Date(tk.createdAt.seconds * 1000).toLocaleDateString() : ""}</div>
+                    <div className="tiny muted">{userName(tk.uid)} · {tk.created ? new Date(tk.created).toLocaleDateString() : ""}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Pill kind={prioPill(tk.priority)}>{tk.priority}</Pill>
@@ -8394,7 +8225,7 @@ function PageAdminAnnouncements() {
                     )}
                     <div className="ann-card__meta tiny muted">
                       {a.startDate} — {a.endDate}
-                      {a.createdAt?.seconds && <span> · {new Date(a.createdAt.seconds * 1000).toLocaleDateString()}</span>}
+                      {a.created && <span> · {new Date(a.created).toLocaleDateString()}</span>}
                     </div>
                     <button className="ann-card__del" onClick={() => handleDelete(a.id)} disabled={deleting === a.id} title={t("delete")}>
                       {deleting === a.id ? "..." : <Icon name="x" />}
@@ -8524,48 +8355,15 @@ async function bootstrap() {
   applyAccessibility(getDefaultAccessibility());
   window.addEventListener("hashchange", () => render().catch(console.error));
 
-  // Needed for signInWithRedirect flows (including Microsoft on mobile)
-  try {
-    await getRedirectResult(auth);
-  } catch (e) {
-    console.error(e);
-    toast(e?.message || t("msLoginError"), "error");
-  }
-
-  onAuthStateChanged(auth, async (user) => {
+  // Check if already authenticated (from localStorage token)
+  if (pb.authStore.isValid) {
     try {
-      setState({ booting: true, authUser: user || null });
+      setState({ booting: true });
+      const authData = await pb.collection("users").authRefresh();
+      const userDoc = normalizeUser(authData.record);
+      setState({ authUser: userDoc, userDoc });
 
-      if (!user) {
-        // Clear heartbeat
-        if (window.__kpiHeartbeat) { clearInterval(window.__kpiHeartbeat); window.__kpiHeartbeat = null; }
-        setState({
-          userDoc: null,
-          types: [],
-          users: [],
-          mySubmissions: [],
-          pendingSubmissions: [],
-          adminRecentSubs: [],
-          myRequests: [],
-          pendingRequests: [],
-          adminRecentRequests: [],
-          myDocuments: [],
-          allDocuments: [],
-          myTeacherDocs: [],
-          news: [],
-          myTickets: [],
-          allTickets: [],
-          announcements: []
-        });
-        setState({ booting: false });
-        render();
-        return;
-      }
-
-      const userDoc = await ensureUserDoc(user.uid, user.email || "");
-      setState({ userDoc });
-
-      // Load user's accessibility + theme preferences from Firestore
+      // Load user's accessibility + theme preferences
       const savedAcc = userDoc.accessibility || getDefaultAccessibility();
       applyAccessibility(savedAcc);
       if (userDoc.preferredTheme) applyTheme(userDoc.preferredTheme);
@@ -8573,38 +8371,82 @@ async function bootstrap() {
       await hydrateForUser(userDoc);
 
       // Mark user online + start heartbeat
-      await setUserOnline(user.uid, true);
+      await setUserOnline(userDoc.id, true);
       if (window.__kpiHeartbeat) clearInterval(window.__kpiHeartbeat);
       window.__kpiHeartbeat = setInterval(() => {
-        if (auth.currentUser) setUserOnline(auth.currentUser.uid, true);
+        if (pb.authStore.isValid) setUserOnline(pb.authStore.model.id, true);
       }, 60000);
 
       // Auto-redirect new employees to onboarding
       if (userDoc.onboarded !== true && userDoc.role !== "admin") {
         navigate("onboarding");
       }
-
-      setState({ booting: false });
-      render();
     } catch (e) {
+      // Token expired or invalid
+      pb.authStore.clear();
       console.error(e);
-      toast(e?.message || t("initError"), "error");
-      setState({ booting: false });
-      render();
     }
+  }
+
+  setState({ booting: false });
+
+  // Listen for future auth changes
+  pb.authStore.onChange(async (token, model) => {
+    if (!token || !model) {
+      // Logged out
+      if (window.__kpiHeartbeat) { clearInterval(window.__kpiHeartbeat); window.__kpiHeartbeat = null; }
+      setState({
+        authUser: null,
+        userDoc: null,
+        types: [],
+        users: [],
+        mySubmissions: [],
+        pendingSubmissions: [],
+        adminRecentSubs: [],
+        myRequests: [],
+        pendingRequests: [],
+        adminRecentRequests: [],
+        myDocuments: [],
+        allDocuments: [],
+        myTeacherDocs: [],
+        news: [],
+        myTickets: [],
+        allTickets: [],
+        announcements: []
+      });
+      render();
+      return;
+    }
+    // Logged in
+    const userDoc = normalizeUser(model);
+    setState({ authUser: userDoc, userDoc });
+    const savedAcc = userDoc.accessibility || getDefaultAccessibility();
+    applyAccessibility(savedAcc);
+    if (userDoc.preferredTheme) applyTheme(userDoc.preferredTheme);
+    await hydrateForUser(userDoc);
+    await setUserOnline(userDoc.id, true);
+    if (window.__kpiHeartbeat) clearInterval(window.__kpiHeartbeat);
+    window.__kpiHeartbeat = setInterval(() => {
+      if (pb.authStore.isValid) setUserOnline(pb.authStore.model.id, true);
+    }, 60000);
+    if (userDoc.onboarded !== true && userDoc.role !== "admin") {
+      navigate("onboarding");
+    }
+    setState({ booting: false });
+    render();
   });
 
   // Presence: mark offline on tab close / hide
   document.addEventListener("visibilitychange", () => {
-    const cu = auth.currentUser;
-    if (cu) setUserOnline(cu.uid, document.visibilityState === "visible");
+    if (pb.authStore.isValid) {
+      setUserOnline(pb.authStore.model.id, document.visibilityState === "visible");
+    }
   });
   window.addEventListener("beforeunload", () => {
-    const cu = auth.currentUser;
-    if (cu) setUserOnline(cu.uid, false);
+    if (pb.authStore.isValid) setUserOnline(pb.authStore.model.id, false);
   });
 
-  // v11: ensure default hash route
+  // ensure default hash route
   try { if (!location.hash || location.hash === "#" || location.hash === "#/") { location.hash = "#/login"; } } catch (e) { }
   render();
 }
@@ -8612,4 +8454,4 @@ async function bootstrap() {
 bootstrap().catch(console.error);
 
 // debug
-window.__KPI__ = { auth, db, storage, store, navigate };
+window.__KPI__ = { pb, store, navigate };
