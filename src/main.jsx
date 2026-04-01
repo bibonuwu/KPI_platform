@@ -507,7 +507,7 @@ function toast(msg, kind = "info") {
 
 /** ---------- PocketBase api ---------- */
 async function ensureUserDoc() {
-  const user = pb.authStore.model;
+  const user = pb.authStore.record;
   if (!user) return null;
   if (!user.displayName) {
     let preName = "", prePosition = "";
@@ -1390,7 +1390,7 @@ function TopbarRight() {
           <div className="tiny" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             <b>{u.displayName || t("unnamed")}</b>
           </div>
-          <Btn kind="ghost" onClick={async () => { if (pb.authStore.model) await setUserOnline(pb.authStore.model.id, false); pb.authStore.clear(); toast(t("loggedOut")); navigate("login"); }}>
+          <Btn kind="ghost" onClick={async () => { if (pb.authStore.record) await setUserOnline(pb.authStore.record.id, false); pb.authStore.clear(); toast(t("loggedOut")); navigate("login"); }}>
             <Icon name="logout" /> {t("navLogout")}
           </Btn>
         </>
@@ -1499,10 +1499,10 @@ function ForcePasswordChange() {
   const handleChange = async () => {
     if (newPwd.length < 6) { toast(t("pwdMinLength"), "error"); return; }
     if (newPwd !== newPwd2) { toast(t("pwdMismatch"), "error"); return; }
-    if (!pb.authStore.model) { toast(t("noSession"), "error"); return; }
+    if (!pb.authStore.record) { toast(t("noSession"), "error"); return; }
     setSaving(true);
     try {
-      await pb.collection("users").update(pb.authStore.model.id, {
+      await pb.collection("users").update(pb.authStore.record.id, {
         password: newPwd,
         passwordConfirm: newPwd,
         oldPassword: newPwd
@@ -2710,8 +2710,10 @@ function PageLogin() {
       await pb.collection("users").authWithPassword(email, pass);
       toast(t("loginWelcome"), "ok");
     } catch (err) {
-      console.error(err);
-      toast(err?.message || t("loginError"), "error");
+      console.error("Login error:", err);
+      console.error("Status:", err?.status, "Data:", JSON.stringify(err?.data));
+      const msg = err?.message || t("loginError");
+      toast(msg, "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -3102,7 +3104,7 @@ function PageProfile() {
   const isPasswordProvider = true; // PocketBase always uses password auth
 
   async function changePassword() {
-    if (!pb.authStore.model) { toast(t("noSession"), "error"); return; }
+    if (!pb.authStore.record) { toast(t("noSession"), "error"); return; }
 
     const next = String(pw.next || "");
     const next2 = String(pw.next2 || "");
@@ -3114,7 +3116,7 @@ function PageProfile() {
 
     try {
       setState({ loading: true });
-      await pb.collection("users").update(pb.authStore.model.id, {
+      await pb.collection("users").update(pb.authStore.record.id, {
         oldPassword: current,
         password: next,
         passwordConfirm: next
@@ -3129,7 +3131,7 @@ function PageProfile() {
 
   async function resetPasswordEmail() {
     try {
-      const email = (pb.authStore.model?.email || u.email || "").trim();
+      const email = (pb.authStore.record?.email || u.email || "").trim();
       if (!email) { toast(t("noEmail"), "error"); return; }
       setState({ loading: true });
       await pb.collection("users").requestPasswordReset(email);
@@ -8374,7 +8376,7 @@ async function bootstrap() {
       await setUserOnline(userDoc.id, true);
       if (window.__kpiHeartbeat) clearInterval(window.__kpiHeartbeat);
       window.__kpiHeartbeat = setInterval(() => {
-        if (pb.authStore.isValid) setUserOnline(pb.authStore.model.id, true);
+        if (pb.authStore.isValid) setUserOnline(pb.authStore.record.id, true);
       }, 60000);
 
       // Auto-redirect new employees to onboarding
@@ -8427,7 +8429,7 @@ async function bootstrap() {
     await setUserOnline(userDoc.id, true);
     if (window.__kpiHeartbeat) clearInterval(window.__kpiHeartbeat);
     window.__kpiHeartbeat = setInterval(() => {
-      if (pb.authStore.isValid) setUserOnline(pb.authStore.model.id, true);
+      if (pb.authStore.isValid) setUserOnline(pb.authStore.record.id, true);
     }, 60000);
     if (userDoc.onboarded !== true && userDoc.role !== "admin") {
       navigate("onboarding");
@@ -8439,11 +8441,11 @@ async function bootstrap() {
   // Presence: mark offline on tab close / hide
   document.addEventListener("visibilitychange", () => {
     if (pb.authStore.isValid) {
-      setUserOnline(pb.authStore.model.id, document.visibilityState === "visible");
+      setUserOnline(pb.authStore.record.id, document.visibilityState === "visible");
     }
   });
   window.addEventListener("beforeunload", () => {
-    if (pb.authStore.isValid) setUserOnline(pb.authStore.model.id, false);
+    if (pb.authStore.isValid) setUserOnline(pb.authStore.record.id, false);
   });
 
   // ensure default hash route
