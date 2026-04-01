@@ -325,6 +325,11 @@ function navigate(path, params = {}) {
   try { window.__closeDrawer?.(); } catch (e) { }
   const qs = new URLSearchParams(params).toString();
   window.location.hash = `#/${path}${qs ? `?${qs}` : ""}`;
+  // Immediately update route visibility for instant feedback
+  const resolved = ROUTES.includes(path) ? path : "login";
+  updateRouteVisibility(resolved);
+  store.state = { ...store.state, route: { path: resolved, params } };
+  for (const fn of store.subs) fn(store.state);
 }
 function resolvePath(path) { return ROUTES.includes(path) ? path : "login"; }
 
@@ -368,11 +373,11 @@ function mount(id, el) {
   root.render(el);
 }
 
+let __layoutMounted = false;
 async function render() {
   const route = parseRoute();
   const prev = store.state.route;
   if (!prev || prev.path !== route.path || JSON.stringify(prev.params || {}) !== JSON.stringify(route.params || {})) {
-    // update store route so menus know active state
     store.state = { ...store.state, route };
     for (const fn of store.subs) fn(store.state);
   }
@@ -385,42 +390,50 @@ async function render() {
   }
   updateRouteVisibility(path);
 
-  // Layout (always)
-  mount("mount-sidebar", <ErrorBoundary name="sidebar"><SidebarNav /></ErrorBoundary>);
-  mount("mount-drawer", <ErrorBoundary name="drawer"><SidebarNav /></ErrorBoundary>);
-  // topbar mount id differs between layouts; mount to both (missing nodes are ignored)
-  mount("mount-topbar", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
-  mount("mount-topbar-right", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
-  mount("mount-bottomnav", <ErrorBoundary name="bottomnav"><BottomNav /></ErrorBoundary>);
-  mount("mount-overlays", <ErrorBoundary name="overlays"><Overlays /></ErrorBoundary>);
-  mount("mount-announcements", <ErrorBoundary name="announcements"><AnnouncementBanner /></ErrorBoundary>);
+  // Layout — mount only once; they self-update via useStore()
+  if (!__layoutMounted) {
+    __layoutMounted = true;
+    mount("mount-sidebar", <ErrorBoundary name="sidebar"><SidebarNav /></ErrorBoundary>);
+    mount("mount-drawer", <ErrorBoundary name="drawer"><SidebarNav /></ErrorBoundary>);
+    mount("mount-topbar", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
+    mount("mount-topbar-right", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
+    mount("mount-bottomnav", <ErrorBoundary name="bottomnav"><BottomNav /></ErrorBoundary>);
+    mount("mount-overlays", <ErrorBoundary name="overlays"><Overlays /></ErrorBoundary>);
+    mount("mount-announcements", <ErrorBoundary name="announcements"><AnnouncementBanner /></ErrorBoundary>);
+  }
 
-  // Pages (only active route)
-  // If still booting (auth state not yet known), show loader instead of page
-  // This avoids the "Rendered more hooks" violation caused by early returns inside page components
-  const show = (p) => p === path;
+  // Pages — only mount/unmount the active page + previous page (to clear it)
   const booting = store.state.booting;
-
-  mount("mount-login", show("login") ? <ErrorBoundary name="login"><PageLogin /></ErrorBoundary> : null);
-  mount("mount-onboarding", show("onboarding") ? <ErrorBoundary name="onboarding">{booting ? <LoadingScreen /> : <PageOnboarding />}</ErrorBoundary> : null);
-  mount("mount-dashboard", show("dashboard") ? <ErrorBoundary name="dashboard">{booting ? <LoadingScreen /> : <PageDashboard />}</ErrorBoundary> : null);
-  mount("mount-profile", show("profile") ? <ErrorBoundary name="profile">{booting ? <LoadingScreen /> : <PageProfile />}</ErrorBoundary> : null);
-  mount("mount-rating", show("rating") ? <ErrorBoundary name="rating">{booting ? <LoadingScreen /> : <PageRating />}</ErrorBoundary> : null);
-  mount("mount-stats", show("stats") ? <ErrorBoundary name="stats">{booting ? <LoadingScreen /> : <PageStats />}</ErrorBoundary> : null);
-  mount("mount-add", show("add") ? <ErrorBoundary name="add">{booting ? <LoadingScreen /> : <PageAdd />}</ErrorBoundary> : null);
-  mount("mount-requests", show("requests") ? <ErrorBoundary name="requests">{booting ? <LoadingScreen /> : <PageRequests />}</ErrorBoundary> : null);
-  mount("mount-documents", show("documents") ? <ErrorBoundary name="documents">{booting ? <LoadingScreen /> : <PageDocuments />}</ErrorBoundary> : null);
-  mount("mount-news", show("news") ? <ErrorBoundary name="news">{booting ? <LoadingScreen /> : <PageNews />}</ErrorBoundary> : null);
-  mount("mount-support", show("support") ? <ErrorBoundary name="support">{booting ? <LoadingScreen /> : <PageSupport />}</ErrorBoundary> : null);
-
-  mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary> : null);
-  mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary> : null);
-  mount("mount-admin-documents", show("admin/documents") ? <ErrorBoundary name="admin/documents">{booting ? <LoadingScreen /> : <PageAdminDocuments />}</ErrorBoundary> : null);
-  mount("mount-admin-types", show("admin/types") ? <ErrorBoundary name="admin/types">{booting ? <LoadingScreen /> : <PageAdminTypes />}</ErrorBoundary> : null);
-  mount("mount-admin-users", show("admin/users") ? <ErrorBoundary name="admin/users">{booting ? <LoadingScreen /> : <PageAdminUsers />}</ErrorBoundary> : null);
-  mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen /> : <PageAdminTeacher />}</ErrorBoundary> : null);
-  mount("mount-admin-support", show("admin/support") ? <ErrorBoundary name="admin/support">{booting ? <LoadingScreen /> : <PageAdminSupport />}</ErrorBoundary> : null);
-  mount("mount-admin-announcements", show("admin/announcements") ? <ErrorBoundary name="admin/announcements">{booting ? <LoadingScreen /> : <PageAdminAnnouncements />}</ErrorBoundary> : null);
+  const prevPath = prev?.path;
+  const pages = {
+    "login": () => <ErrorBoundary name="login"><PageLogin /></ErrorBoundary>,
+    "onboarding": () => <ErrorBoundary name="onboarding">{booting ? <LoadingScreen /> : <PageOnboarding />}</ErrorBoundary>,
+    "dashboard": () => <ErrorBoundary name="dashboard">{booting ? <LoadingScreen /> : <PageDashboard />}</ErrorBoundary>,
+    "profile": () => <ErrorBoundary name="profile">{booting ? <LoadingScreen /> : <PageProfile />}</ErrorBoundary>,
+    "rating": () => <ErrorBoundary name="rating">{booting ? <LoadingScreen /> : <PageRating />}</ErrorBoundary>,
+    "stats": () => <ErrorBoundary name="stats">{booting ? <LoadingScreen /> : <PageStats />}</ErrorBoundary>,
+    "add": () => <ErrorBoundary name="add">{booting ? <LoadingScreen /> : <PageAdd />}</ErrorBoundary>,
+    "requests": () => <ErrorBoundary name="requests">{booting ? <LoadingScreen /> : <PageRequests />}</ErrorBoundary>,
+    "documents": () => <ErrorBoundary name="documents">{booting ? <LoadingScreen /> : <PageDocuments />}</ErrorBoundary>,
+    "news": () => <ErrorBoundary name="news">{booting ? <LoadingScreen /> : <PageNews />}</ErrorBoundary>,
+    "support": () => <ErrorBoundary name="support">{booting ? <LoadingScreen /> : <PageSupport />}</ErrorBoundary>,
+    "admin/approvals": () => <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary>,
+    "admin/requests": () => <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary>,
+    "admin/documents": () => <ErrorBoundary name="admin/documents">{booting ? <LoadingScreen /> : <PageAdminDocuments />}</ErrorBoundary>,
+    "admin/types": () => <ErrorBoundary name="admin/types">{booting ? <LoadingScreen /> : <PageAdminTypes />}</ErrorBoundary>,
+    "admin/users": () => <ErrorBoundary name="admin/users">{booting ? <LoadingScreen /> : <PageAdminUsers />}</ErrorBoundary>,
+    "admin/teacher": () => <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen /> : <PageAdminTeacher />}</ErrorBoundary>,
+    "admin/support": () => <ErrorBoundary name="admin/support">{booting ? <LoadingScreen /> : <PageAdminSupport />}</ErrorBoundary>,
+    "admin/announcements": () => <ErrorBoundary name="admin/announcements">{booting ? <LoadingScreen /> : <PageAdminAnnouncements />}</ErrorBoundary>,
+  };
+  const toMountId = (p) => "mount-" + p.replace("/", "-");
+  // Clear previous page if different
+  if (prevPath && prevPath !== path) {
+    mount(toMountId(prevPath), null);
+  }
+  // Mount active page
+  const factory = pages[path];
+  if (factory) mount(toMountId(path), factory());
 }
 
 function setupMobileDrawer() {
@@ -2424,20 +2437,32 @@ function PageOnboarding() {
       setSaving(true);
       const c = canvasRef.current;
       const blob = await new Promise(res => c.toBlob(res, "image/png"));
-      const formData = new FormData();
-      formData.append("onboarded", true);
-      formData.append("signature", new File([blob], "sig.png", { type: "image/png" }));
-      await pb.collection("users").update(u.id, formData);
+      const sigFile = new File([blob], "sig.png", { type: "image/png" });
+      // Step 1: update onboarded flag (plain JSON)
+      await pb.collection("users").update(u.id, { onboarded: true });
+      // Step 2: upload signature file (FormData)
+      try {
+        const fd = new FormData();
+        fd.append("signature", sigFile);
+        await pb.collection("users").update(u.id, fd);
+      } catch (sigErr) {
+        console.warn("Signature upload failed (non-critical):", sigErr);
+      }
       // Flag for password change overlay (stored in localStorage, not PocketBase)
       try { localStorage.setItem("kpi_needsPwdChange", "1"); } catch (e) { }
       const freshUser = await ensureUserDoc();
       setState({ userDoc: freshUser });
       toast(t("onbCompleted"), "ok");
-      // After onboarding, redirect to dashboard — ForcePasswordChange overlay will appear
       navigate("dashboard");
     } catch (e) {
-      console.error(e);
-      toast(e?.message || t("saveError"), "error");
+      console.error("Onboarding error:", e, "data:", e?.data);
+      // Show detailed field errors if available
+      let msg = e?.message || t("saveError");
+      if (e?.data) {
+        const fieldErrors = Object.entries(e.data).map(([k, v]) => `${k}: ${v?.message || v}`).join("; ");
+        if (fieldErrors) msg += " (" + fieldErrors + ")";
+      }
+      toast(msg, "error");
     } finally {
       setSaving(false);
     }
@@ -8364,7 +8389,12 @@ async function bootstrap() {
   setupMobileDrawer();
   applyTheme(store.state.theme);
   applyAccessibility(getDefaultAccessibility());
-  window.addEventListener("hashchange", () => render().catch(console.error));
+  // Debounced render on hash changes to avoid flooding React with 20+ root.render() calls
+  let _renderTimer = null;
+  window.addEventListener("hashchange", () => {
+    if (_renderTimer) cancelAnimationFrame(_renderTimer);
+    _renderTimer = requestAnimationFrame(() => { _renderTimer = null; render().catch(console.error); });
+  });
 
   // Check if already authenticated (from localStorage token)
   if (pb.authStore.isValid) {
