@@ -193,6 +193,8 @@ export const T = {
   securityHelp: { kz: "Ағымдағы құпиясөзді, содан кейін жаңасын енгізіңіз.", ru: "Введите текущий пароль, затем новый.", en: "Enter current password, then new one." },
   securityNote: { kz: "Google/басқа провайдер арқылы кірсеңіз, құпиясөзді өзгерту үшін қайта кіру қажет болуы мүмкін.", ru: "Если вы входите через Google/другой провайдер, может потребоваться повторный вход для смены пароля.", en: "If you sign in via Google/other provider, re-login may be required to change password." },
   currentPwd: { kz: "Ағымдағы құпиясөз", ru: "Текущий пароль", en: "Current password" },
+  oldPwd: { kz: "Ағымдағы құпиясөз", ru: "Текущий пароль", en: "Current password" },
+  enterOldPwd: { kz: "Ағымдағы құпиясөзді енгізіңіз", ru: "Введите текущий пароль", en: "Enter current password" },
   newPwd: { kz: "Жаңа құпиясөз", ru: "Новый пароль", en: "New password" },
   repeatNewPwd: { kz: "Жаңа құпиясөзді қайталаңыз", ru: "Повторите новый пароль", en: "Repeat new password" },
   changePwd: { kz: "Құпиясөзді өзгерту", ru: "Изменить пароль", en: "Change password" },

@@ -1505,6 +1505,7 @@ function BottomNav() {
 function ForcePasswordChange() {
   const st = useStore();
   const u = st.userDoc;
+  const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [newPwd2, setNewPwd2] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1515,6 +1516,7 @@ function ForcePasswordChange() {
   if (!needsPwdChange) return null;
 
   const handleChange = async () => {
+    if (!oldPwd) { toast(t("enterOldPwd"), "error"); return; }
     if (newPwd.length < 6) { toast(t("pwdMinLength"), "error"); return; }
     if (newPwd !== newPwd2) { toast(t("pwdMismatch"), "error"); return; }
     if (!pb.authStore.record) { toast(t("noSession"), "error"); return; }
@@ -1523,8 +1525,10 @@ function ForcePasswordChange() {
       await pb.collection("users").update(pb.authStore.record.id, {
         password: newPwd,
         passwordConfirm: newPwd,
-        oldPassword: newPwd
+        oldPassword: oldPwd
       });
+      // Re-authenticate with new password to refresh auth token
+      try { await pb.collection("users").authWithPassword(u.email, newPwd); } catch (_) { }
       try { localStorage.removeItem("kpi_needsPwdChange"); } catch (e) { }
       setState({ userDoc: { ...u } }); // trigger re-render
       toast(t("pwdChangedRedirect"), "ok");
@@ -1545,6 +1549,8 @@ function ForcePasswordChange() {
         <h2>{t("forceChangePwdTitle")}</h2>
         <p className="force-pwd-desc">{t("forceChangePwdDesc")}</p>
         <div className="force-pwd-form">
+          <label className="label">{t("oldPwd")}</label>
+          <input className="input" type="password" value={oldPwd} onChange={e => setOldPwd(e.target.value)} placeholder="••••••••" />
           <label className="label">{t("newPwd")}</label>
           <input className="input" type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="••••••••" />
           <label className="label">{t("repeatNewPwd")}</label>
@@ -2843,6 +2849,29 @@ function PageLogin() {
 
 
 /* ══════════════════════════════════════════════ */
+/* ═══ AnimNum (stable component — must live outside PageDashboard) */
+/* ══════════════════════════════════════════════ */
+function AnimNum({ value, suffix = "" }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    const target = Number(value) || 0;
+    if (target === 0) { setDisplay(0); return; }
+    let frame;
+    const start = performance.now();
+    const dur = 900;
+    const step = (t) => {
+      const p = Math.min((t - start) / dur, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      setDisplay(Math.round(ease * target));
+      if (p < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return <>{fmtPoints(display)}{suffix}</>;
+}
+
+/* ══════════════════════════════════════════════ */
 /* ═══ PAGE: DASHBOARD ════════════════════════= */
 /* ══════════════════════════════════════════════ */
 function PageDashboard() {
@@ -2918,26 +2947,6 @@ function PageDashboard() {
     const map = { pending: "warn", approved: "ok", rejected: "error" };
     const labelMap = { pending: t("dashPending"), approved: t("dashApproved"), rejected: "—" };
     return <span className={`pill ${map[status] || ""}`}>{labelMap[status] || status}</span>;
-  };
-
-  const AnimNum = ({ value, suffix = "" }) => {
-    const [display, setDisplay] = useState(0);
-    useEffect(() => {
-      const target = Number(value) || 0;
-      if (target === 0) { setDisplay(0); return; }
-      let frame;
-      const start = performance.now();
-      const dur = 900;
-      const step = (t) => {
-        const p = Math.min((t - start) / dur, 1);
-        const ease = 1 - Math.pow(1 - p, 3);
-        setDisplay(Math.round(ease * target));
-        if (p < 1) frame = requestAnimationFrame(step);
-      };
-      frame = requestAnimationFrame(step);
-      return () => cancelAnimationFrame(frame);
-    }, [value]);
-    return <>{fmtPoints(display)}{suffix}</>;
   };
 
   return (
@@ -8478,11 +8487,8 @@ async function bootstrap() {
     window.__kpiHeartbeat = setInterval(() => {
       if (pb.authStore.isValid) setUserOnline(pb.authStore.record.id, true);
     }, 60000);
-    if (userDoc.onboarded !== true && userDoc.role !== "admin") {
-      navigate("onboarding");
-    }
     setState({ booting: false });
-    render();
+    // navigate is handled by PageLogin's useEffect to avoid duplicate render cascades
   });
 
   // Presence: mark offline on tab close / hide
