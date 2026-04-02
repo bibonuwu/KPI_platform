@@ -1,6 +1,6 @@
 console.log("[KPI] main.jsx loaded");
 try { const el = document.getElementById("boot-status"); if (el) { el.textContent = "JS: loaded"; el.dataset.kind = "ok"; } } catch (e) { }
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import "./styles.css";
@@ -2362,6 +2362,16 @@ function PageOnboarding() {
   const [expanded, setExpanded] = useState(null);
   const [brushSize, setBrushSize] = useState(2);
 
+  // Fill white bg on mount and on clear
+  const fillCanvasWhite = useCallback(() => {
+    const c = canvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, c.width, c.height);
+  }, []);
+  useEffect(() => { fillCanvasWhite(); }, [fillCanvasWhite]);
+
   const u = st.userDoc;
   if (!u) return <Guard />;
   if (!canAccess("onboarding", u)) return <Guard />;
@@ -2377,16 +2387,6 @@ function PageOnboarding() {
     const t = e.touches ? e.touches[0] : e;
     return [(t.clientX - rect.left) * scaleX, (t.clientY - rect.top) * scaleY];
   };
-
-  // Fill white bg on mount and on clear
-  const fillCanvasWhite = () => {
-    const c = canvasRef.current;
-    if (!c) return;
-    const ctx = c.getContext("2d");
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, c.width, c.height);
-  };
-  useEffect(() => { fillCanvasWhite(); }, []); // eslint-disable-line
 
   const onDown = (e) => {
     e.preventDefault();
