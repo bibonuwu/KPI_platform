@@ -1187,6 +1187,15 @@ function NavFlyout({ icon, label, children, badge, open, onToggle }) {
   );
 }
 
+function NavLink({ p, tKey, icon, path, badge }) {
+  return (
+    <div className={`navlink ${path === p ? "active" : ""}`} role="button" tabIndex={0} onClick={() => navigate(p)}>
+      <Icon name={icon} /> {t(tKey)}
+      {badge > 0 && <span className="nav-badge">{badge > 99 ? "99+" : badge}</span>}
+    </div>
+  );
+}
+
 function SidebarNav() {
   const st = useStore();
   const u = st.userDoc;
@@ -1198,16 +1207,6 @@ function SidebarNav() {
     if (p === "documents") return (st.myDocuments || []).filter(d => d.status === "sent").length || 0;
     if (p === "admin/support") return (st.allTickets || []).filter(tk => tk.status === "new").length || 0;
     return 0;
-  };
-
-  const NavLink = ({ it }) => {
-    const badge = badgeFor(it.p);
-    return (
-      <div className={`navlink ${path === it.p ? "active" : ""}`} role="button" tabIndex={0} onClick={() => navigate(it.p)}>
-        <Icon name={it.i} /> {t(it.tKey)}
-        {badge > 0 && <span className="nav-badge">{badge > 99 ? "99+" : badge}</span>}
-      </div>
-    );
   };
 
   // Accordion: only one flyout open at a time; sync with current route
@@ -1241,7 +1240,7 @@ function SidebarNav() {
     return (
       <div className="sidenav">
         <div className="navsec">{t("navTitle")}</div>
-        <NavLink it={{ p: "login", tKey: "navLogin", i: "user" }} />
+        <NavLink p="login" tKey="navLogin" icon="user" path={path} badge={0} />
       </div>
     );
   }
@@ -1253,33 +1252,33 @@ function SidebarNav() {
       <div className="navsec">{t("navTitle")}</div>
 
       {/* Dashboard — home page */}
-      <NavLink it={{ p: "dashboard", tKey: "navDashboard", i: "home" }} />
+      <NavLink p="dashboard" tKey="navDashboard" icon="home" path={path} badge={0} />
 
       {/* Profile */}
-      <NavLink it={{ p: "profile", tKey: "navProfile", i: "user" }} />
+      <NavLink p="profile" tKey="navProfile" icon="user" path={path} badge={0} />
 
       {/* News — standalone */}
-      <NavLink it={{ p: "news", tKey: "navNews", i: "news" }} />
+      <NavLink p="news" tKey="navNews" icon="news" path={path} badge={0} />
 
       {/* Group 1: Рейтинг + Статистика */}
       <NavFlyout icon="rank" label={t("navGroupAnalytics")} open={openGroup === "analytics"} onToggle={() => toggle("analytics")}>
-        <NavLink it={{ p: "rating", tKey: "navRating", i: "rank" }} />
-        <NavLink it={{ p: "stats", tKey: "navStats", i: "chart" }} />
+        <NavLink p="rating" tKey="navRating" icon="rank" path={path} badge={0} />
+        <NavLink p="stats" tKey="navStats" icon="chart" path={path} badge={0} />
       </NavFlyout>
 
       {isTeacher && (
         <>
           {/* Group 2: Заявления + Документы + Добавить KPI */}
           <NavFlyout icon="clipboard" label={t("navGroupWork")} badge={workBadge} open={openGroup === "work"} onToggle={() => toggle("work")}>
-            <NavLink it={{ p: "requests", tKey: "navRequests", i: "file" }} />
-            <NavLink it={{ p: "documents", tKey: "navDocuments", i: "shield" }} />
-            <NavLink it={{ p: "add", tKey: "navAddKpi", i: "plus" }} />
+            <NavLink p="requests" tKey="navRequests" icon="file" path={path} badge={0} />
+            <NavLink p="documents" tKey="navDocuments" icon="shield" path={path} badge={badgeFor("documents")} />
+            <NavLink p="add" tKey="navAddKpi" icon="plus" path={path} badge={0} />
           </NavFlyout>
 
           {/* Group 3: Поддержка + Ознакомление */}
           <NavFlyout icon="info" label={t("navGroupInfo")} open={openGroup === "info"} onToggle={() => toggle("info")}>
-            <NavLink it={{ p: "support", tKey: "navSupport", i: "bug" }} />
-            <NavLink it={{ p: "onboarding", tKey: "navOnboarding", i: "check" }} />
+            <NavLink p="support" tKey="navSupport" icon="bug" path={path} badge={0} />
+            <NavLink p="onboarding" tKey="navOnboarding" icon="check" path={path} badge={0} />
           </NavFlyout>
         </>
       )}
@@ -1287,7 +1286,7 @@ function SidebarNav() {
       {u.role === "admin" && (
         <>
           <div className="navsec">{t("navAdmin")}</div>
-          {adminItems.map(it => <NavLink key={it.p} it={it} />)}
+          {adminItems.map(ai => <NavLink key={ai.p} p={ai.p} tKey={ai.tKey} icon={ai.i} path={path} badge={badgeFor(ai.p)} />)}
         </>
       )}
 
@@ -3219,7 +3218,6 @@ function PageProfile() {
       const fresh = await ensureUserDoc();
       setState({ userDoc: fresh });
       toast(t("profileUpdated"), "ok");
-      setOpen(false);
     } catch (e) {
       console.error(e);
       toast(e?.message || t("saveError"), "error");
