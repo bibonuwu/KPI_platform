@@ -2720,7 +2720,15 @@ function PageLogin() {
   const [pass, setPass] = useState("");
   const [slide, setSlide] = useState(0);
 
-  useEffect(() => { if (st.userDoc) navigate("dashboard"); }, [st.userDoc]);
+  useEffect(() => {
+    if (st.userDoc) {
+      if (st.userDoc.onboarded !== true && st.userDoc.role !== "admin") {
+        navigate("onboarding");
+      } else {
+        navigate("dashboard");
+      }
+    }
+  }, [st.userDoc]);
 
   useEffect(() => {
     const id = setInterval(() => setSlide(s => (s + 1) % 3), 4500);
