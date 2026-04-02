@@ -938,8 +938,8 @@ async function createNewsPost({ uid, authorName, authorRole, avatarUrl, category
   formData.append("link", safeText(link));
   formData.append("mood", safeText(mood || ""));
   formData.append("fontFamily", safeText(fontFamily || ""));
-  formData.append("likes", JSON.stringify([]));
-  formData.append("pinned", false);
+  formData.append("likes", "[]");
+  formData.append("pinned", "false");
   if (photoFile) formData.append("photo", photoFile);
   if (coverFile) formData.append("cover", coverFile);
   await pb.collection("news").create(formData);
@@ -3968,8 +3968,13 @@ function PageAdd() {
       setTitle(""); setDescription(""); setEvidenceLink(""); setFile(null);
       navigate("dashboard");
     } catch (err) {
-      console.error(err);
-      toast(err?.message || "Ошибка отправки", "error");
+      console.error("Submission create error:", err, err?.data);
+      let msg = err?.message || "Ошибка отправки";
+      if (err?.data) {
+        const fields = Object.entries(err.data).map(([k, v]) => `${k}: ${v?.message || JSON.stringify(v)}`).join("; ");
+        if (fields) msg += " — " + fields;
+      }
+      toast(msg, "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -4243,8 +4248,13 @@ function PageRequests() {
       setState({ myRequests: myReq });
       setNote("");
     } catch (err) {
-      console.error(err);
-      toast(err?.message || t("sendError"), "error");
+      console.error("Request create error:", err, err?.data);
+      let msg = err?.message || t("sendError");
+      if (err?.data) {
+        const fields = Object.entries(err.data).map(([k, v]) => `${k}: ${v?.message || JSON.stringify(v)}`).join("; ");
+        if (fields) msg += " — " + fields;
+      }
+      toast(msg, "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -5270,8 +5280,13 @@ function PageDocuments() {
       setState({ myTeacherDocs: fresh });
       setDocTitle(""); setDocDesc(""); setDocFile(null);
     } catch (err) {
-      console.error(err);
-      toast(err?.message || t("error"), "error");
+      console.error("TeacherDoc create error:", err, err?.data);
+      let msg = err?.message || t("error");
+      if (err?.data) {
+        const fields = Object.entries(err.data).map(([k, v]) => `${k}: ${v?.message || JSON.stringify(v)}`).join("; ");
+        if (fields) msg += " — " + fields;
+      }
+      toast(msg, "error");
     } finally { setState({ loading: false }); }
   };
 
@@ -7661,7 +7676,13 @@ function PageNews() {
       const updated = await fetchNewsAll();
       setState({ news: updated });
     } catch (e) {
-      toast(e?.message || t("publishError"), "error");
+      console.error("News create error:", e, e?.data);
+      let msg = e?.message || t("publishError");
+      if (e?.data) {
+        const fields = Object.entries(e.data).map(([k, v]) => `${k}: ${v?.message || JSON.stringify(v)}`).join("; ");
+        if (fields) msg += " — " + fields;
+      }
+      toast(msg, "error");
     } finally { setSubmitting(false); }
   };
 
@@ -7904,7 +7925,13 @@ function PageSupport() {
       setState({ myTickets: tix });
       toast(t("bugSent"), "ok");
     } catch (e) {
-      toast(e?.message || t("bugSendError"), "error");
+      console.error("Ticket create error:", e, e?.data);
+      let msg = e?.message || t("bugSendError");
+      if (e?.data) {
+        const fields = Object.entries(e.data).map(([k, v]) => `${k}: ${v?.message || JSON.stringify(v)}`).join("; ");
+        if (fields) msg += " — " + fields;
+      }
+      toast(msg, "error");
     } finally {
       setSending(false);
     }
