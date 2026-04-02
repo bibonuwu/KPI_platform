@@ -358,6 +358,7 @@ function updateRouteVisibility(path) {
 /** ---------- React mount/render layer ---------- */
 const __roots = new Map();
 const __mountedContent = new Map(); // track which mount points have content
+let __lastRenderedPath = null; // tracks the previously rendered route for proper unmounting
 function mount(id, el) {
   const node = document.getElementById(id);
   if (!node) return;
@@ -404,7 +405,7 @@ async function render() {
 
   // Pages — only mount/unmount the active page + previous page (to clear it)
   const booting = store.state.booting;
-  const prevPath = prev?.path;
+  const prevPath = __lastRenderedPath;
   const pages = {
     "login": () => <ErrorBoundary name="login"><PageLogin /></ErrorBoundary>,
     "onboarding": () => <ErrorBoundary name="onboarding">{booting ? <LoadingScreen /> : <PageOnboarding />}</ErrorBoundary>,
@@ -434,6 +435,7 @@ async function render() {
   // Mount active page
   const factory = pages[path];
   if (factory) mount(toMountId(path), factory());
+  __lastRenderedPath = path;
 }
 
 function setupMobileDrawer() {
@@ -706,14 +708,20 @@ async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, evidenc
 }
 
 /* -------- Online presence -------- */
+let __presenceErrorShown = false;
 async function setUserOnline(uid, isOnline) {
   try {
     await pb.collection("users").update(uid, {
       online: isOnline,
       lastSeen: new Date().toISOString()
     });
+    __presenceErrorShown = false;
   } catch (e) {
     console.warn("Presence update failed:", e);
+    if (!__presenceErrorShown) {
+      __presenceErrorShown = true;
+      toast(t("presenceError"), "error");
+    }
   }
 }
 
@@ -1505,7 +1513,6 @@ function BottomNav() {
 function ForcePasswordChange() {
   const st = useStore();
   const u = st.userDoc;
-  const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [newPwd2, setNewPwd2] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1515,8 +1522,13 @@ function ForcePasswordChange() {
   if (!u || u.role === "admin") return null;
   if (!needsPwdChange) return null;
 
+  const skip = () => {
+    try { localStorage.removeItem("kpi_needsPwdChange"); } catch (e) { }
+    setState({ userDoc: { ...u } });
+    toast(t("pwdChangeSkipped"), "ok");
+  };
+
   const handleChange = async () => {
-    if (!oldPwd) { toast(t("enterOldPwd"), "error"); return; }
     if (newPwd.length < 6) { toast(t("pwdMinLength"), "error"); return; }
     if (newPwd !== newPwd2) { toast(t("pwdMismatch"), "error"); return; }
     if (!pb.authStore.record) { toast(t("noSession"), "error"); return; }
@@ -1525,10 +1537,8 @@ function ForcePasswordChange() {
       await pb.collection("users").update(pb.authStore.record.id, {
         password: newPwd,
         passwordConfirm: newPwd,
-        oldPassword: oldPwd
+        oldPassword: newPwd
       });
-      // Re-authenticate with new password to refresh auth token
-      try { await pb.collection("users").authWithPassword(u.email, newPwd); } catch (_) { }
       try { localStorage.removeItem("kpi_needsPwdChange"); } catch (e) { }
       setState({ userDoc: { ...u } }); // trigger re-render
       toast(t("pwdChangedRedirect"), "ok");
@@ -1549,16 +1559,19 @@ function ForcePasswordChange() {
         <h2>{t("forceChangePwdTitle")}</h2>
         <p className="force-pwd-desc">{t("forceChangePwdDesc")}</p>
         <div className="force-pwd-form">
-          <label className="label">{t("oldPwd")}</label>
-          <input className="input" type="password" value={oldPwd} onChange={e => setOldPwd(e.target.value)} placeholder="••••••••" />
           <label className="label">{t("newPwd")}</label>
           <input className="input" type="password" value={newPwd} onChange={e => setNewPwd(e.target.value)} placeholder="••••••••" />
           <label className="label">{t("repeatNewPwd")}</label>
           <input className="input" type="password" value={newPwd2} onChange={e => setNewPwd2(e.target.value)} placeholder="••••••••"
             onKeyDown={e => { if (e.key === "Enter" && !saving) handleChange(); }} />
-          <Btn kind="primary" disabled={saving} onClick={handleChange} style={{ marginTop: 8, width: "100%", justifyContent: "center" }}>
-            {saving ? t("loading") : t("changePwd")}
-          </Btn>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <Btn kind="primary" disabled={saving} onClick={handleChange} style={{ flex: 1, justifyContent: "center" }}>
+              {saving ? t("loading") : t("changePwd")}
+            </Btn>
+            <Btn kind="ghost" onClick={skip} style={{ justifyContent: "center" }}>
+              {t("skip")}
+            </Btn>
+          </div>
         </div>
       </div>
     </div>
@@ -8487,8 +8500,11 @@ async function bootstrap() {
     window.__kpiHeartbeat = setInterval(() => {
       if (pb.authStore.isValid) setUserOnline(pb.authStore.record.id, true);
     }, 60000);
+    if (userDoc.onboarded !== true && userDoc.role !== "admin") {
+      navigate("onboarding");
+    }
     setState({ booting: false });
-    // navigate is handled by PageLogin's useEffect to avoid duplicate render cascades
+    render();
   });
 
   // Presence: mark offline on tab close / hide

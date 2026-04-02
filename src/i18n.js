@@ -124,6 +124,8 @@ export const T = {
   actions: { kz: "Әрекеттер", ru: "Действия", en: "Actions" },
   avatarUpdated: { kz: "Аватар жаңартылды", ru: "Аватар обновлён", en: "Avatar updated" },
   saveError: { kz: "Сақтау қатесі", ru: "Ошибка сохранения", en: "Save error" },
+  presenceError: { kz: "Онлайн статусын жаңарту қатесі — PocketBase users API ережелерін тексеріңіз", ru: "Ошибка обновления онлайн-статуса — проверьте API Rules коллекции users", en: "Presence update failed — check users collection API Rules" },
+  hydrateError: { kz: "Деректерді жүктеу қатесі", ru: "Ошибка загрузки данных", en: "Data loading error" },
   needImage: { kz: "Сурет қажет", ru: "Нужна картинка", en: "Image required" },
 
   // ===== CHART LABELS =====
@@ -193,8 +195,6 @@ export const T = {
   securityHelp: { kz: "Ағымдағы құпиясөзді, содан кейін жаңасын енгізіңіз.", ru: "Введите текущий пароль, затем новый.", en: "Enter current password, then new one." },
   securityNote: { kz: "Google/басқа провайдер арқылы кірсеңіз, құпиясөзді өзгерту үшін қайта кіру қажет болуы мүмкін.", ru: "Если вы входите через Google/другой провайдер, может потребоваться повторный вход для смены пароля.", en: "If you sign in via Google/other provider, re-login may be required to change password." },
   currentPwd: { kz: "Ағымдағы құпиясөз", ru: "Текущий пароль", en: "Current password" },
-  oldPwd: { kz: "Ағымдағы құпиясөз", ru: "Текущий пароль", en: "Current password" },
-  enterOldPwd: { kz: "Ағымдағы құпиясөзді енгізіңіз", ru: "Введите текущий пароль", en: "Enter current password" },
   newPwd: { kz: "Жаңа құпиясөз", ru: "Новый пароль", en: "New password" },
   repeatNewPwd: { kz: "Жаңа құпиясөзді қайталаңыз", ru: "Повторите новый пароль", en: "Repeat new password" },
   changePwd: { kz: "Құпиясөзді өзгерту", ru: "Изменить пароль", en: "Change password" },
@@ -597,6 +597,8 @@ export const T = {
   forceChangePwdTitle: { kz: "Құпиясөзді өзгертіңіз", ru: "Измените пароль", en: "Change your password" },
   forceChangePwdDesc: { kz: "Қауіпсіздік үшін бірінші кіргенде құпиясөзді өзгерту қажет.", ru: "Для безопасности необходимо сменить пароль при первом входе.", en: "For security, you must change your password on first login." },
   pwdChangedRedirect: { kz: "Құпиясөз өзгертілді! Бағытталуда…", ru: "Пароль изменён! Перенаправление…", en: "Password changed! Redirecting…" },
+  pwdChangeSkipped: { kz: "Құпиясөзді кейін өзгертуге болады", ru: "Пароль можно сменить позже", en: "You can change password later" },
+  skip: { kz: "Кейін", ru: "Позже", en: "Later" },
   justNow: { kz: "жаңа ғана", ru: "только что", en: "just now" },
   minAgo: { kz: "мин. бұрын", ru: "мин. назад", en: "min ago" },
   hAgo: { kz: "сағ. бұрын", ru: "ч. назад", en: "h ago" },
