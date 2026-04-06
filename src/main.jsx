@@ -284,12 +284,20 @@ const store = {
     // announcements (admin banners)
     announcements: [],
 
+    // goals
+    myGoals: [],
+
+    // quarter filter
+    quarterFilter: "all",
+
     // ui
     statsRangeMode: "14d",
     statsView: "mine",
     theme: (function () { try { return localStorage.getItem("kpi_theme") || "light"; } catch (e) { return "light"; } })(),
+    font: (function () { try { return localStorage.getItem("kpi_font") || "default"; } catch (e) { return "default"; } })(),
     accessibility: { reduceMotion: false, largeText: false, highContrast: false },
-    showAccessibilityModal: false
+    showAccessibilityModal: false,
+    siteSettings: { showClock: true, showWeather: true }
   },
   subs: new Set()
 };
@@ -322,6 +330,20 @@ function toggleTheme() {
   }
 }
 
+/* -------- Font settings -------- */
+const FONT_MAP = {
+  default: "'Onest', system-ui, sans-serif",
+  sans: "'Inter', sans-serif",
+  system: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  dyslexic: "'Open Dyslexic', 'OpenDyslexic', sans-serif"
+};
+function applyFont(f) {
+  const val = FONT_MAP[f] || FONT_MAP.default;
+  document.documentElement.style.setProperty('--font', val);
+  try { localStorage.setItem("kpi_font", f); } catch (e) {}
+  setState({ font: f });
+}
+
 /* -------- Accessibility settings -------- */
 function getDefaultAccessibility() {
   return { reduceMotion: false, largeText: false, highContrast: false };
@@ -339,10 +361,23 @@ async function saveAccessibilityToFirestore(uid, acc) {
   } catch (e) { console.warn("Accessibility save failed:", e); }
 }
 
+/* -------- Site settings (per-user display prefs) -------- */
+function getDefaultSiteSettings() {
+  return { showClock: true, showWeather: true };
+}
+function applySiteSettings(s) {
+  setState({ siteSettings: { ...getDefaultSiteSettings(), ...s } });
+}
+async function saveSiteSettings(uid, s) {
+  try {
+    await updateDoc(doc(db, "users", uid), { siteSettings: s });
+  } catch (e) { console.warn("SiteSettings save failed:", e); }
+}
+
 /** ---------- router ---------- */
 const ROUTES = [
   "login", "onboarding", "dashboard", "profile", "rating", "stats", "add",
-  "requests", "documents", "news", "support",
+  "requests", "documents", "news", "support", "settings",
   "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support", "admin/announcements"
 ];
 
@@ -373,11 +408,11 @@ function canAccess(path, userDoc) {
   if (role === "teacher") {
     if (userDoc.onboarded !== true) return false; // block all pages until onboarding done
     if (path.startsWith("admin/")) return false;
-    return ["dashboard", "profile", "rating", "stats", "add", "requests", "documents", "news", "support"].includes(path);
+    return ["dashboard", "profile", "rating", "stats", "add", "requests", "documents", "news", "support", "settings"].includes(path);
   }
   if (role === "admin") {
     if (path === "add") return false;
-    return ["dashboard", "profile", "rating", "stats", "documents", "news"].includes(path) || path.startsWith("admin/");
+    return ["dashboard", "profile", "rating", "stats", "documents", "news", "settings"].includes(path) || path.startsWith("admin/");
   }
   return false;
 }
@@ -418,6 +453,7 @@ async function render() {
   updateRouteVisibility(path);
 
   // Layout (always)
+  mount("mount-topbar-title", <ErrorBoundary name="topbar-title"><TopbarTitle /></ErrorBoundary>);
   mount("mount-sidebar", <ErrorBoundary name="sidebar"><SidebarNav /></ErrorBoundary>);
   mount("mount-drawer", <ErrorBoundary name="drawer"><SidebarNav /></ErrorBoundary>);
   // topbar mount id differs between layouts; mount to both (missing nodes are ignored)
@@ -444,6 +480,7 @@ async function render() {
   mount("mount-documents", show("documents") ? <ErrorBoundary name="documents">{booting ? <LoadingScreen /> : <PageDocuments />}</ErrorBoundary> : null);
   mount("mount-news", show("news") ? <ErrorBoundary name="news">{booting ? <LoadingScreen /> : <PageNews />}</ErrorBoundary> : null);
   mount("mount-support", show("support") ? <ErrorBoundary name="support">{booting ? <LoadingScreen /> : <PageSupport />}</ErrorBoundary> : null);
+  mount("mount-settings", show("settings") ? <ErrorBoundary name="settings">{booting ? <LoadingScreen /> : <PageSettings />}</ErrorBoundary> : null);
 
   mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary> : null);
   mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary> : null);
@@ -535,6 +572,115 @@ function levelFromPoints(p) {
   if (x >= 150) return { name: t("lvlPro"), next: 300, pct: Math.round(((x - 150) / (150)) * 100) };
   if (x >= 50) return { name: t("lvlConfident"), next: 150, pct: Math.round(((x - 50) / (100)) * 100) };
   return { name: t("lvlNewbie"), next: 50, pct: Math.round((x / 50) * 100) };
+}
+
+/** ---------- academic quarters ---------- */
+function getAcademicYear(date = new Date()) {
+  const y = date.getFullYear();
+  const m = date.getMonth(); // 0-based
+  // Academic year starts September: Sep 2025 → 2025-2026
+  return m >= 8 ? { start: y, end: y + 1 } : { start: y - 1, end: y };
+}
+
+const QUARTER_RANGES = [
+  { key: "q1", startMonth: 9, startDay: 1, endMonth: 10, endDay: 25 },
+  { key: "q2", startMonth: 11, startDay: 5, endMonth: 12, endDay: 27 },
+  { key: "q3", startMonth: 1, startDay: 10, endMonth: 3, endDay: 21 },
+  { key: "q4", startMonth: 4, startDay: 1, endMonth: 5, endDay: 25 },
+];
+
+function getQuarterDates(quarterKey, refDate = new Date()) {
+  const ay = getAcademicYear(refDate);
+  const q = QUARTER_RANGES.find(x => x.key === quarterKey);
+  if (!q) return null;
+  const startYear = q.startMonth >= 9 ? ay.start : ay.end;
+  const endYear = q.endMonth >= 9 ? ay.start : ay.end;
+  return {
+    start: `${startYear}-${String(q.startMonth).padStart(2, "0")}-${String(q.startDay).padStart(2, "0")}`,
+    end: `${endYear}-${String(q.endMonth).padStart(2, "0")}-${String(q.endDay).padStart(2, "0")}`
+  };
+}
+
+function getCurrentQuarter(date = new Date()) {
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  if ((m === 9) || (m === 10 && d <= 25)) return "q1";
+  if ((m === 11 && d >= 5) || m === 12) return "q2";
+  if ((m === 1 && d >= 10) || m === 2 || (m === 3 && d <= 21)) return "q3";
+  if (m === 4 || (m === 5 && d <= 25)) return "q4";
+  return null; // vacation period
+}
+
+function filterByQuarter(items, quarterKey, dateField = "eventDate") {
+  if (!quarterKey || quarterKey === "all") return items;
+  const range = getQuarterDates(quarterKey);
+  if (!range) return items;
+  return items.filter(item => {
+    const d = item[dateField];
+    if (!d) return false;
+    return d >= range.start && d <= range.end;
+  });
+}
+
+function getAcademicYearLabel(refDate = new Date()) {
+  const ay = getAcademicYear(refDate);
+  return `${ay.start}–${ay.end}`;
+}
+
+/** ---------- CSV / Excel export ---------- */
+function exportToCsv(filename, headers, rows) {
+  const BOM = "\uFEFF";
+  const escape = (v) => {
+    const s = String(v ?? "").replace(/"/g, '""');
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s}"` : s;
+  };
+  const csv = BOM + [headers.map(escape).join(","), ...rows.map(r => r.map(escape).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportRatingCsv(users, types) {
+  const teachers = users.filter(x => (x.role || "teacher") !== "admin");
+  const sorted = [...teachers].sort((a, b) => (Number(b.totalPoints) || 0) - (Number(a.totalPoints) || 0));
+  const headers = [t("rank"), t("teacher"), "Email", t("subject"), t("totalPoints")];
+  const rows = sorted.map((u, i) => [
+    i + 1,
+    u.displayName || u.email || "—",
+    u.email || "",
+    u.subject || "—",
+    Number(u.totalPoints) || 0
+  ]);
+  exportToCsv(`rating_${ymd()}.csv`, headers, rows);
+}
+
+function exportSubmissionsCsv(submissions, typesMap, quarter = "all") {
+  const filtered = filterByQuarter(submissions, quarter);
+  const headers = [t("date"), t("type"), t("title"), t("points"), t("status"), t("quarter")];
+  const rows = filtered.map(s => {
+    const tp = typesMap?.get(s.typeId);
+    const qKey = getQuarterForDate(s.eventDate);
+    return [
+      s.eventDate || "—",
+      tp?.name || s.typeName || "—",
+      s.title || "—",
+      Number(s.points) || 0,
+      s.status || "—",
+      qKey ? t(qKey) : "—"
+    ];
+  });
+  exportToCsv(`kpi_${quarter}_${ymd()}.csv`, headers, rows);
+}
+
+function getQuarterForDate(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  return getCurrentQuarter(d);
 }
 
 /** ---------- toasts ---------- */
@@ -1097,6 +1243,34 @@ async function deleteAnnouncement(id) {
   await deleteDoc(doc(db, "announcements", id));
 }
 
+/** ---------- goals api ---------- */
+async function fetchGoals(uid) {
+  const qy = query(collection(db, "goals"), where("uid", "==", uid), orderBy("createdAt", "desc"));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function createGoal({ uid, targetPoints, deadline, note, scope, section }) {
+  await addDoc(collection(db, "goals"), {
+    uid,
+    targetPoints: Number(targetPoints) || 0,
+    deadline: safeText(deadline),
+    note: safeText(note),
+    scope: safeText(scope) || "quarter",
+    section: safeText(section),
+    completed: false,
+    createdAt: serverTimestamp()
+  });
+}
+
+async function updateGoal(goalId, patch) {
+  await updateDoc(doc(db, "goals", goalId), patch);
+}
+
+async function deleteGoalDoc(goalId) {
+  await deleteDoc(doc(db, "goals", goalId));
+}
+
 /** ---------- ui components ---------- */
 function Icon({ name }) {
   const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none" };
@@ -1363,6 +1537,9 @@ function SidebarNav() {
         </>
       )}
 
+      {/* Settings — standalone */}
+      <NavLink it={{ p: "settings", tKey: "navSettings", i: "settings" }} />
+
       {u.role === "admin" && (
         <>
           <div className="navsec">{t("navAdmin")}</div>
@@ -1375,11 +1552,13 @@ function SidebarNav() {
 }
 
 function LiveClock() {
+  const st = useStore();
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(id);
   }, []);
+  if (st.siteSettings && !st.siteSettings.showClock) return null;
   const days = [t("daySun"), t("dayMon"), t("dayTue"), t("dayWed"), t("dayThu"), t("dayFri"), t("daySat")];
   const dd = String(now.getDate()).padStart(2, "0");
   const mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -1395,28 +1574,52 @@ function LiveClock() {
   );
 }
 
-function LangSwitcher() {
+function WeatherWidget() {
   const st = useStore();
-  const lang = getLang();
-  const langs = [
-    { code: "kz", label: "KZ" },
-    { code: "ru", label: "RU" },
-    { code: "en", label: "EN" },
-  ];
+  const [weather, setWeather] = useState(null);
+  useEffect(() => {
+    const fetchWeather = () => {
+      fetch("https://api.open-meteo.com/v1/forecast?latitude=44.85&longitude=65.51&current=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m&timezone=Asia/Almaty")
+        .then(r => r.json())
+        .then(data => {
+          if (data.current) setWeather(data.current);
+        })
+        .catch(() => {});
+    };
+    fetchWeather();
+    const id = setInterval(fetchWeather, 600000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!weather || (st.siteSettings && !st.siteSettings.showWeather)) return null;
+
+  const code = weather.weather_code;
+  const temp = Math.round(weather.temperature_2m);
+  const wind = Math.round(weather.wind_speed_10m);
+  const humidity = weather.relative_humidity_2m;
+
+  const getWeatherIcon = (c) => {
+    if (c === 0) return "\u2600\uFE0F";
+    if (c <= 3) return "\u26C5";
+    if (c <= 48) return "\u2601\uFE0F";
+    if (c <= 57) return "\uD83C\uDF27\uFE0F";
+    if (c <= 67) return "\uD83C\uDF26\uFE0F";
+    if (c <= 77) return "\u2744\uFE0F";
+    if (c <= 82) return "\uD83C\uDF27\uFE0F";
+    if (c <= 86) return "\uD83C\uDF28\uFE0F";
+    if (c >= 95) return "\u26C8\uFE0F";
+    return "\u2601\uFE0F";
+  };
+
   return (
-    <div className="lang-switcher">
-      {langs.map(l => (
-        <button
-          key={l.code}
-          className={`lang-switcher__btn${lang === l.code ? " lang-switcher__btn--active" : ""}`}
-          onClick={() => { setLang(l.code); setState({ lang: l.code }); render(); }}
-        >
-          {l.label}
-        </button>
-      ))}
+    <div className="weather-widget" title={`${t("weatherHumidity") || "Humidity"}: ${humidity}% · ${t("weatherWind") || "Wind"}: ${wind} km/h`}>
+      <span className="weather-widget__icon">{getWeatherIcon(code)}</span>
+      <span className="weather-widget__temp">{temp > 0 ? "+" : ""}{temp}°</span>
+      <span className="weather-widget__city">Kyzylorda</span>
     </div>
   );
 }
+
 
 function AccessibilityModal() {
   const st = useStore();
@@ -1464,6 +1667,58 @@ function AccessibilityModal() {
   );
 }
 
+const ROUTE_META = {
+  dashboard:           { icon: "home",      tKey: "navDashboard",      desc: "dashboardDesc" },
+  profile:             { icon: "user",      tKey: "navProfile",        desc: "profileDesc" },
+  rating:              { icon: "rank",      tKey: "navRating",         desc: "ratingDesc" },
+  stats:               { icon: "chart",     tKey: "navStats",          desc: "statsDesc" },
+  add:                 { icon: "plus",      tKey: "navAddKpi",         desc: "addDesc" },
+  requests:            { icon: "file",      tKey: "navRequests",       desc: "requestsDesc" },
+  documents:           { icon: "shield",    tKey: "navDocuments",      desc: "documentsDesc" },
+  news:                { icon: "news",      tKey: "navNews",           desc: "newsDesc" },
+  support:             { icon: "bug",       tKey: "navSupport",        desc: "supportDesc" },
+  settings:            { icon: "settings",  tKey: "navSettings",       desc: "settingsDesc2" },
+  onboarding:          { icon: "check",     tKey: "navOnboarding",     desc: "onboardingDesc" },
+  "admin/approvals":   { icon: "check",     tKey: "navApprovals",      desc: "approvalsDesc" },
+  "admin/requests":    { icon: "file",      tKey: "navRequests",       desc: "adminReqDesc" },
+  "admin/documents":   { icon: "shield",    tKey: "navDocuments",      desc: "adminDocDesc" },
+  "admin/types":       { icon: "file",      tKey: "navKpiTypes",       desc: "typesDesc" },
+  "admin/users":       { icon: "user",      tKey: "navUsers",          desc: "usersDesc" },
+  "admin/teacher":     { icon: "user",      tKey: "navProfile",        desc: "teacherPageDesc" },
+  "admin/support":     { icon: "bug",       tKey: "navSupport",        desc: "adminSupportDesc" },
+  "admin/announcements": { icon: "bell",    tKey: "navAnnouncements",  desc: "annPageDesc" },
+};
+
+function TopbarTitle() {
+  const st = useStore();
+  const path = st.route?.path || "login";
+  const meta = ROUTE_META[path];
+  const [animKey, setAnimKey] = useState(path);
+
+  useEffect(() => { setAnimKey(path); }, [path]);
+
+  if (!meta) {
+    return (
+      <>
+        <div className="topbar__titleBig">NIS KPI Platform</div>
+        <div className="topbar__titleSmall muted">{t("appTagline")}</div>
+      </>
+    );
+  }
+
+  return (
+    <div className="topbar-title-anim" key={animKey}>
+      <div className="topbar-title__icon-wrap">
+        <Icon name={meta.icon} />
+      </div>
+      <div>
+        <div className="topbar__titleBig">{t(meta.tKey)}</div>
+        <div className="topbar__titleSmall muted">{t(meta.desc)}</div>
+      </div>
+    </div>
+  );
+}
+
 function TopbarRight() {
   const st = useStore();
   const u = st.userDoc;
@@ -1472,22 +1727,14 @@ function TopbarRight() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
       <LiveClock />
-      <LangSwitcher />
+      <WeatherWidget />
       <button
         className="iconbtn"
-        onClick={() => setState({ showAccessibilityModal: true })}
-        aria-label={t("accessibilityBtn")}
-        title={t("accessibilityBtn")}
+        onClick={() => navigate("settings")}
+        aria-label={t("navSettings")}
+        title={t("navSettings")}
       >
-        <Icon name="eye" />
-      </button>
-      <button
-        className="iconbtn theme-toggle"
-        onClick={toggleTheme}
-        aria-label={isDark ? t("lightTheme") : t("darkTheme")}
-        title={isDark ? t("lightTheme") : t("darkTheme")}
-      >
-        <Icon name={isDark ? "sun" : "moon"} />
+        <Icon name="settings" />
       </button>
       {u ? (
         <>
@@ -4163,10 +4410,6 @@ function PageAdd() {
   ) : (
     <div className="grid2">
       <div className="glass card">
-        <div className="h1">Добавить KPI</div>
-        <p className="p">Выберите тип KPI и прикрепите доказательства.</p>
-        <div className="sep"></div>
-
         <form onSubmit={submit}>
           <div className="grid2">
             <div>
@@ -4379,10 +4622,6 @@ function PageRequests() {
 
       <div className="grid2">
         <div className="glass card">
-          <div className="h1">{t("requestsTitle")}</div>
-          <p className="p">{t("requestsDesc")}</p>
-          <div className="sep"></div>
-
           <form onSubmit={submit}>
             <div className="label">{t("requestType")}</div>
             <Select value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -4512,10 +4751,6 @@ function PageRating() {
 
   return (
     <div className="glass card">
-      <div className="h1">{t("ratingTitle")}</div>
-      <p className="p">{t("ratingDesc")}</p>
-      <div className="sep"></div>
-
       <div className="podium">
         {[1, 0, 2].map((idx, i) => {
           const tc = top3[idx];
@@ -4748,7 +4983,6 @@ function PageStats() {
 
     return (
       <div className="glass card">
-        <div className="h1">{t("myStats")}</div>
         <p className="p">Диапазон: <b>{mode === "365d" ? t("rangeYear") : t("range14d")}</b>.</p>
         <Controls />
 
@@ -4945,7 +5179,6 @@ function PageStats() {
 
     return (
       <div className="glass card">
-        <div className="h1">{t("platformStats")}</div>
         <p className="p">
           {t("overallView")} <b>{mode === "365d" ? t("rangeYear") : t("range14d")}</b>.
         </p>
@@ -5108,10 +5341,6 @@ function PageAdminApprovals() {
 
   return (
     <div className="glass card">
-      <div className="h1">{t("approvalsTitle")}</div>
-      <p className="p">{t("approvalsDesc")}</p>
-      <div className="sep"></div>
-
       {!pending.length && <p className="p muted" style={{ padding: "12px 0" }}>{t("noSubsToReview")}</p>}
       <div className="mobile-cards">
         {pending.map(s => {
@@ -5201,10 +5430,6 @@ function PageAdminRequests() {
   return (
     <div className="grid2">
       <div className="glass card">
-        <div className="h1">{t("adminReqTitle")}</div>
-        <p className="p">{t("adminReqDesc")}</p>
-        <div className="sep"></div>
-
         {!pending.length && <p className="p muted" style={{ padding: "12px 0" }}>{t("noReqToReview")}</p>}
         <div className="mobile-cards">
           {pending.map(r => {
@@ -5502,17 +5727,6 @@ function PageDocuments() {
       )}
 
       <div className="page-wrap">
-        {/* Header */}
-        <div className="glass card" style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
-            <div>
-              <div className="h1">{t("documentsTitle")}</div>
-              <div className="muted" style={{ fontSize: 13 }}>{t("documentsDesc")}</div>
-            </div>
-          </div>
-        </div>
-
         {/* Tabs */}
         <div className="prof-tabs" style={{ marginBottom: 16 }}>
           <button className={`prof-tab${activeTab === "sign" ? " prof-tab--active" : ""}`} onClick={() => setActiveTab("sign")}>
@@ -5771,14 +5985,7 @@ function PageAdminDocuments() {
   return (
     <div className="page-wrap">
       <div className="glass card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
-          <div style={{ flex: 1 }}>
-            <div className="h1">{t("adminDocTitle")}</div>
-            <div className="muted" style={{ fontSize: 13 }}>{t("adminDocDesc")}</div>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <div style={{ display: "flex", gap: 8 }}>
           <Btn kind={tab === "send" ? "primary" : "ghost"} onClick={() => setTab("send")}>{t("sendTab")}</Btn>
           <Btn kind={tab === "list" ? "primary" : "ghost"} onClick={() => setTab("list")}>{t("listTab")} ({docs.length})</Btn>
         </div>
@@ -6229,21 +6436,14 @@ function PageAdminTypes() {
 
       {/* Page header */}
       <div className="glass card" style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
-          <div style={{ flex: 1 }}>
-            <div className="h1" style={{ margin: 0 }}>{t("typesTitle")}</div>
-            <div className="muted" style={{ fontSize: 13 }}>{t("typesDesc")}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="types-stat-pill">
+            <Icon name="check" />
+            <span>{activeCount} {t("typeActive")}</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div className="types-stat-pill">
-              <Icon name="check" />
-              <span>{activeCount} {t("typeActive")}</span>
-            </div>
-            <div className="types-stat-pill muted-pill">
-              <Icon name="file" />
-              <span>{allTypes.length} {t("typeTotal")}</span>
-            </div>
+          <div className="types-stat-pill muted-pill">
+            <Icon name="file" />
+            <span>{allTypes.length} {t("typeTotal")}</span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
@@ -6546,17 +6746,10 @@ function PageAdminUsers() {
 
       {/* Page header */}
       <div className="glass card" style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <img src="/logo-nis.png" alt="NIS" style={{ width: 40, height: 40, objectFit: "contain" }} />
-          <div style={{ flex: 1 }}>
-            <div className="h1" style={{ margin: 0 }}>{t("usersTitle")}</div>
-            <div className="muted" style={{ fontSize: 13 }}>{t("usersDesc")}</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
-            <span className="online-dot" />
-            <span style={{ color: "var(--green, #22c55e)" }}>{onlineCount} online</span>
-            <span className="muted">/ {filtered.length}</span>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
+          <span className="online-dot" />
+          <span style={{ color: "var(--green, #22c55e)" }}>{onlineCount} online</span>
+          <span className="muted">/ {filtered.length}</span>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <Btn kind={usersTab === "users" ? "primary" : "ghost"} onClick={() => setUsersTab("users")}>{t("usersTabUsers")}</Btn>
@@ -7794,20 +7987,34 @@ function PageNews() {
 
   return (
     <div className="page-news">
-      <div className="page-head" style={{ marginBottom: 20 }}>
-        <div>
-          <div className="h1">{t("newsTitle")}</div>
-          <div className="muted tiny">{t("sharedFeed")} · {localNews.length} {t("publication")}</div>
+      {/* Hero header */}
+      <div className="news-hero">
+        <div className="news-hero__bg">
+          <div className="news-hero__orb news-hero__orb--1" />
+          <div className="news-hero__orb news-hero__orb--2" />
+          <div className="news-hero__orb news-hero__orb--3" />
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button className={`iconbtn${refreshing ? " spin" : ""}`} onClick={doRefresh} title={t("refresh")} disabled={refreshing}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
-          </button>
-          {u && (
-            <Btn kind="primary" onClick={() => setShowForm(v => !v)}>
-              {showForm ? `✕ ${t("close")}` : `+ ${t("publish")}`}
-            </Btn>
-          )}
+        <div className="news-hero__content">
+          <div className="news-hero__left">
+            <div className="news-hero__icon-wrap">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h14a2 2 0 002-2V7.5L14.5 2H6a2 2 0 00-2 2v4" /><path d="M14 2v6h6" /><path d="M2 15h10M2 19h6" /></svg>
+            </div>
+            <div>
+              <div className="news-hero__title">{t("newsTitle")}</div>
+              <div className="news-hero__sub">{t("sharedFeed")} · <span className="news-hero__count">{localNews.length}</span> {t("publication")}</div>
+            </div>
+          </div>
+          <div className="news-hero__actions">
+            <button className={`news-hero__refresh${refreshing ? " spin" : ""}`} onClick={doRefresh} title={t("refresh")} disabled={refreshing}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" /></svg>
+            </button>
+            {u && (
+              <button className={`news-hero__publish${showForm ? " active" : ""}`} onClick={() => setShowForm(v => !v)}>
+                <span className="news-hero__publish-icon">{showForm ? "✕" : "+"}</span>
+                {showForm ? t("close") : t("publish")}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -7884,9 +8091,12 @@ function PageNews() {
           <div className="news-list">
             {filtered.length === 0 ? (
               <div className="news-empty">
-                <div className="news-empty__icon">{filter !== "all" ? (NEWS_CAT_ICONS[filter] || "\u{1F4F0}") : "\u{1F4F0}"}</div>
-                <div className="h2">{t("noNews")}</div>
-                <div className="tiny muted" style={{ marginTop: 6 }}>{t("noNewsCat")}</div>
+                <div className="news-empty__icon-wrap">
+                  <div className="news-empty__pulse" />
+                  <div className="news-empty__icon">{filter !== "all" ? (NEWS_CAT_ICONS[filter] || "\u{1F4F0}") : "\u{1F4F0}"}</div>
+                </div>
+                <div className="news-empty__title">{t("noNews")}</div>
+                <div className="news-empty__sub">{t("noNewsCat")}</div>
               </div>
             ) : (
               filtered.map((n, i) => <NewsCard key={n.id} item={n} user={u} index={i} />)
@@ -7897,17 +8107,23 @@ function PageNews() {
         {/* RIGHT: sidebar */}
         <div className="news-sidebar">
           {/* Stats */}
-          <div className="news-sidebar-card">
+          <div className="news-sidebar-card news-sidebar-card--stats">
             <h3>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 20V10" /><path d="M12 20V4" /><path d="M6 20v-6" /></svg>
               {t("newsStats")}
             </h3>
             <div className="news-stat-grid">
-              <div className="news-stat-item">
+              <div className="news-stat-item news-stat-item--posts">
+                <div className="news-stat-item__icon-bg">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h14a2 2 0 002-2V7.5L14.5 2H6a2 2 0 00-2 2v4" /><path d="M14 2v6h6" /></svg>
+                </div>
                 <span className="news-stat-item__num">{localNews.length}</span>
                 <span className="news-stat-item__label">{t("totalPosts")}</span>
               </div>
-              <div className="news-stat-item">
+              <div className="news-stat-item news-stat-item--likes">
+                <div className="news-stat-item__icon-bg">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" /></svg>
+                </div>
                 <span className="news-stat-item__num">{totalLikes}</span>
                 <span className="news-stat-item__label">{t("totalLikes")}</span>
               </div>
@@ -7978,6 +8194,167 @@ function PageNews() {
 }
 
 /** ---------- PageSupport (teacher: bug report + FAQ + social) ---------- */
+/* ══════════════════════════════════════════════ */
+/* ═══ PAGE: SETTINGS ═════════════════════════  */
+/* ══════════════════════════════════════════════ */
+function PageSettings() {
+  const st = useStore();
+  const u = st.userDoc;
+  const site = st.siteSettings || getDefaultSiteSettings();
+  const acc = st.accessibility || getDefaultAccessibility();
+  const isDark = st.theme !== "light";
+  const lang = getLang();
+
+  const toggleSite = (key) => {
+    const next = { ...site, [key]: !site[key] };
+    applySiteSettings(next);
+    if (u) saveSiteSettings(u.uid, next);
+    toast(t("settingsSaved"), "ok");
+  };
+
+  const toggleAcc = (key) => {
+    const next = { ...acc, [key]: !acc[key] };
+    applyAccessibility(next);
+    if (u) saveAccessibilityToFirestore(u.uid, next);
+  };
+
+  const changeLang = (code) => {
+    setLang(code);
+    setState({ lang: code });
+    render();
+  };
+
+  const changeTheme = (theme) => {
+    applyTheme(theme);
+    if (u) updateDoc(doc(db, "users", u.uid), { preferredTheme: theme }).catch(() => {});
+  };
+
+  const currentFont = st.font || "default";
+  const changeFont = (f) => {
+    applyFont(f);
+    if (u) updateDoc(doc(db, "users", u.uid), { preferredFont: f }).catch(() => {});
+    toast(t("settingsSaved"), "ok");
+  };
+
+  const fontOptions = [
+    { id: "default", label: t("settFontDefault"), cls: "default" },
+    { id: "sans", label: t("settFontSans"), cls: "sans" },
+    { id: "system", label: t("settFontSystem"), cls: "system" },
+    { id: "dyslexic", label: t("settFontDyslexic"), cls: "dyslexic" },
+  ];
+
+  const displayRows = [
+    { key: "showClock", label: t("settShowClock"), desc: t("settShowClockDesc") },
+    { key: "showWeather", label: t("settShowWeather"), desc: t("settShowWeatherDesc") },
+  ];
+
+  const accRows = [
+    { key: "reduceMotion", label: t("accReduceMotion"), desc: t("accReduceMotionDesc") },
+    { key: "largeText", label: t("accLargeText"), desc: t("accLargeTextDesc") },
+    { key: "highContrast", label: t("accHighContrast"), desc: t("accHighContrastDesc") },
+  ];
+
+  const langs = [
+    { code: "kz", label: "Қазақша", flag: "🇰🇿" },
+    { code: "ru", label: "Русский", flag: "🇷🇺" },
+    { code: "en", label: "English", flag: "🇬🇧" },
+  ];
+
+  const ToggleRow = ({ label, desc, on, onToggle }) => (
+    <div className="sett-row">
+      <div className="sett-row__info">
+        <div className="sett-row__label">{label}</div>
+        {desc && <div className="sett-row__desc">{desc}</div>}
+      </div>
+      <button className={`sett-toggle${on ? " sett-toggle--on" : ""}`} onClick={onToggle} aria-label={label} />
+    </div>
+  );
+
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? t("settGreetMorning") : hour < 18 ? t("settGreetDay") : t("settGreetEvening");
+  const initial = (u?.displayName || "?")[0].toUpperCase();
+
+  return (
+    <div className="sett">
+      {/* Banner */}
+      <div className="sett-banner">
+        <div className="sett-banner__deco sett-banner__deco--1" />
+        <div className="sett-banner__deco sett-banner__deco--2" />
+        <div className="sett-banner__deco sett-banner__deco--3" />
+        <div className="sett-banner__content">
+          <div className="sett-banner__avatar">
+            {u?.avatarUrl
+              ? <img src={u.avatarUrl} alt="" />
+              : <span>{initial}</span>}
+          </div>
+          <div className="sett-banner__text">
+            <div className="sett-banner__greeting">{greeting}</div>
+            <div className="sett-banner__name">{u?.displayName || t("unnamed")}</div>
+            <div className="sett-banner__sub">{t("settingsDesc")}</div>
+          </div>
+          <div className="sett-banner__gear"><Icon name="settings" /></div>
+        </div>
+      </div>
+
+      <div className="sett__grid">
+        {/* Display */}
+        <div className="sett__card glass" style={{ animationDelay: "0s" }}>
+          <div className="sett__card-title"><Icon name="eye" /> {t("settingsGroupDisplay")}</div>
+          {displayRows.map(r => (
+            <ToggleRow key={r.key} label={r.label} desc={r.desc} on={site[r.key]} onToggle={() => toggleSite(r.key)} />
+          ))}
+        </div>
+
+        {/* Theme */}
+        <div className="sett__card glass" style={{ animationDelay: ".07s" }}>
+          <div className="sett__card-title"><Icon name={isDark ? "moon" : "sun"} /> {t("settingsGroupTheme")}</div>
+          <div className="sett__choice-grid">
+            <button className={`sett__choice${!isDark ? " sett__choice--on" : ""}`} onClick={() => changeTheme("light")}>
+              <Icon name="sun" /><span>{t("settThemeLight")}</span>
+            </button>
+            <button className={`sett__choice${isDark ? " sett__choice--on" : ""}`} onClick={() => changeTheme("dark")}>
+              <Icon name="moon" /><span>{t("settThemeDark")}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Font */}
+        <div className="sett__card glass" style={{ animationDelay: ".14s" }}>
+          <div className="sett__card-title"><Icon name="file-text" /> {t("settingsGroupFont")}</div>
+          <div className="sett__font-grid">
+            {fontOptions.map(fo => (
+              <button key={fo.id} className={`sett__font-card sett__font-card--${fo.cls}${currentFont === fo.id ? " sett__font-card--on" : ""}`} onClick={() => changeFont(fo.id)}>
+                <span className="sett__font-preview">Aa</span>
+                <span className="sett__font-label">{fo.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Language */}
+        <div className="sett__card glass" style={{ animationDelay: ".21s" }}>
+          <div className="sett__card-title"><Icon name="info" /> {t("settingsGroupLang")}</div>
+          <div className="sett__choice-grid sett__choice-grid--3">
+            {langs.map(l => (
+              <button key={l.code} className={`sett__choice${lang === l.code ? " sett__choice--on" : ""}`} onClick={() => changeLang(l.code)}>
+                <span style={{ fontSize: 18 }}>{l.flag}</span><span>{l.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Accessibility */}
+        <div className="sett__card glass" style={{ animationDelay: ".28s" }}>
+          <div className="sett__card-title"><Icon name="eye" /> {t("settingsGroupAccess")}</div>
+          {accRows.map(r => (
+            <ToggleRow key={r.key} label={r.label} desc={r.desc} on={acc[r.key]} onToggle={() => toggleAcc(r.key)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PageSupport() {
   const st = useStore();
   const u = st.userDoc;
@@ -8037,9 +8414,6 @@ function PageSupport() {
       <div className="support-grid">
         {/* LEFT COLUMN: Form + My Tickets */}
         <div className="support-left slide-up">
-          <h1 className="h1">{t("supportTitle")}</h1>
-          <p className="p muted" style={{ marginBottom: 16 }}>{t("supportDesc")}</p>
-
           <div className="support-form-card">
             <div className="support-form-header">
               <Icon name="bug" />
@@ -8180,9 +8554,6 @@ function PageAdminSupport() {
 
   return (
     <div className="page-admin-support fade-in">
-      <h1 className="h1">{t("adminSupportTitle")}</h1>
-      <p className="p muted">{t("adminSupportDesc")}</p>
-
       {/* Stats pills */}
       <div className="admin-support-stats slide-up">
         <div className="admin-support-stat admin-support-stat--new" onClick={() => setFilter("new")}>
@@ -8311,9 +8682,6 @@ function PageAdminAnnouncements() {
 
   return (
     <div className="page-admin-announcements fade-in">
-      <h1 className="h1">{t("annPageTitle")}</h1>
-      <p className="p muted">{t("annPageDesc")}</p>
-
       <div className="ann-columns">
         {/* Left: Create form */}
         <div className="ann-col-left">
@@ -8481,7 +8849,7 @@ async function hydrateForUser(userDoc) {
       });
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
-      const [types, my, myReq, myDocs, myTDocs, users, recent, newsData, myTix, announcementsData] = await Promise.all([
+      const [types, my, myReq, myDocs, myTDocs, users, recent, newsData, myTix, announcementsData, myGoalsData] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
@@ -8491,7 +8859,8 @@ async function hydrateForUser(userDoc) {
         fetchAdminRecentSubs(),
         fetchNewsAll(),
         fetchMyTickets(userDoc.uid),
-        fetchAnnouncements()
+        fetchAnnouncements(),
+        fetchGoals(userDoc.uid)
       ]);
       setState({
         types,
@@ -8504,6 +8873,7 @@ async function hydrateForUser(userDoc) {
         news: newsData,
         myTickets: myTix,
         announcements: announcementsData,
+        myGoals: myGoalsData,
         pendingSubmissions: [],
         pendingRequests: [],
         adminRecentRequests: [],
@@ -8521,6 +8891,7 @@ async function hydrateForUser(userDoc) {
 async function bootstrap() {
   setupMobileDrawer();
   applyTheme(store.state.theme);
+  applyFont(store.state.font);
   applyAccessibility(getDefaultAccessibility());
   window.addEventListener("hashchange", () => render().catch(console.error));
 
@@ -8565,10 +8936,13 @@ async function bootstrap() {
       const userDoc = await ensureUserDoc(user.uid, user.email || "");
       setState({ userDoc });
 
-      // Load user's accessibility + theme preferences from Firestore
+      // Load user's accessibility + theme + site preferences from Firestore
       const savedAcc = userDoc.accessibility || getDefaultAccessibility();
       applyAccessibility(savedAcc);
+      const savedSite = userDoc.siteSettings || getDefaultSiteSettings();
+      applySiteSettings(savedSite);
       if (userDoc.preferredTheme) applyTheme(userDoc.preferredTheme);
+      if (userDoc.preferredFont) applyFont(userDoc.preferredFont);
 
       await hydrateForUser(userDoc);
 
