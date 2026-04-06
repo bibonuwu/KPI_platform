@@ -124,8 +124,6 @@ export const T = {
   actions: { kz: "Әрекеттер", ru: "Действия", en: "Actions" },
   avatarUpdated: { kz: "Аватар жаңартылды", ru: "Аватар обновлён", en: "Avatar updated" },
   saveError: { kz: "Сақтау қатесі", ru: "Ошибка сохранения", en: "Save error" },
-  presenceError: { kz: "Онлайн статусын жаңарту қатесі — PocketBase users API ережелерін тексеріңіз", ru: "Ошибка обновления онлайн-статуса — проверьте API Rules коллекции users", en: "Presence update failed — check users collection API Rules" },
-  hydrateError: { kz: "Деректерді жүктеу қатесі", ru: "Ошибка загрузки данных", en: "Data loading error" },
   needImage: { kz: "Сурет қажет", ru: "Нужна картинка", en: "Image required" },
 
   // ===== CHART LABELS =====
@@ -597,8 +595,6 @@ export const T = {
   forceChangePwdTitle: { kz: "Құпиясөзді өзгертіңіз", ru: "Измените пароль", en: "Change your password" },
   forceChangePwdDesc: { kz: "Қауіпсіздік үшін бірінші кіргенде құпиясөзді өзгерту қажет.", ru: "Для безопасности необходимо сменить пароль при первом входе.", en: "For security, you must change your password on first login." },
   pwdChangedRedirect: { kz: "Құпиясөз өзгертілді! Бағытталуда…", ru: "Пароль изменён! Перенаправление…", en: "Password changed! Redirecting…" },
-  pwdChangeSkipped: { kz: "Құпиясөзді кейін өзгертуге болады", ru: "Пароль можно сменить позже", en: "You can change password later" },
-  skip: { kz: "Кейін", ru: "Позже", en: "Later" },
   justNow: { kz: "жаңа ғана", ru: "только что", en: "just now" },
   minAgo: { kz: "мин. бұрын", ru: "мин. назад", en: "min ago" },
   hAgo: { kz: "сағ. бұрын", ru: "ч. назад", en: "h ago" },
