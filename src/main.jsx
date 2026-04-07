@@ -291,7 +291,7 @@ const store = {
     quarterFilter: "all",
 
     // ui
-    statsRangeMode: "14d",
+    statsRangeMode: "365d",
     statsView: "mine",
     theme: (function () { try { return localStorage.getItem("kpi_theme") || "light"; } catch (e) { return "light"; } })(),
     font: (function () { try { return localStorage.getItem("kpi_font") || "default"; } catch (e) { return "default"; } })(),
@@ -1245,9 +1245,20 @@ async function deleteAnnouncement(id) {
 
 /** ---------- goals api ---------- */
 async function fetchGoals(uid) {
-  const qy = query(collection(db, "goals"), where("uid", "==", uid), orderBy("createdAt", "desc"));
-  const res = await getDocs(qy);
-  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+  try {
+    const qy = query(collection(db, "goals"), where("uid", "==", uid));
+    const res = await getDocs(qy);
+    const items = res.docs.map(d => ({ id: d.id, ...d.data() }));
+    items.sort((a, b) => {
+      const ta = a.createdAt?.seconds || 0;
+      const tb = b.createdAt?.seconds || 0;
+      return tb - ta;
+    });
+    return items;
+  } catch (e) {
+    console.warn("[goals] fetch failed:", e);
+    return [];
+  }
 }
 
 async function createGoal({ uid, targetPoints, deadline, note, scope, section }) {
@@ -1345,6 +1356,470 @@ function DataCards({ columns, rows, emptyText }) {
   );
 }
 
+
+/** ---------- Quarter filter selector ---------- */
+function QuarterFilter({ value, onChange, showLabel = true }) {
+  const curQ = getCurrentQuarter();
+  const quarters = [
+    { key: "all", label: t("allQuarters") },
+    { key: "q1", label: t("q1"), dates: t("q1Dates") },
+    { key: "q2", label: t("q2"), dates: t("q2Dates") },
+    { key: "q3", label: t("q3"), dates: t("q3Dates") },
+    { key: "q4", label: t("q4"), dates: t("q4Dates") },
+  ];
+  return (
+    <div className="quarter-filter">
+      {showLabel && <span className="quarter-filter__label">{t("quarter")}:</span>}
+      <div className="quarter-filter__btns">
+        {quarters.map(q => (
+          <button
+            key={q.key}
+            className={`quarter-filter__btn${value === q.key ? " quarter-filter__btn--active" : ""}${q.key === curQ ? " quarter-filter__btn--current" : ""}`}
+            onClick={() => onChange(q.key)}
+            title={q.dates || ""}
+          >
+            {q.label}
+            {q.key === curQ && <span className="quarter-filter__dot" />}
+          </button>
+        ))}
+      </div>
+      {showLabel && <span className="quarter-filter__year">{t("academicYear")}: {getAcademicYearLabel()}</span>}
+    </div>
+  );
+}
+
+/** ---------- Goals widget ---------- */
+function GoalsWidget({ compact = false }) {
+  const st = useStore();
+  const u = st.userDoc;
+  const goals = st.myGoals || [];
+  const subs = st.mySubmissions || [];
+  const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [target, setTarget] = useState("");
+  const [deadline, setDeadline] = useState("");
+  const [note, setNote] = useState("");
+  const [scope, setScope] = useState("quarter");
+  const [section, setSection] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState("goals"); // "goals" | "deadlines"
+  const [pendingProgress, setPendingProgress] = useState({});
+  const [compactTab, setCompactTab] = useState("goals"); // "goals" | "history"
+  const [goalsPage, setGoalsPage] = useState(1);
+  const [histPage, setHistPage] = useState(1);
+  const PER_PAGE = 4;
+
+  if (!u || u.role === "admin") return null;
+
+  const types = st.types || [];
+
+  const approvedSubs = subs.filter(s => s.status === "approved");
+
+  const computeProgress = (goal) => {
+    // If manual progress is set, use it
+    if (goal.manualProgress != null && goal.manualProgress > 0) {
+      const targetPts = Number(goal.targetPoints) || 1;
+      const earned = Math.round(targetPts * goal.manualProgress / 100);
+      return { earned, pct: Math.min(100, goal.manualProgress) };
+    }
+    let relevantSubs = approvedSubs;
+    if (goal.section) {
+      relevantSubs = relevantSubs.filter(s => s.typeSection === goal.section);
+    }
+    if (goal.scope === "quarter") {
+      const curQ = getCurrentQuarter();
+      if (curQ) relevantSubs = filterByQuarter(relevantSubs, curQ);
+    }
+    const earned = sum(relevantSubs, s => s.points);
+    const targetPts = Number(goal.targetPoints) || 1;
+    return { earned, pct: Math.min(100, Math.round((earned / targetPts) * 100)) };
+  };
+
+  const isOverdue = (goal) => {
+    if (!goal.deadline) return false;
+    return goal.deadline < ymd() && !goal.completed;
+  };
+
+  const resetForm = () => {
+    setTarget(""); setDeadline(""); setNote(""); setScope("quarter"); setSection(""); setEditId(null); setShowForm(false);
+  };
+
+  const startEdit = (g) => {
+    setEditId(g.id);
+    setTarget(String(g.targetPoints || ""));
+    setDeadline(g.deadline || "");
+    setNote(g.note || "");
+    setScope(g.scope || "quarter");
+    setSection(g.section || "");
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!target || Number(target) <= 0) { toast(t("goalTarget"), "error"); return; }
+    setSaving(true);
+    try {
+      if (editId) {
+        await updateGoal(editId, { targetPoints: Number(target), deadline, note: safeText(note), scope, section: safeText(section) });
+      } else {
+        await createGoal({ uid: u.uid, targetPoints: Number(target), deadline, note, scope, section });
+      }
+      const fresh = await fetchGoals(u.uid);
+      setState({ myGoals: fresh });
+      toast(t("goalSaved"), "ok");
+      resetForm();
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await deleteGoalDoc(id);
+      const fresh = await fetchGoals(u.uid);
+      setState({ myGoals: fresh });
+      toast(t("goalDeleted"), "ok");
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    }
+  };
+
+  const handleToggleComplete = async (g) => {
+    if (!g.completed) {
+      // Ask confirmation and submit for review
+      if (!window.confirm(t("confirmSubmitGoal"))) return;
+      try {
+        // Create a submission from this goal for admin review
+        const goalType = (st.types || []).find(tp => tp.section === g.section) || { id: "goal", name: g.note || t("goals"), section: g.section || "", subsection: "", defaultPoints: g.targetPoints };
+        await createSubmission({
+          uid: u.uid,
+          type: { ...goalType, defaultPoints: g.targetPoints },
+          title: g.note || t("goals"),
+          description: `${t("goalTarget")}: ${g.targetPoints} · ${t("goalDeadline")}: ${g.deadline || "—"}`,
+          eventDate: ymd(),
+          evidenceLink: "",
+          evidenceFileUrl: ""
+        });
+        await updateGoal(g.id, { completed: true });
+        const fresh = await fetchGoals(u.uid);
+        const mySubs = await fetchMySubmissions(u.uid);
+        setState({ myGoals: fresh, mySubmissions: mySubs });
+        toast(t("goalSubmitted"), "ok");
+      } catch (e) {
+        toast(e?.message || t("error"), "error");
+      }
+    } else {
+      try {
+        await updateGoal(g.id, { completed: false });
+        const fresh = await fetchGoals(u.uid);
+        setState({ myGoals: fresh });
+      } catch (e) {
+        toast(e?.message || t("error"), "error");
+      }
+    }
+  };
+
+  const handleBarInteraction = (g, e) => {
+    const bar = e.currentTarget;
+    const rect = bar.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const raw = Math.round((x / rect.width) * 100);
+    const pct = Math.min(100, Math.max(0, Math.round(raw / 5) * 5));
+    setPendingProgress(prev => ({ ...prev, [g.id]: pct }));
+  };
+
+  const saveProgress = async (g) => {
+    const pct = pendingProgress[g.id];
+    if (pct == null) return;
+    try {
+      await updateGoal(g.id, { manualProgress: pct });
+      const fresh = await fetchGoals(u.uid);
+      setState({ myGoals: fresh });
+      setPendingProgress(prev => { const n = { ...prev }; delete n[g.id]; return n; });
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    }
+  };
+
+  const sections = Array.from(new Set((st.types || []).map(tp => tp.section).filter(Boolean))).sort();
+  const daysUntil = (dateStr) => {
+    if (!dateStr) return null;
+    const diff = Math.ceil((new Date(dateStr + "T00:00:00") - new Date()) / 86400000);
+    return diff;
+  };
+
+  if (compact) {
+    const historySubs = [...subs].sort((a, b) => {
+      const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+      const db2 = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+      return db2 - da;
+    });
+
+    return (
+      <div className="glass card dash-card goals-compact-v2" style={{ "--di": 7 }}>
+        {/* Tab switcher */}
+        <div className="gc-tabs">
+          <button className={`gc-tabs__btn${compactTab === "goals" ? " gc-tabs__btn--active" : ""}`} onClick={() => setCompactTab("goals")}>
+            <Icon name="check" />
+            <span>{t("myGoals")}</span>
+          </button>
+          <button className={`gc-tabs__btn${compactTab === "history" ? " gc-tabs__btn--active" : ""}`} onClick={() => setCompactTab("history")}>
+            <Icon name="chart" />
+            <span>{t("kpiHistory")}</span>
+          </button>
+          <div className="gc-tabs__indicator" style={{ transform: `translateX(${compactTab === "history" ? "100%" : "0"})` }} />
+        </div>
+
+        {/* Tab content with slide animation */}
+        <div className="gc-tab-viewport">
+          <div className="gc-tab-slider" style={{ transform: `translateX(${compactTab === "history" ? "-50%" : "0"})` }}>
+            {/* Tab 1: Goals */}
+            <div className="gc-tab-panel">
+              {(() => {
+                const goalPages = Math.ceil(goals.length / PER_PAGE) || 1;
+                const gPage = Math.min(goalsPage, goalPages);
+                const pagedGoals = goals.slice((gPage - 1) * PER_PAGE, gPage * PER_PAGE);
+                return <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span className="tiny muted">{goals.filter(g => !g.completed).length} {t("goalActive").toLowerCase()}</span>
+                  </div>
+                  {pagedGoals.length ? pagedGoals.map(g => {
+                    const prog = computeProgress(g);
+                    const overdue = isOverdue(g);
+                    const dl = daysUntil(g.deadline);
+                    const barColor = g.completed || prog.pct >= 100 ? "var(--green)" : overdue ? "var(--red)" : "var(--accent)";
+                    return (
+                      <div key={g.id} className={`gc-item${g.completed ? " gc-item--done" : ""}${overdue ? " gc-item--overdue" : ""}`}>
+                        <div className="gc-item__head">
+                          <div className="gc-item__left">
+                            <button className={`gc-item__check${g.completed ? " gc-item__check--done" : ""}`} onClick={!g.completed ? () => handleToggleComplete(g) : undefined} disabled={g.completed}>
+                              {g.completed ? "✓" : ""}
+                            </button>
+                            <div>
+                              <div className="gc-item__title">{g.note || t("goals")}</div>
+                              <div className="gc-item__meta">
+                                <span className="gc-item__pts">{fmtPoints(prog.earned)}/{fmtPoints(g.targetPoints)}</span>
+                                {g.section && <span className="gc-item__section">{g.section}</span>}
+                                {g.deadline && <span className="gc-item__dl">{g.deadline}</span>}
+                                {dl !== null && dl >= 0 && !g.completed && <span className={`gc-item__days${dl <= 3 ? " gc-item__days--warn" : ""}`}>{dl}д</span>}
+                                {overdue && <span className="gc-item__overdue">{t("goalOverdue")}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          {!g.completed && (
+                            <div className="gc-item__actions">
+                              <button className="iconbtn gc-item__edit" onClick={() => startEdit(g)} title={t("editGoal")}><Icon name="settings" /></button>
+                              <button className="iconbtn gc-item__del" onClick={() => handleDelete(g.id)} title={t("deleteGoal")}><Icon name="x" /></button>
+                            </div>
+                          )}
+                        </div>
+                        {editId === g.id && showForm ? (
+                          <div className="gc-item__edit-row">
+                            <div style={{ flex: 1 }}>
+                              <label className="tiny muted">{t("goalDeadline")}</label>
+                              <Input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} style={{ height: 32, fontSize: 13 }} />
+                            </div>
+                            <div style={{ display: "flex", gap: 4, alignItems: "flex-end", paddingBottom: 1 }}>
+                              <Btn kind="primary" onClick={handleSave} disabled={saving} style={{ height: 32, fontSize: 12, padding: "0 10px" }}>{saving ? "..." : t("save")}</Btn>
+                              <Btn onClick={resetForm} style={{ height: 32, fontSize: 12, padding: "0 8px" }}>✕</Btn>
+                            </div>
+                          </div>
+                        ) : null}
+                        <div className="gc-item__bar-wrap">
+                          <div
+                            className={`gc-item__bar${!g.completed ? " gc-item__bar--interactive" : ""}`}
+                            onClick={!g.completed ? (e) => handleBarInteraction(g, e) : undefined}
+                            onTouchMove={!g.completed ? (e) => { e.preventDefault(); handleBarInteraction(g, e); } : undefined}
+                          >
+                            <div className="gc-item__fill" style={{ width: `${pendingProgress[g.id] != null ? pendingProgress[g.id] : prog.pct}%`, background: barColor }} />
+                          </div>
+                          <span className="gc-item__pct">{pendingProgress[g.id] != null ? pendingProgress[g.id] : prog.pct}%</span>
+                          {pendingProgress[g.id] != null && (
+                            <Btn kind="primary" onClick={() => saveProgress(g)} style={{ height: 26, fontSize: 11, padding: "0 10px", marginLeft: 4 }}>{t("save")}</Btn>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                    <div style={{ textAlign: "center", padding: "16px 0" }}>
+                      <p className="p muted" style={{ margin: "0 0 8px" }}>{t("noGoals")}</p>
+                    </div>
+                  )}
+                  {goalPages > 1 && (
+                    <div className="gc-pager">
+                      <button className="gc-pager__arrow" disabled={gPage <= 1} onClick={() => setGoalsPage(p => p - 1)}>&lsaquo;</button>
+                      {Array.from({ length: goalPages }, (_, i) => i + 1).map(p => (
+                        <button key={p} className={`gc-pager__num${p === gPage ? " gc-pager__num--active" : ""}`} onClick={() => setGoalsPage(p)}>{p}</button>
+                      ))}
+                      <button className="gc-pager__arrow" disabled={gPage >= goalPages} onClick={() => setGoalsPage(p => p + 1)}>&rsaquo;</button>
+                    </div>
+                  )}
+                </>;
+              })()}
+            </div>
+
+            {/* Tab 2: KPI History */}
+            <div className="gc-tab-panel">
+              {(() => {
+                const histPages = Math.ceil(historySubs.length / PER_PAGE) || 1;
+                const hPage = Math.min(histPage, histPages);
+                const pagedHist = historySubs.slice((hPage - 1) * PER_PAGE, hPage * PER_PAGE);
+                return historySubs.length ? <>
+                  <div className="gc-history">
+                    {pagedHist.map((s, idx) => {
+                      const tp = types.find(x => x.id === s.typeId);
+                      const d = s.createdAt?.toDate ? s.createdAt.toDate() : new Date(s.createdAt || 0);
+                      const statusCls = s.status === "approved" ? "gc-hist--ok" : s.status === "rejected" ? "gc-hist--err" : "gc-hist--warn";
+                      const statusLabel = s.status === "approved" ? t("dashApproved") : s.status === "rejected" ? "—" : t("dashPending");
+                      return (
+                        <div key={s.id || idx} className={`gc-hist ${statusCls}`} style={{ animationDelay: `${idx * 0.05}s` }}>
+                          <div className="gc-hist__dot" />
+                          <div className="gc-hist__body">
+                            <div className="gc-hist__title">{tp?.name || s.typeName || s.typeId || "—"}</div>
+                            <div className="gc-hist__meta">
+                              <span>{d.toLocaleDateString("ru-RU")}</span>
+                              {s.typeSection && <span className="gc-hist__section">{s.typeSection}</span>}
+                              <span className={`pill ${s.status === "approved" ? "ok" : s.status === "rejected" ? "error" : "warn"}`} style={{ fontSize: 10, padding: "1px 6px" }}>{statusLabel}</span>
+                            </div>
+                          </div>
+                          <div className={`gc-hist__pts${s.status === "approved" ? " gc-hist__pts--ok" : ""}`}>
+                            {s.status === "approved" ? "+" : ""}{s.points || 0}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {histPages > 1 && (
+                    <div className="gc-pager">
+                      <button className="gc-pager__arrow" disabled={hPage <= 1} onClick={() => setHistPage(p => p - 1)}>&lsaquo;</button>
+                      {Array.from({ length: histPages }, (_, i) => i + 1).map(p => (
+                        <button key={p} className={`gc-pager__num${p === hPage ? " gc-pager__num--active" : ""}`} onClick={() => setHistPage(p)}>{p}</button>
+                      ))}
+                      <button className="gc-pager__arrow" disabled={hPage >= histPages} onClick={() => setHistPage(p => p + 1)}>&rsaquo;</button>
+                    </div>
+                  )}
+                </> : (
+                  <div style={{ textAlign: "center", padding: "24px 0" }}>
+                    <p className="p muted">{t("kpiHistoryEmpty")}</p>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass card goals-widget">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+        <div className="h2">{t("goalsAndDeadlines")}</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="goal-mode-switch">
+            <button className={`goal-mode-btn${mode === "goals" ? " goal-mode-btn--active" : ""}`} onClick={() => setMode("goals")}>{t("goals")}</button>
+            <button className={`goal-mode-btn${mode === "deadlines" ? " goal-mode-btn--active" : ""}`} onClick={() => setMode("deadlines")}>{t("deadlines")}</button>
+          </div>
+          <Btn kind={showForm ? "" : "primary"} onClick={() => { if (showForm) resetForm(); else setShowForm(true); }}>
+            {showForm ? t("cancel") : <><Icon name="plus" /> {t("setGoal")}</>}
+          </Btn>
+        </div>
+      </div>
+
+      {showForm && (
+        <div className="goal-form glass" style={{ padding: 16, borderRadius: 12, marginBottom: 16, border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 120px" }}>
+              <label className="label">{t("goalTarget")}</label>
+              <Input type="number" value={target} onChange={e => setTarget(e.target.value)} placeholder="100" min="1" />
+            </div>
+            <div style={{ flex: "1 1 140px" }}>
+              <label className="label">{t("goalDeadline")}</label>
+              <Input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} />
+            </div>
+            <div style={{ flex: "1 1 120px" }}>
+              <label className="label">{t("goalScope")}</label>
+              <select className="input" value={scope} onChange={e => setScope(e.target.value)}>
+                <option value="quarter">{t("goalQuarter")}</option>
+                <option value="year">{t("goalYear")}</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 8 }}>
+            <div style={{ flex: "1 1 200px" }}>
+              <label className="label">{t("goalSection")}</label>
+              <select className="input" value={section} onChange={e => setSection(e.target.value)}>
+                <option value="">{t("anySection")}</option>
+                {sections.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: "2 1 200px" }}>
+              <label className="label">{t("goalNote")}</label>
+              <Input value={note} onChange={e => setNote(e.target.value)} placeholder={t("goalNote")} />
+            </div>
+          </div>
+          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+            <Btn kind="primary" onClick={handleSave} disabled={saving}>{saving ? "..." : t("save")}</Btn>
+            <Btn onClick={resetForm}>{t("cancel")}</Btn>
+          </div>
+        </div>
+      )}
+
+      {(() => {
+        const filtered = mode === "deadlines"
+          ? goals.filter(g => g.deadline).sort((a, b) => (a.deadline || "").localeCompare(b.deadline || ""))
+          : goals;
+        return <>
+      {!filtered.length && !showForm && (
+        <p className="p muted" style={{ textAlign: "center", padding: "20px 0" }}>{t("noGoals")}</p>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {filtered.map(g => {
+          const prog = computeProgress(g);
+          const overdue = isOverdue(g);
+          const dl = daysUntil(g.deadline);
+          return (
+            <div key={g.id} className={`goal-card${g.completed ? " goal-card--done" : ""}${overdue ? " goal-card--overdue" : ""}`}>
+              <div className="goal-card__top">
+                <button className={`goal-card__check${g.completed ? " goal-card__check--done" : ""}`} onClick={() => handleToggleComplete(g)} title={g.completed ? t("goalActive") : t("goalCompleted")}>
+                  {g.completed ? "✓" : ""}
+                </button>
+                <div className="goal-card__info">
+                  <div className="goal-card__title">
+                    {fmtPoints(prog.earned)} / {fmtPoints(g.targetPoints)} {t("points")}
+                    {g.section && <span className="goal-card__section">{g.section}</span>}
+                  </div>
+                  {g.note && <div className="goal-card__note">{g.note}</div>}
+                  <div className="goal-card__meta">
+                    <Pill kind={g.completed ? "approved" : overdue ? "rejected" : "pending"}>
+                      {g.completed ? t("goalCompleted") : overdue ? t("goalOverdue") : t("goalActive")}
+                    </Pill>
+                    <span className="tiny muted">{g.scope === "year" ? t("goalYear") : t("goalQuarter")}</span>
+                    {g.deadline && <span className="tiny muted">{t("goalDeadline")}: {g.deadline}</span>}
+                    {dl !== null && dl >= 0 && !g.completed && <span className="tiny" style={{ color: dl <= 7 ? "var(--red)" : "var(--muted)" }}>{dl} {t("daysLeft")}</span>}
+                  </div>
+                </div>
+                <div className="goal-card__actions">
+                  <button className="iconbtn" onClick={() => startEdit(g)} title={t("editGoal")}><Icon name="settings" /></button>
+                  <button className="iconbtn" onClick={() => handleDelete(g.id)} title={t("deleteGoal")}><Icon name="x" /></button>
+                </div>
+              </div>
+              <div className="goal-card__bar">
+                <div className="goal-card__fill" style={{
+                  width: `${prog.pct}%`,
+                  background: g.completed || prog.pct >= 100 ? "var(--green)" : overdue ? "var(--red)" : "var(--accent)"
+                }} />
+              </div>
+              <div className="goal-card__pct">{prog.pct}%</div>
+            </div>
+          );
+        })}
+      </div>
+      </>;
+      })()}
+    </div>
+  );
+}
 
 function LoadingScreen() {
   return (
@@ -1897,8 +2372,17 @@ function ForcePasswordChange() {
 function TeacherProfileModal() {
   const st = useStore();
   const m = st.modal;
-  if (m?.kind !== "teacherProfile") return null;
-  const tc = m.teacher;
+  const tc = m?.kind === "teacherProfile" ? m.teacher : null;
+
+  const [teacherGoals, setTeacherGoals] = useState([]);
+  const [loadingGoals, setLoadingGoals] = useState(true);
+
+  useEffect(() => {
+    if (!tc?.uid) { setTeacherGoals([]); setLoadingGoals(false); return; }
+    setLoadingGoals(true);
+    fetchGoals(tc.uid).then(g => { setTeacherGoals(g); setLoadingGoals(false); }).catch(() => setLoadingGoals(false));
+  }, [tc?.uid]);
+
   if (!tc) return null;
 
   const allTeachers = (st.users || []).filter(x => (x.role || "teacher") !== "admin");
@@ -1910,18 +2394,41 @@ function TeacherProfileModal() {
   const approved = subs.filter(s => s.status === "approved");
   const igHandle = (tc.instagram || "").replace(/^@/, "").trim();
 
+  const activeGoals = teacherGoals.filter(g => !g.completed);
+  const completedGoals = teacherGoals.filter(g => g.completed);
+
+  const daysUntil = (dateStr) => {
+    if (!dateStr) return null;
+    return Math.ceil((new Date(dateStr + "T00:00:00") - new Date()) / 86400000);
+  };
+
+  const goalPct = (g) => {
+    if (g.manualProgress != null && g.manualProgress > 0) return Math.min(100, g.manualProgress);
+    const sec = g.section;
+    let rel = approved;
+    if (sec) rel = rel.filter(s => s.typeSection === sec);
+    const earned = sum(rel, s => s.points);
+    const target = Number(g.targetPoints) || 1;
+    return Math.min(100, Math.round((earned / target) * 100));
+  };
+
   const close = () => setState({ modal: null });
 
   return (
     <div className="tp-overlay" onClick={close}>
-      <div className="tp-card" onClick={e => e.stopPropagation()}>
+      <div className="tp-card tp-card--v2" onClick={e => e.stopPropagation()}>
         <button className="tp-close" onClick={close}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
         </button>
 
+        {/* Hero banner */}
+        <div className="tp-banner">
+          <div className="tp-banner__glow" />
+        </div>
+
         <div className="tp-header">
           <div className="tp-avatar-wrap">
-            <div className="tp-avatar">
+            <div className="tp-avatar tp-avatar--lg">
               {tc.avatarUrl
                 ? <img src={tc.avatarUrl} alt="" />
                 : <span>{(tc.displayName || tc.email || "?").slice(0, 1).toUpperCase()}</span>}
@@ -1929,7 +2436,11 @@ function TeacherProfileModal() {
             <div className="tp-rank-badge">#{rank}</div>
           </div>
           <div className="tp-name">{tc.displayName || t("unnamed")}</div>
-          <div className="tp-role">{tc.position || t("role")}: {tc.role || "teacher"}</div>
+          <div className="tp-role-tags">
+            <span className="tp-tag tp-tag--role">{tc.role === "admin" ? "Admin" : "Teacher"}</span>
+            <span className="tp-tag tp-tag--level">{lvl.name}</span>
+            {tc.position && <span className="tp-tag">{tc.position}</span>}
+          </div>
           {tc.school && <div className="tp-school">{tc.school}</div>}
         </div>
 
@@ -1947,17 +2458,17 @@ function TeacherProfileModal() {
             <div className="tp-stat-label">{t("rankLabel")}</div>
           </div>
           <div className="tp-stat">
-            <div className="tp-stat-value">{tc.experienceYears || 0}</div>
-            <div className="tp-stat-label">{t("expYears")}</div>
+            <div className="tp-stat-value">{approved.length}</div>
+            <div className="tp-stat-label">{t("submissions")}</div>
           </div>
         </div>
 
         <div className="tp-info-list">
-          {tc.subject && <div className="tp-info-row"><span className="tp-info-icon">📚</span><span>{tc.subject}</span></div>}
-          {tc.city && <div className="tp-info-row"><span className="tp-info-icon">📍</span><span>{tc.city}</span></div>}
-          {tc.email && <div className="tp-info-row"><span className="tp-info-icon">✉️</span><span>{tc.email}</span><a href={`https://teams.microsoft.com/l/chat/0/0?users=${tc.email}`} target="_blank" rel="noopener noreferrer" className="tp-teams-btn" title="Teams Chat">💬</a></div>}
-          {tc.phone && <div className="tp-info-row"><span className="tp-info-icon">📞</span><span>{tc.phone}</span></div>}
-          {tc.experienceYears > 0 && <div className="tp-info-row"><span className="tp-info-icon">⏳</span><span>{tc.experienceYears} {t("yearsShort")}</span></div>}
+          {tc.subject && <div className="tp-info-row"><span className="tp-info-icon"><Icon name="file" /></span><span>{tc.subject}</span></div>}
+          {tc.city && <div className="tp-info-row"><span className="tp-info-icon"><Icon name="home" /></span><span>{tc.city}</span></div>}
+          {tc.email && <div className="tp-info-row"><span className="tp-info-icon"><Icon name="briefcase" /></span><span>{tc.email}</span><a href={`https://teams.microsoft.com/l/chat/0/0?users=${tc.email}`} target="_blank" rel="noopener noreferrer" className="tp-teams-btn" title="Teams Chat"><Icon name="info" /></a></div>}
+          {tc.phone && <div className="tp-info-row"><span className="tp-info-icon"><Icon name="shield" /></span><span>{tc.phone}</span></div>}
+          {tc.experienceYears > 0 && <div className="tp-info-row"><span className="tp-info-icon"><Icon name="chart" /></span><span>{tc.experienceYears} {t("yearsShort")}</span></div>}
         </div>
 
         <div className="tp-progress">
@@ -1970,6 +2481,48 @@ function TeacherProfileModal() {
           </div>
         </div>
 
+        {/* Goals section */}
+        {!loadingGoals && teacherGoals.length > 0 && (
+          <div className="tp-goals">
+            <div className="tp-goals__title">{t("teacherGoals")}</div>
+            {activeGoals.map(g => {
+              const pct = goalPct(g);
+              const dl = daysUntil(g.deadline);
+              const barColor = pct >= 100 ? "var(--green)" : (dl !== null && dl < 0) ? "var(--red)" : "var(--accent)";
+              return (
+                <div key={g.id} className="tp-goal">
+                  <div className="tp-goal__head">
+                    <div className="tp-goal__name">{g.note || t("goals")}</div>
+                    {g.section && <span className="tp-goal__section">{g.section}</span>}
+                  </div>
+                  <div className="tp-goal__info">
+                    <span className="tp-goal__pts">{fmtPoints(g.targetPoints)} {t("pts")}</span>
+                    {g.deadline && <span className="tp-goal__dl">{g.deadline}</span>}
+                    {dl !== null && dl >= 0 && <span className={`tp-goal__days${dl <= 3 ? " tp-goal__days--warn" : ""}`}>{dl}д</span>}
+                  </div>
+                  <div className="tp-goal__bar">
+                    <div className="tp-goal__fill" style={{ width: `${pct}%`, background: barColor }} />
+                  </div>
+                  <div className="tp-goal__pct">{pct}%</div>
+                </div>
+              );
+            })}
+            {completedGoals.length > 0 && (
+              <div className="tp-goals__completed">
+                <div className="tiny muted" style={{ marginBottom: 4 }}>{t("goalCompleted")} ({completedGoals.length})</div>
+                {completedGoals.slice(0, 3).map(g => (
+                  <div key={g.id} className="tp-goal tp-goal--done">
+                    <div className="tp-goal__head">
+                      <span style={{ color: "var(--green)", marginRight: 4 }}>✓</span>
+                      <div className="tp-goal__name">{g.note || t("goals")}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="tp-footer">
           {igHandle && (
             <a href={`https://instagram.com/${igHandle}`} target="_blank" rel="noopener noreferrer" className="btn btn--instagram">
@@ -1977,6 +2530,13 @@ function TeacherProfileModal() {
               Instagram
             </a>
           )}
+          {tc.youtube && (
+            <a href={tc.youtube} target="_blank" rel="noopener noreferrer" className="btn btn--youtube">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" /></svg>
+              YouTube
+            </a>
+          )}
+          <Btn kind="primary" onClick={() => { close(); navigate("profile", { uid: tc.uid }); }}><Icon name="user" /> {t("goToProfile")}</Btn>
           <button className="btn" onClick={close}>{t("closeProfile")}</button>
         </div>
       </div>
@@ -3451,6 +4011,24 @@ function PageDashboard() {
               {recent.length === 0 && <p className="p muted">{t("dashNoActivity")}</p>}
             </div>
           </div>
+
+          {/* Goals widget (teachers only) */}
+          {!isAdmin && <GoalsWidget compact />}
+
+          {/* Current quarter info */}
+          {(() => {
+            const curQ = getCurrentQuarter();
+            return curQ ? (
+              <div className="glass card dash-card" style={{ "--di": 8 }}>
+                <div className="h2">{t("currentQuarter")}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                  <Pill kind="approved">{t(curQ)}</Pill>
+                  <span className="tiny muted">{t(curQ + "Dates")}</span>
+                  <span className="tiny muted">{t("academicYear")}: {getAcademicYearLabel()}</span>
+                </div>
+              </div>
+            ) : null;
+          })()}
         </div>
       </div>
     </div>
@@ -3458,22 +4036,269 @@ function PageDashboard() {
 }
 
 
+/** ---------- Read-only teacher profile (viewed by others) ---------- */
+function ReadOnlyProfile({ teacher: tc, subs, goals }) {
+  const st = useStore();
+  const allTeachers = (st.users || []).filter(x => (x.role || "teacher") !== "admin");
+  const sorted = [...allTeachers].sort((a, b) => (Number(b.totalPoints) || 0) - (Number(a.totalPoints) || 0));
+  const rankIdx = sorted.findIndex(x => x.uid === tc.uid);
+  const rank = rankIdx >= 0 ? rankIdx + 1 : "—";
+  const lvl = levelFromPoints(tc.totalPoints || 0);
+  const approved = subs.filter(s => s.status === "approved");
+  const approvedPts = sum(approved, s => s.points);
+  const nextPts = lvl.next ? lvl.next - (Number(tc.totalPoints) || 0) : 0;
+  const igHandle = (tc.instagram || "").replace(/^@/, "").trim();
+
+  const activeGoals = goals.filter(g => !g.completed);
+  const completedGoals = goals.filter(g => g.completed);
+  const daysUntil = (d) => d ? Math.ceil((new Date(d + "T00:00:00") - new Date()) / 86400000) : null;
+  const goalPct = (g) => {
+    if (g.manualProgress != null && g.manualProgress > 0) return Math.min(100, g.manualProgress);
+    const rel = g.section ? approved.filter(s => s.typeSection === g.section) : approved;
+    const earned = sum(rel, s => s.points);
+    return Math.min(100, Math.round((earned / (Number(g.targetPoints) || 1)) * 100));
+  };
+
+  const LevelRing = ({ pct, size = 80, stroke = 5 }) => {
+    const r = (size - stroke) / 2;
+    const circ = 2 * Math.PI * r;
+    const offset = circ - (circ * Math.min(pct, 100)) / 100;
+    return (
+      <svg width={size} height={size} className="prof-level-ring">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#ropGrad)" strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)" }}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`} />
+        <defs><linearGradient id="ropGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="var(--accent)" /><stop offset="100%" stopColor="var(--accent2)" /></linearGradient></defs>
+      </svg>
+    );
+  };
+
+  return (
+    <div className="prof rop">
+      {/* Back button */}
+      <div style={{ marginBottom: 12 }}>
+        <Btn onClick={() => navigate("rating")}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ transform: "rotate(90deg)" }}><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          {t("backToRating")}
+        </Btn>
+      </div>
+
+      {/* Hero card */}
+      <div className="glass card rop-hero" style={{ "--di": 0 }}>
+        <div className="rop-hero__banner" />
+        <div className="rop-hero__content">
+          <div className="rop-hero__avatar-col">
+            <div className="rop-hero__avatar-ring">
+              <div className="rop-hero__avatar">
+                {tc.avatarUrl ? <img src={tc.avatarUrl} alt="" /> : <span>{(tc.displayName || tc.email || "?").slice(0, 1).toUpperCase()}</span>}
+              </div>
+            </div>
+            <div className="rop-hero__rank">#{rank}</div>
+          </div>
+          <div className="rop-hero__info">
+            <div className="rop-hero__name">{tc.displayName || t("unnamed")}</div>
+            <div className="rop-hero__tags">
+              <span className="prof-tag prof-tag--role">Teacher</span>
+              <span className="prof-tag prof-tag--level">{lvl.name}</span>
+              {tc.position && <span className="prof-tag">{tc.position}</span>}
+            </div>
+            <div className="rop-hero__meta">
+              {tc.school && <span className="rop-hero__meta-item"><Icon name="home" /> {tc.school}</span>}
+              {tc.subject && <span className="rop-hero__meta-item"><Icon name="file" /> {tc.subject}</span>}
+              {tc.city && <span className="rop-hero__meta-item"><Icon name="briefcase" /> {tc.city}</span>}
+              {tc.email && <span className="rop-hero__meta-item"><Icon name="shield" /> {tc.email}</span>}
+            </div>
+            <div className="rop-hero__social">
+              {igHandle && (
+                <a href={`https://instagram.com/${igHandle}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
+                  @{igHandle}
+                </a>
+              )}
+              {tc.youtube && (
+                <a href={tc.youtube} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--yt">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" /></svg>
+                  YouTube
+                </a>
+              )}
+              {tc.email && (
+                <a href={`https://teams.microsoft.com/l/chat/0/0?users=${tc.email}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn">
+                  <Icon name="info" /> Teams
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="rop-hero__right">
+            <div className="rop-hero__level-wrap">
+              <LevelRing pct={lvl.pct} />
+              <div className="rop-hero__level-inner">
+                <div className="rop-hero__level-pts">{fmtPoints(tc.totalPoints)}</div>
+                <div className="rop-hero__level-label">{t("points")}</div>
+              </div>
+            </div>
+            {lvl.next && <div className="rop-hero__level-hint">{nextPts} {t("profileNextLevel").toLowerCase()}</div>}
+          </div>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="prof-stats">
+        <div className="prof-stat glass card" style={{ "--di": 1 }}>
+          <div className="prof-stat__icon prof-stat__icon--green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </div>
+          <div className="prof-stat__num">{fmtPoints(tc.totalPoints)}</div>
+          <div className="prof-stat__label">{t("totalPoints")}</div>
+          <div className="prof-stat__bar"><div className="prof-stat__fill" style={{ width: `${lvl.pct}%` }} /></div>
+        </div>
+        <div className="prof-stat glass card" style={{ "--di": 2 }}>
+          <div className="prof-stat__icon prof-stat__icon--blue">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="2" /><path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" /></svg>
+          </div>
+          <div className="prof-stat__num">{subs.length}</div>
+          <div className="prof-stat__label">{t("submissions")}</div>
+          <div className="prof-stat__badges">
+            <span className="pill ok">{approved.length}</span>
+            <span className="pill warn">{subs.filter(s => s.status === "pending").length}</span>
+          </div>
+        </div>
+        <div className="prof-stat glass card" style={{ "--di": 3 }}>
+          <div className="prof-stat__icon prof-stat__icon--amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </div>
+          <div className="prof-stat__num">{fmtPoints(approvedPts)}</div>
+          <div className="prof-stat__label">{t("approvedPts")}</div>
+        </div>
+        <div className="prof-stat glass card" style={{ "--di": 4 }}>
+          <div className="prof-stat__icon prof-stat__icon--purple">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V6l-8-3-8 3v6c0 6 8 10 8 10z" stroke="currentColor" strokeWidth="2" /></svg>
+          </div>
+          <div className="prof-stat__num">#{rank}</div>
+          <div className="prof-stat__label">{t("rankLabel")}</div>
+        </div>
+      </div>
+
+      {/* Goals section */}
+      {goals.length > 0 && (
+        <div className="glass card rop-goals" style={{ "--di": 5 }}>
+          <div className="h2">{t("teacherGoals")}</div>
+          <div className="sep" />
+          <div className="rop-goals__grid">
+            {activeGoals.map(g => {
+              const pct = goalPct(g);
+              const dl = daysUntil(g.deadline);
+              const barColor = pct >= 100 ? "var(--green)" : (dl !== null && dl < 0) ? "var(--red)" : "var(--accent)";
+              return (
+                <div key={g.id} className="rop-goal-card">
+                  <div className="rop-goal-card__head">
+                    <div className="rop-goal-card__name">{g.note || t("goals")}</div>
+                    {g.section && <span className="rop-goal-card__section">{g.section}</span>}
+                  </div>
+                  <div className="rop-goal-card__meta">
+                    <span className="rop-goal-card__target">{fmtPoints(g.targetPoints)} {t("pts")}</span>
+                    {g.deadline && <span>{t("goalDeadline")}: {g.deadline}</span>}
+                    {dl !== null && dl >= 0 && <span className={dl <= 3 ? "rop-goal-card__warn" : ""}>{dl} {t("daysLeft")}</span>}
+                  </div>
+                  <div className="rop-goal-card__bar-wrap">
+                    <div className="rop-goal-card__bar">
+                      <div className="rop-goal-card__fill" style={{ width: `${pct}%`, background: barColor }} />
+                    </div>
+                    <span className="rop-goal-card__pct">{pct}%</span>
+                  </div>
+                </div>
+              );
+            })}
+            {completedGoals.map(g => (
+              <div key={g.id} className="rop-goal-card rop-goal-card--done">
+                <div className="rop-goal-card__head">
+                  <span style={{ color: "var(--green)", fontWeight: 700, marginRight: 4 }}>✓</span>
+                  <div className="rop-goal-card__name">{g.note || t("goals")}</div>
+                </div>
+                <div className="rop-goal-card__meta"><span>{t("goalCompleted")}</span></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recent submissions */}
+      <div className="glass card" style={{ "--di": 6 }}>
+        <div className="h2">{t("recentSubs")}</div>
+        <div className="sep" />
+        <DataCards
+          emptyText={t("noSubsYet")}
+          columns={[
+            { key: "eventDate", label: t("date") },
+            { key: "typeName", label: t("type") },
+            { key: "title", label: t("title") },
+            { key: "points", label: t("points"), render: s => <b>{fmtPoints(s.points)}</b> },
+            { key: "status", label: t("status"), render: s => <Pill kind={s.status}>{s.status}</Pill> }
+          ]}
+          rows={approved.slice(0, 10).map(s => ({ ...s, __key: s.id }))}
+        />
+      </div>
+    </div>
+  );
+}
+
 function PageProfile() {
   const st = useStore();
   const u = st.userDoc; // read early, guard comes AFTER all hooks
+  const viewUid = st.route?.params?.uid || "";
+  const isOther = !!(viewUid && u && viewUid !== u.uid);
 
   // ALL hooks before any early return
   const [tab, setTab] = useState("overview"); // overview | settings | security
   const [form, setForm] = useState({ displayName: "", school: "", subject: "", experienceYears: 0, phone: "", city: "", position: "", instagram: "", youtube: "" });
   const [pw, setPw] = useState({ current: "", next: "", next2: "" });
+  const [otherUser, setOtherUser] = useState(null);
+  const [otherSubs, setOtherSubs] = useState([]);
+  const [otherGoals, setOtherGoals] = useState([]);
+  const [otherLoading, setOtherLoading] = useState(false);
   useEffect(() => {
     if (!u) return;
     setForm({ displayName: u.displayName || "", school: u.school || "", subject: u.subject || "", experienceYears: u.experienceYears || 0, phone: u.phone || "", city: u.city || "", position: u.position || "", instagram: u.instagram || "", youtube: u.youtube || "" });
   }, [u?.uid]);
   useEffect(() => setPw({ current: "", next: "", next2: "" }), [u?.uid]);
+  useEffect(() => {
+    if (!isOther) { setOtherUser(null); setOtherSubs([]); setOtherGoals([]); return; }
+    setTab("overview");
+    let alive = true;
+    (async () => {
+      setOtherLoading(true);
+      try {
+        // Try from store first
+        let teacher = (st.users || []).find(x => x.uid === viewUid) || null;
+        if (!teacher) {
+          const snap = await getDoc(doc(db, "users", viewUid));
+          if (snap.exists()) teacher = { id: snap.id, uid: snap.id, ...snap.data() };
+        }
+        if (alive) setOtherUser(teacher);
+        // Fetch submissions
+        const sq = query(collection(db, "submissions"), where("uid", "==", viewUid));
+        const sr = await getDocs(sq);
+        if (alive) setOtherSubs(sr.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => tsKey(b) - tsKey(a)));
+        // Fetch goals
+        const goals = await fetchGoals(viewUid);
+        if (alive) setOtherGoals(goals);
+      } catch (e) { console.error(e); }
+      if (alive) setOtherLoading(false);
+    })();
+    return () => { alive = false; };
+  }, [viewUid]);
 
   if (!u) return <Guard />;
   if (!canAccess("profile", u)) return <Guard />;
+
+  // If viewing another teacher's profile
+  if (isOther) {
+    if (otherLoading || !otherUser) {
+      return <div className="glass card" style={{ textAlign: "center", padding: 40 }}><div className="h2">{otherLoading ? t("loading") : t("noData")}</div></div>;
+    }
+    return <ReadOnlyProfile teacher={otherUser} subs={otherSubs} goals={otherGoals} />;
+  }
 
   const subs = st.mySubmissions || [];
   const lvl = levelFromPoints(u.totalPoints || 0);
@@ -3729,21 +4554,26 @@ function PageProfile() {
 
       {/* Tab: overview */}
       {tab === "overview" && (
-        <div className="glass card prof-card" style={{ "--di": 5 }}>
-          <div className="h2">{t("recentSubs")}</div>
-          <div className="sep"></div>
-          <DataCards
-            emptyText={t("noSubsYet")}
-            columns={[
-              { key: "eventDate", label: t("date") },
-              { key: "typeName", label: t("type") },
-              { key: "title", label: t("title") },
-              { key: "points", label: t("points"), render: s => <b>{fmtPoints(s.points)}</b> },
-              { key: "status", label: t("status"), render: s => <Pill kind={s.status}>{s.status}</Pill> }
-            ]}
-            rows={subs.slice(0, 8).map(s => ({ ...s, __key: s.id }))}
-          />
-        </div>
+        <>
+          {/* Goals on profile */}
+          {u.role !== "admin" && <GoalsWidget compact />}
+
+          <div className="glass card prof-card" style={{ "--di": 5 }}>
+            <div className="h2">{t("recentSubs")}</div>
+            <div className="sep"></div>
+            <DataCards
+              emptyText={t("noSubsYet")}
+              columns={[
+                { key: "eventDate", label: t("date") },
+                { key: "typeName", label: t("type") },
+                { key: "title", label: t("title") },
+                { key: "points", label: t("points"), render: s => <b>{fmtPoints(s.points)}</b> },
+                { key: "status", label: t("status"), render: s => <Pill kind={s.status}>{s.status}</Pill> }
+              ]}
+              rows={subs.slice(0, 8).map(s => ({ ...s, __key: s.id }))}
+            />
+          </div>
+        </>
       )}
 
       {/* Tab: settings */}
@@ -4175,6 +5005,9 @@ function PageAdd() {
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizResult, setQuizResult] = useState(null);
   const [quizSubmitting, setQuizSubmitting] = useState(false);
+  const [goalMode, setGoalMode] = useState(false);
+  const [goalDateFrom, setGoalDateFrom] = useState("");
+  const [goalDateTo, setGoalDateTo] = useState("");
 
   const types = (st.types || []).filter(t => t.active);
   const sections = Array.from(new Set(types.map(t => t.section))).sort();
@@ -4293,6 +5126,7 @@ function PageAdd() {
 
   async function submit(e) {
     e.preventDefault();
+    if (goalMode) return submitGoal();
     try {
       if (!type) { toast("Выберите тип KPI", "error"); return; }
       if (!safeText(title)) { toast("Введите название", "error"); return; }
@@ -4313,6 +5147,29 @@ function PageAdd() {
     } catch (err) {
       console.error(err);
       toast(err?.message || "Ошибка отправки", "error");
+    } finally { setState({ loading: false }); }
+  }
+
+  async function submitGoal() {
+    try {
+      const pts = type?.defaultPoints || 0;
+      if (!pts) { toast("Выберите тип KPI", "error"); return; }
+      setState({ loading: true });
+      await createGoal({
+        uid: u.uid,
+        targetPoints: pts,
+        deadline: goalDateTo || goalDateFrom || "",
+        note: safeText(title) || (type?.name || ""),
+        scope: goalDateFrom && goalDateTo ? `${goalDateFrom} — ${goalDateTo}` : "quarter",
+        section: type?.section || ""
+      });
+      const fresh = await fetchGoals(u.uid);
+      setState({ myGoals: fresh });
+      toast(t("goalSaved"), "ok");
+      setTitle(""); setDescription(""); setGoalDateFrom(""); setGoalDateTo("");
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || t("error"), "error");
     } finally { setState({ loading: false }); }
   }
 
@@ -4409,7 +5266,7 @@ function PageAdd() {
     </div>
   ) : (
     <div className="grid2">
-      <div className="glass card">
+      <div className="glass card add-form-card">
         <form onSubmit={submit}>
           <div className="grid2">
             <div>
@@ -4434,15 +5291,38 @@ function PageAdd() {
           </div>
 
           <div className="grid2">
-            <div>
-              <div className="label">Дата</div>
-              <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required />
-            </div>
+            {!goalMode && (
+              <div>
+                <div className="label">Дата</div>
+                <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required />
+              </div>
+            )}
             <div>
               <div className="label">Баллы</div>
               <Input value={type?.defaultPoints ?? ""} readOnly />
             </div>
           </div>
+
+          {/* Goals & Deadlines toggle */}
+          <div className="add-goal-toggle" style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 6px" }}>
+            <label className="type-toggle" style={{ flexShrink: 0 }}>
+              <input type="checkbox" checked={goalMode} onChange={e => setGoalMode(e.target.checked)} />
+              <span className="type-toggle-slider"></span>
+            </label>
+            <span className="label" style={{ margin: 0, cursor: "pointer" }} onClick={() => setGoalMode(!goalMode)}>{t("goalsAndDeadlines")}</span>
+          </div>
+          {goalMode && (
+            <div className="grid2" style={{ marginBottom: 4 }}>
+              <div>
+                <div className="label">{t("dateFrom")}</div>
+                <Input type="date" value={goalDateFrom} onChange={e => setGoalDateFrom(e.target.value)} />
+              </div>
+              <div>
+                <div className="label">{t("dateTo")}</div>
+                <Input type="date" value={goalDateTo} onChange={e => setGoalDateTo(e.target.value)} />
+              </div>
+            </div>
+          )}
 
           <div className="label">Название</div>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
@@ -4457,72 +5337,47 @@ function PageAdd() {
           <Input type="file" accept=".pdf,image/png,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} />
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            <Btn kind="primary" type="submit" disabled={st.loading}>Отправить</Btn>
+            <Btn kind="primary" type="submit" disabled={st.loading}>{goalMode ? t("setGoal") : "Отправить"}</Btn>
             <Btn type="button" onClick={() => navigate("profile")}>Назад</Btn>
           </div>
         </form>
       </div>
 
-      <div className="glass card">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <div>
-            <div className="h2" style={{ marginBottom: 4 }}>Подсказки · Книги месяца</div>
-            <div className="tiny muted">Откройте тест по книге. При результате от 70% система отправит +20 баллов на проверку.</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Goals widget */}
+        <GoalsWidget compact />
+
+        {/* Books compact */}
+        <div className="glass card" style={{ padding: "14px 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div className="h2" style={{ fontSize: 15, margin: 0 }}>Книги месяца</div>
+            {quizLoading ? <Pill kind="pending">...</Pill> : <Pill kind="approved">Тесты</Pill>}
           </div>
-          {quizLoading ? <Pill kind="pending">Загрузка...</Pill> : <Pill kind="approved">Тесты с БД</Pill>}
-        </div>
-        <div className="sep"></div>
-
-        <div className="book-month-grid">
-          {BOOK_QUIZ_LIBRARY.map(book => {
-            const qs = book.questions || [];
-            const status = getBookQuizStatus(book, quizAttempts, st.mySubmissions || []);
-            const isSelected = selectedBookId === book.id;
-            const stateLabel = status.state === "sent"
-              ? "На проверке"
-              : status.state === "cooldown"
-                ? "Пауза 24ч"
-                : status.state === "soon"
-                  ? "Скоро"
-                  : "Доступен";
-            return (
-              <div key={book.id} className={`book-month-card ${isSelected ? "active" : ""}`}>
-                <div className="book-month-card__top">
-                  <div className="book-month-card__month">{book.month}</div>
-                  <Pill kind={status.state === "sent" ? "pending" : status.state === "cooldown" ? "rejected" : status.state === "soon" ? "" : "approved"}>{stateLabel}</Pill>
-                </div>
-                <div className="book-month-card__title">{book.author}</div>
-                <div className="book-month-card__subtitle">«{book.shortTitle}»</div>
-                <div className="tiny muted" style={{ marginTop: 6 }}>{book.note || ""}</div>
-                <div className="tiny muted" style={{ marginTop: 8 }}>
-                  {qs.length ? `${qs.length} сұрақ · Порог ${book.thresholdPercent || 70}% · +${book.points || 20} балл` : "Тест сұрақтары әлі қосылмаған"}
-                </div>
-                {status.state === "cooldown" && status.latest?.cooldownUntil ? (
-                  <div className="tiny" style={{ marginTop: 8, color: "var(--red)" }}>Повтор: {fmtDateTimeSafe(status.latest.cooldownUntil)}</div>
-                ) : null}
-                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                  <Btn
-                    kind={isSelected ? "primary" : ""}
-                    onClick={() => { setSelectedBookId(book.id); if (qs.length) setQuizOpen(true); }}
-                    disabled={!qs.length}
-                    type="button"
-                  >
-                    {isSelected ? "Выбрано" : "Открыть"}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {BOOK_QUIZ_LIBRARY.map(book => {
+              const qs = book.questions || [];
+              const status = getBookQuizStatus(book, quizAttempts, st.mySubmissions || []);
+              const stateLabel = status.state === "sent" ? "На проверке" : status.state === "cooldown" ? "Пауза" : status.state === "soon" ? "Скоро" : "Доступен";
+              const stateKind = status.state === "sent" ? "pending" : status.state === "cooldown" ? "rejected" : status.state === "soon" ? "" : "approved";
+              return (
+                <div key={book.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card-bg)" }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>{book.month}</span>
+                      <Pill kind={stateKind} style={{ fontSize: 10, padding: "1px 6px" }}>{stateLabel}</Pill>
+                    </div>
+                    <div className="tiny muted" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{book.author} · «{book.shortTitle}»</div>
+                  </div>
+                  <Btn kind="ghost" type="button" style={{ fontSize: 12, padding: "4px 10px", flexShrink: 0 }} onClick={() => { if (qs.length) openQuiz(book); }} disabled={!qs.length}>
+                    {qs.length ? "Тест" : "Скоро"}
                   </Btn>
-                  {qs.length ? <Btn type="button" kind="ghost" onClick={() => openQuiz(book)}>Начать тест</Btn> : null}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-
-        <div className="sep"></div>
-        <p className="p">Если тест не пройден (меньше 70%), повторная попытка блокируется на 24 часа. Это помогает проверить, действительно ли учитель читал книгу.</p>
-        {BOOK_QUIZ_LIBRARY.some(b => b.answerKeyNeedsReview) && (
-          <div className="help" style={{ marginTop: 8 }}>⚠️ Для теста «Ауыл шетіндегі үй» ответы добавлены как рабочий ключ. Перед запуском в школе проверьте ключи у методиста.</div>
-        )}
       </div>
-    </div>
+      </div>
   );
 }
 
@@ -4751,6 +5606,14 @@ function PageRating() {
 
   return (
     <div className="glass card">
+      {/* Quarter filter + Export */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+        <div className="tiny muted">{t("academicYear")}: {getAcademicYearLabel()}</div>
+        <Btn kind="ghost" onClick={() => { exportRatingCsv(st.users, st.types); toast(t("exportSuccess"), "ok"); }}>
+          <Icon name="file" /> {t("exportCsv")}
+        </Btn>
+      </div>
+
       <div className="podium">
         {[1, 0, 2].map((idx, i) => {
           const tc = top3[idx];
@@ -4858,32 +5721,23 @@ function PageStats() {
   if (!u) return <Guard />;
   if (!canAccess("stats", u)) return <Guard />;
 
-  const mode = st.statsRangeMode;
-  const days = mode === "365d" ? 365 : 14;
+  const mode = "365d";
+  const days = 365;
 
-  // keep UI responsive: 14d -> daily, 365d -> monthly
   const startYMD = startYMDFromDays(days);
-  const dayBins = lastDays(14);
   const monthBins = lastMonths(12);
-  const bins = mode === "365d" ? monthBins : dayBins;
+  const bins = monthBins;
 
-  const rangeDays = new Set(dayBins.map(x => x.ymd));
   const rangeMonths = new Set(monthBins.map(x => x.key));
 
   const inRange = (s) => {
     if (!s?.eventDate) return false;
-    if (mode === "365d") {
-      const mk = (s.eventDate || "").slice(0, 7);
-      return s.eventDate >= startYMD && rangeMonths.has(mk);
-    }
-    return rangeDays.has(s.eventDate);
+    const mk = (s.eventDate || "").slice(0, 7);
+    return s.eventDate >= startYMD && rangeMonths.has(mk);
   };
 
   const seriesPoints = (approved, bin) => {
-    if (mode === "365d") {
-      return sum(approved.filter(s => (s.eventDate || "").slice(0, 7) === bin.key), s => s.points);
-    }
-    return sum(approved.filter(s => s.eventDate === bin.ymd), s => s.points);
+    return sum(approved.filter(s => (s.eventDate || "").slice(0, 7) === bin.key), s => s.points);
   };
 
   const view = u.role === "teacher" ? (st.statsView || "mine") : "platform";
@@ -4901,6 +5755,8 @@ function PageStats() {
     }
   }
 
+  const qf = st.quarterFilter || "all";
+
   const Controls = () => (
     <div className="stats-controls">
       {u.role === "teacher" ? (
@@ -4909,23 +5765,27 @@ function PageStats() {
           <Btn kind={view === "platform" ? "primary" : ""} onClick={() => setState({ statsView: "platform" })}><Icon name="chart" /> {t("platform")}</Btn>
         </div>
       ) : null}
-      <div className="stats-controls__group">
-        <Btn kind={mode === "14d" ? "primary" : ""} onClick={() => setState({ statsRangeMode: "14d" })}>{t("range14d")}</Btn>
-        <Btn kind={mode === "365d" ? "primary" : ""} onClick={() => setState({ statsRangeMode: "365d" })}>{t("rangeYear")}</Btn>
-      </div>
+      <QuarterFilter value={qf} onChange={v => setState({ quarterFilter: v })} showLabel={false} />
       <div className="stats-controls__group">
         {u.role === "teacher" && view === "mine" ? <Btn onClick={() => navigate("add")}><Icon name="plus" /> KPI</Btn> : null}
         {view === "platform" ? <Btn onClick={() => navigate("rating")}>{t("navRating")}</Btn> : null}
         {u.role === "admin" ? <Btn onClick={() => navigate("admin/approvals")}>{t("navApprovals")}</Btn> : null}
         <Btn onClick={refresh} disabled={st.loading}>{t("refresh")}</Btn>
+        {u.role === "teacher" && view === "mine" ? (
+          <Btn kind="ghost" onClick={() => {
+            const typesMap = new Map((st.types || []).map(tp => [tp.id, tp]));
+            exportSubmissionsCsv(st.mySubmissions || [], typesMap, qf);
+            toast(t("exportSuccess"), "ok");
+          }}><Icon name="file" /> {t("exportCsv")}</Btn>
+        ) : null}
       </div>
     </div>
   );
 
   // Trend: compare current half of range vs previous half
   const halfBins = Math.ceil(bins.length / 2);
-  const recentBins = new Set(bins.slice(-halfBins).map(b => mode === "365d" ? b.key : b.ymd));
-  const olderBins = new Set(bins.slice(0, halfBins).map(b => mode === "365d" ? b.key : b.ymd));
+  const recentBins = new Set(bins.slice(-halfBins).map(b => b.key));
+  const olderBins = new Set(bins.slice(0, halfBins).map(b => b.key));
 
   const trendPct = (curr, prev) => {
     if (!prev) return curr > 0 ? 100 : 0;
@@ -4942,7 +5802,7 @@ function PageStats() {
   };
 
   function renderMine() {
-    const allMy = (st.mySubmissions || []);
+    const allMy = filterByQuarter(st.mySubmissions || [], qf);
     const subs = allMy.filter(inRange);
     const approved = subs.filter(s => s.status === "approved");
     const pending = subs.filter(s => s.status === "pending");
@@ -4953,11 +5813,11 @@ function PageStats() {
 
     // Trend calculation
     const recentPts = sum(approved.filter(s => {
-      const k = mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate;
+      const k = (s.eventDate || "").slice(0, 7);
       return recentBins.has(k);
     }), s => s.points);
     const olderPts = sum(approved.filter(s => {
-      const k = mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate;
+      const k = (s.eventDate || "").slice(0, 7);
       return olderBins.has(k);
     }), s => s.points);
 
@@ -4977,13 +5837,16 @@ function PageStats() {
     const topSections = Array.from(sectionMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const totalForPie = sum(topSections, x => x[1]) || 1;
 
-    // For gauge: use all-time total from user doc
+    // For gauge: use user's active goal or default 200
     const allTimeTotal = Number(u.totalPoints) || 0;
-    const GOAL = 200;
+    const activeGoal = (st.myGoals || []).find(g => !g.completed);
+    const GOAL = activeGoal ? Number(activeGoal.targetPoints) || 200 : 200;
 
     return (
       <div className="glass card">
-        <p className="p">Диапазон: <b>{mode === "365d" ? t("rangeYear") : t("range14d")}</b>.</p>
+        <p className="p">
+          {t("quarter")}: <b>{qf === "all" ? t("allQuarters") : t(qf)}</b> · {t("academicYear")}: <b>{getAcademicYearLabel()}</b>
+        </p>
         <Controls />
 
         <div className="sep"></div>
@@ -5104,12 +5967,15 @@ function PageStats() {
             </div>
           ) : <p className="p">{t("noData")}</p>}
         </div>
+
+        <div className="sep"></div>
+        <GoalsWidget />
       </div>
     );
   }
 
   function renderPlatform() {
-    const subs = (st.adminRecentSubs || []).filter(inRange);
+    const subs = filterByQuarter(st.adminRecentSubs || [], qf).filter(inRange);
     const approved = subs.filter(s => s.status === "approved");
     const pending = subs.filter(s => s.status === "pending");
     const rejected = subs.filter(s => s.status === "rejected");
@@ -5121,11 +5987,11 @@ function PageStats() {
 
     // Trend
     const recentPts = sum(approved.filter(s => {
-      const k = mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate;
+      const k = (s.eventDate || "").slice(0, 7);
       return recentBins.has(k);
     }), s => s.points);
     const olderPts = sum(approved.filter(s => {
-      const k = mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate;
+      const k = (s.eventDate || "").slice(0, 7);
       return olderBins.has(k);
     }), s => s.points);
 
@@ -5146,8 +6012,8 @@ function PageStats() {
 
     // Stacked bar: approved/pending/rejected by time bin
     const stackedData = bins.map(b => {
-      const bKey = mode === "365d" ? b.key : b.ymd;
-      const inBin = subs.filter(s => (mode === "365d" ? (s.eventDate || "").slice(0, 7) : s.eventDate) === bKey);
+      const bKey = b.key;
+      const inBin = subs.filter(s => (s.eventDate || "").slice(0, 7) === bKey);
       return {
         label: b.label,
         segments: [
@@ -5161,10 +6027,7 @@ function PageStats() {
     // heatmap (top teachers x bins)
     const hmTeachers = topTeachers.map(x => x.user).filter(Boolean).slice(0, 10);
     const maxCell = Math.max(1, ...hmTeachers.map(t => Math.max(0, ...bins.map(b => {
-      const v = mode === "365d"
-        ? sum(approved.filter(s => s.uid === t.uid && (s.eventDate || "").slice(0, 7) === b.key), s => s.points)
-        : sum(approved.filter(s => s.uid === t.uid && s.eventDate === b.ymd), s => s.points);
-      return v;
+      return sum(approved.filter(s => s.uid === t.uid && (s.eventDate || "").slice(0, 7) === b.key), s => s.points);
     }))));
 
     const cellStyle = (v) => {
@@ -5180,7 +6043,7 @@ function PageStats() {
     return (
       <div className="glass card">
         <p className="p">
-          {t("overallView")} <b>{mode === "365d" ? t("rangeYear") : t("range14d")}</b>.
+          {t("overallView")} <b>{t("rangeYear")}</b>.
         </p>
         <Controls />
 
@@ -5274,7 +6137,7 @@ function PageStats() {
                     <thead>
                       <tr>
                         <th className="heatmap-name-col">{t("teacher")}</th>
-                        {bins.map(b => <th key={mode === "365d" ? b.key : b.ymd} className="heatmap-bin-col">{b.label}</th>)}
+                        {bins.map(b => <th key={b.key} className="heatmap-bin-col">{b.label}</th>)}
                       </tr>
                     </thead>
                     <tbody>
@@ -5282,11 +6145,9 @@ function PageStats() {
                         <tr key={t.uid}>
                           <td className="tiny heatmap-name-col"><b>{(t.displayName || t.email || "—").slice(0, 14)}</b></td>
                           {bins.map(b => {
-                            const v = mode === "365d"
-                              ? sum(approved.filter(s => s.uid === t.uid && (s.eventDate || "").slice(0, 7) === b.key), s => s.points)
-                              : sum(approved.filter(s => s.uid === t.uid && s.eventDate === b.ymd), s => s.points);
+                            const v = sum(approved.filter(s => s.uid === t.uid && (s.eventDate || "").slice(0, 7) === b.key), s => s.points);
                             return (
-                              <td key={mode === "365d" ? b.key : b.ymd} className="tiny" style={{ ...cellStyle(v), textAlign: "center", padding: "6px 4px", fontSize: 11 }} title={`${b.label}: ${v}`}>
+                              <td key={b.key} className="tiny" style={{ ...cellStyle(v), textAlign: "center", padding: "6px 4px", fontSize: 11 }} title={`${b.label}: ${v}`}>
                                 {v ? fmtPoints(v) : ""}
                               </td>
                             );
@@ -8845,7 +9706,8 @@ async function hydrateForUser(userDoc) {
         mySubmissions: [],
         myRequests: [],
         myDocuments: [],
-        myTickets: []
+        myTickets: [],
+        myGoals: []
       });
     } else {
       // teacher: нужен и личный набор, и общая выборка для рейтинга/общей статистики
@@ -8926,7 +9788,8 @@ async function bootstrap() {
           news: [],
           myTickets: [],
           allTickets: [],
-          announcements: []
+          announcements: [],
+          myGoals: []
         });
         setState({ booting: false });
         render();

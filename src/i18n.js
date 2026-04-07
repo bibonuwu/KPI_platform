@@ -867,6 +867,16 @@ export const T = {
   daysLeft: { kz: "күн қалды", ru: "дней осталось", en: "days left" },
   goalSection: { kz: "Санат (міндетті емес)", ru: "Категория (необязательно)", en: "Category (optional)" },
   anySection: { kz: "Кез-келген санат", ru: "Любая категория", en: "Any category" },
+  kpiHistory: { kz: "KPI тарихы", ru: "История KPI", en: "KPI History" },
+  kpiHistoryEmpty: { kz: "Әзірге жазбалар жоқ", ru: "Пока нет записей", en: "No entries yet" },
+  goalsAndDeadlines: { kz: "Мақсаттар және мерзімдер", ru: "Цели и дедлайны", en: "Goals & Deadlines" },
+  deadlines: { kz: "Мерзімдер", ru: "Дедлайны", en: "Deadlines" },
+  confirmSubmitGoal: { kz: "Нәтижені тексеруге жіберу керек пе?", ru: "Отправить результат на проверку?", en: "Submit result for review?" },
+  goalSubmitted: { kz: "Нәтиже тексеруге жіберілді", ru: "Результат отправлен на проверку", en: "Result submitted for review" },
+  teacherGoals: { kz: "Мақсаттары", ru: "Цели", en: "Goals" },
+  viewProfile: { kz: "Профильді қарау", ru: "Посмотреть профиль", en: "View profile" },
+  goToProfile: { kz: "Профильге өту", ru: "Перейти в профиль", en: "Go to profile" },
+  backToRating: { kz: "Рейтингке оралу", ru: "Назад к рейтингу", en: "Back to rating" },
 };
 
 /**
