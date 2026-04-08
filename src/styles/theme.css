@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.bunny.net/css?family=open-dyslexic:400,700&display=swap');
+
+/* ══════════════════════════════════════════════ */
+/* ═══ LIQUID GLASS — DARK (default) ══════════ */
+/* ══════════════════════════════════════════════ */
+:root,
+[data-theme="dark"] {
+  --bg: #08090e;
+  --bg-body: #08090e;
+  --surface: rgba(255, 255, 255, .045);
+  --surface2: rgba(255, 255, 255, .025);
+  --border: rgba(255, 255, 255, .08);
+  --border2: rgba(255, 255, 255, .04);
+  --text: #eef0f6;
+  --muted: rgba(180, 195, 230, .55);
+  --accent: #7dd3fc;
+  --accent2: #38bdf8;
+  --green: #34d399;
+  --red: #fb7185;
+  --yellow: #fbbf24;
+  --radius: 22px;
+  --radius2: 16px;
+  --radius3: 10px;
+  --shadow: 0 2px 12px rgba(0, 0, 0, .3), 0 0 1px rgba(255, 255, 255, .06);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, .5), 0 0 1px rgba(255, 255, 255, .08);
+  --sidebarW: 264px;
+  --font: 'Onest', system-ui, sans-serif;
+  --sidebar-bg: rgba(14, 16, 26, .65);
+  --sidebar-border: rgba(255, 255, 255, .06);
+  --input-bg: rgba(255, 255, 255, .04);
+  --modal-bg: rgba(14, 16, 28, .82);
+  --bottomnav-bg: rgba(14, 16, 28, .72);
+  --glow1: rgba(125, 211, 252, .10);
+  --glow2: rgba(56, 189, 248, .06);
+  --card-bg: rgba(255, 255, 255, .035);
+  --hover-bg: rgba(255, 255, 255, .055);
+  --text2: rgba(180, 195, 230, .6);
+  /* Liquid glass specials */
+  --glass-blur: 28px;
+  --glass-border: rgba(255, 255, 255, .10);
+  --glass-shine: linear-gradient(135deg, rgba(255, 255, 255, .08) 0%, transparent 50%);
+  --glass-inner-shadow: inset 0 1px 0 rgba(255, 255, 255, .06);
+  --glow-accent: rgba(125, 211, 252, .18);
+  --glow-accent-strong: rgba(125, 211, 252, .35);
+}
+
+/* ══════════════════════════════════════════════ */
+/* ═══ LIQUID GLASS — LIGHT ═══════════════════ */
+/* ══════════════════════════════════════════════ */
+[data-theme="light"] {
+  --bg: #e8ecf2;
+  --bg-body: #e8ecf2;
+  --surface: rgba(255, 255, 255, .55);
+  --surface2: rgba(255, 255, 255, .35);
+  --border: rgba(0, 0, 0, .06);
+  --border2: rgba(0, 0, 0, .04);
+  --text: #1a1d2e;
+  --muted: rgba(30, 40, 80, .5);
+  --accent: #0ea5e9;
+  --accent2: #0284c7;
+  --green: #10b981;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --shadow: 0 2px 12px rgba(0, 0, 0, .06), 0 0 1px rgba(0, 0, 0, .04);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, .10), 0 0 1px rgba(0, 0, 0, .06);
+  --sidebar-bg: rgba(255, 255, 255, .55);
+  --sidebar-border: rgba(0, 0, 0, .06);
+  --input-bg: rgba(255, 255, 255, .5);
+  --modal-bg: rgba(255, 255, 255, .78);
+  --bottomnav-bg: rgba(255, 255, 255, .72);
+  --glow1: rgba(14, 165, 233, .08);
+  --glow2: rgba(56, 189, 248, .05);
+  --card-bg: rgba(255, 255, 255, .45);
+  --hover-bg: rgba(14, 165, 233, .06);
+  --text2: rgba(30, 40, 80, .55);
+  --glass-blur: 28px;
+  --glass-border: rgba(255, 255, 255, .5);
+  --glass-shine: linear-gradient(135deg, rgba(255, 255, 255, .5) 0%, transparent 50%);
+  --glass-inner-shadow: inset 0 1px 0 rgba(255, 255, 255, .7);
+  --glow-accent: rgba(14, 165, 233, .12);
+  --glow-accent-strong: rgba(14, 165, 233, .25);
+}

@@ -1,0 +1,354 @@
+/* ══════════════════════════════════════════════ */
+/* ═══ BASE ════════════════════════════════════ */
+/* ══════════════════════════════════════════════ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 15px;
+  background: var(--bg-body);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.55;
+  transition: background .4s ease, color .3s ease;
+}
+
+/* Ambient orb glows — liquid glass atmosphere */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 700px 500px at 10% 0%, rgba(125, 211, 252, .07) 0%, transparent 60%),
+    radial-gradient(ellipse 600px 400px at 85% 90%, rgba(56, 189, 248, .05) 0%, transparent 55%),
+    radial-gradient(ellipse 500px 500px at 50% 40%, rgba(139, 92, 246, .03) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+  transition: background .4s ease;
+  animation: ambientShift 20s ease-in-out infinite alternate;
+}
+
+@keyframes ambientShift {
+  0% {
+    opacity: .8;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: .7;
+  }
+}
+
+[data-theme="light"] body::before {
+  background:
+    radial-gradient(ellipse 900px 500px at 10% -5%, rgba(14, 165, 233, .06) 0%, transparent 60%),
+    radial-gradient(ellipse 700px 400px at 90% 95%, rgba(139, 92, 246, .04) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 500px at 50% 50%, rgba(56, 189, 248, .03) 0%, transparent 65%);
+}
+
+/* Floating ambient orb */
+.bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bg::before,
+.bg::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: .12;
+  animation: floatOrb 18s ease-in-out infinite alternate;
+}
+
+.bg::before {
+  width: 400px;
+  height: 400px;
+  background: var(--accent);
+  top: -10%;
+  right: 15%;
+  animation-duration: 22s;
+}
+
+.bg::after {
+  width: 350px;
+  height: 350px;
+  background: #8b5cf6;
+  bottom: -5%;
+  left: 10%;
+  animation-delay: -8s;
+}
+
+@keyframes floatOrb {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  33% {
+    transform: translate(30px, -20px) scale(1.1);
+  }
+
+  66% {
+    transform: translate(-20px, 15px) scale(.95);
+  }
+
+  100% {
+    transform: translate(10px, -10px) scale(1.05);
+  }
+}
+
+/* Glass utility — liquid glass core */
+.glass {
+  background: var(--surface);
+  border: 1px solid var(--glass-border, var(--border));
+  backdrop-filter: blur(var(--glass-blur, 28px)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur, 28px)) saturate(1.4);
+  box-shadow:
+    var(--shadow),
+    var(--glass-inner-shadow, inset 0 1px 0 rgba(255, 255, 255, .06));
+  transition: background .3s ease, border-color .25s ease, box-shadow .35s ease, transform .3s ease;
+  position: relative;
+}
+
+/* Glass shine overlay */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--glass-shine);
+  pointer-events: none;
+  z-index: 0;
+  opacity: .6;
+  transition: opacity .3s ease;
+}
+
+.glass:hover::before {
+  opacity: 1;
+}
+
+.glass>* {
+  position: relative;
+  z-index: 1;
+}
+
+/* ══════════════════════════════════════════════ */
+/* ═══ APP SHELL ═══════════════════════════════ */
+/* ══════════════════════════════════════════════ */
+.app-shell {
+  min-height: 100%;
+  display: grid;
+  grid-template-columns: var(--sidebarW) 1fr;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Sidebar — liquid glass panel ── */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 14px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--glass-border, var(--sidebar-border));
+  backdrop-filter: blur(32px) saturate(1.5);
+  -webkit-backdrop-filter: blur(32px) saturate(1.5);
+  overflow-y: auto;
+  box-shadow:
+    1px 0 0 var(--border2),
+    4px 0 32px rgba(0, 0, 0, .2),
+    inset -1px 0 0 rgba(255, 255, 255, .04);
+  transition: background .3s ease, border-color .3s ease, box-shadow .3s ease;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 10px 18px;
+}
+
+.brand__logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .1);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 3px 16px var(--glow-accent, rgba(125, 211, 252, .15));
+  border: 1px solid rgba(255, 255, 255, .08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.brand__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.brand__name {
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.brand__sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.sidebar__foot {
+  margin-top: auto;
+  padding: 14px;
+  border-radius: var(--radius2);
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+}
+
+/* ── Main area ── */
+.main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Topbar ── */
+.topbar {
+  position: sticky;
+  top: 10px;
+  z-index: 10;
+  margin: 14px 14px 0;
+  padding: 11px 16px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.topbar__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar__titleBig {
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.topbar__title {
+  min-width: 0;
+}
+
+.topbar__titleSmall {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 48vw;
+}
+
+/* Animated topbar page title */
+.topbar-title-anim {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: topbarTitleIn .4s cubic-bezier(.4, 0, .2, 1) both;
+}
+
+.topbar-title__icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2, var(--accent)));
+  color: #fff;
+  flex-shrink: 0;
+  animation: topbarIconPop .5s cubic-bezier(.34, 1.56, .64, 1) both;
+  box-shadow: 0 2px 12px var(--glow-accent);
+}
+
+.topbar-title__icon-wrap svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes topbarTitleIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes topbarIconPop {
+  0% {
+    opacity: 0;
+    transform: scale(.5) rotate(-15deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+/* ── Content ── */
+.content {
+  padding: 14px;
+  flex: 1;
+}
+
+.route-section {
+  animation: fadeUp .25s ease both;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.route-inner {
+  margin: 0 auto;
+}
+
