@@ -293,7 +293,7 @@ const store = {
     // ui
     statsRangeMode: "365d",
     statsView: "mine",
-    theme: (function () { try { return localStorage.getItem("kpi_theme") || "light"; } catch (e) { return "light"; } })(),
+    theme: (function () { try { return localStorage.getItem("kpi_theme") || "dark"; } catch (e) { return "dark"; } })(),
     font: (function () { try { return localStorage.getItem("kpi_font") || "default"; } catch (e) { return "default"; } })(),
     accessibility: { reduceMotion: false, largeText: false, highContrast: false },
     showAccessibilityModal: false,
@@ -4400,7 +4400,7 @@ function PageProfile() {
     </button>
   );
 
-  const LevelRing = ({ pct, size = 72, stroke = 5 }) => {
+  const LevelRing = ({ pct, size = 60, stroke = 4 }) => {
     const r = (size - stroke) / 2;
     const circ = 2 * Math.PI * r;
     const offset = circ - (circ * Math.min(pct, 100)) / 100;
@@ -4418,109 +4418,119 @@ function PageProfile() {
 
   return (
     <div className="prof">
-      {/* ══ Modern Hero Card ══ */}
+      {/* ══ Compact Hero Card ══ */}
       <div className="prof-hero glass card" style={{ "--di": 0 }}>
-        <div className="prof-hero__banner" />
-        <div className="prof-hero__content">
-          {/* Avatar with upload */}
-          <div className="prof-hero__avatar-wrap" onClick={() => document.getElementById("prof-avatar-input")?.click()}>
-            <div className="prof-hero__avatar-ring">
-              <div className="prof-hero__avatar">
-                {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : <span>{(u.displayName || u.email || "?").slice(0, 1).toUpperCase()}</span>}
+        <div className="prof-hero__banner"><div className="prof-hero__shimmer" /></div>
+        <div className="prof-hero__body">
+          <div className="prof-hero__main">
+            {/* Avatar with upload */}
+            <div className="prof-hero__avatar-wrap" onClick={() => document.getElementById("prof-avatar-input")?.click()}>
+              <div className="prof-hero__avatar-ring">
+                <div className="prof-hero__avatar">
+                  {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : <span>{(u.displayName || u.email || "?").slice(0, 1).toUpperCase()}</span>}
+                </div>
+              </div>
+              <div className="prof-hero__avatar-overlay"><Icon name="file" /></div>
+              <input id="prof-avatar-input" hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
+              <div className="prof-hero__badge-role">{u.role === "admin" ? "A" : "T"}</div>
+            </div>
+
+            {/* Info */}
+            <div className="prof-hero__info">
+              <div className="prof-hero__name">{u.displayName || t("unnamed")}</div>
+              <div className="prof-hero__tags">
+                <span className="prof-tag prof-tag--role">{u.role === "admin" ? "Admin" : "Teacher"}</span>
+                <span className="prof-tag prof-tag--level">{lvl.name}</span>
+                {u.position && <span className="prof-tag">{u.position}</span>}
+              </div>
+              <div className="prof-hero__meta-row">
+                <span className="prof-hero__meta-item">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" /><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" /></svg>
+                  {u.email}
+                </span>
+                {u.school && (
+                  <span className="prof-hero__meta-item">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2" /></svg>
+                    {u.school}
+                  </span>
+                )}
+                {u.subject && (
+                  <span className="prof-hero__meta-item">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2" /></svg>
+                    {u.subject}
+                  </span>
+                )}
               </div>
             </div>
-            <div className="prof-hero__avatar-overlay"><Icon name="file" /></div>
-            <input id="prof-avatar-input" hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
-            <div className="prof-hero__badge-role">{u.role === "admin" ? "A" : "T"}</div>
-          </div>
 
-          {/* Info block */}
-          <div className="prof-hero__info">
-            <div className="prof-hero__name">{u.displayName || t("unnamed")}</div>
-            <div className="prof-hero__tags">
-              <span className="prof-tag prof-tag--role">{u.role === "admin" ? "Admin" : "Teacher"}</span>
-              <span className="prof-tag prof-tag--level">{lvl.name}</span>
-              {u.position && <span className="prof-tag">{u.position}</span>}
-            </div>
-            <div className="prof-hero__meta-row">
-              <span className="prof-hero__meta-item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" /><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" /></svg>
-                {u.email}
-              </span>
-              {u.school && (
-                <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2" /></svg>
-                  {u.school}
-                </span>
-              )}
-              {u.subject && (
-                <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2" /></svg>
-                  {u.subject}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Level ring + actions */}
-          <div className="prof-hero__right">
-            <div className="prof-hero__level-wrap">
-              <LevelRing pct={lvl.pct} />
-              <div className="prof-hero__level-inner">
-                <div className="prof-hero__level-pts">{fmtPoints(u.totalPoints)}</div>
-                <div className="prof-hero__level-label">{t("points")}</div>
+            {/* Level ring */}
+            <div className="prof-hero__right">
+              <div className="prof-hero__level-wrap">
+                <LevelRing pct={lvl.pct} />
+                <div className="prof-hero__level-inner">
+                  <div className="prof-hero__level-pts">{fmtPoints(u.totalPoints)}</div>
+                  <div className="prof-hero__level-label">{t("points")}</div>
+                </div>
               </div>
+              {lvl.next && <div className="prof-hero__level-hint">{nextPts} {t("profileNextLevel").toLowerCase()}</div>}
             </div>
-            {lvl.next && <div className="prof-hero__level-hint">{nextPts} {t("profileNextLevel").toLowerCase()}</div>}
           </div>
-        </div>
 
-        {/* Social links + quick actions */}
-        <div className="prof-hero__bottom">
-          <div className="prof-hero__social">
-            {u.instagram && (
-              <a href={`https://instagram.com/${u.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
-                {u.instagram.startsWith("@") ? u.instagram : `@${u.instagram}`}
-              </a>
-            )}
-            {u.youtube && (
-              <a href={u.youtube} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--yt">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                YouTube
-              </a>
-            )}
-            {u.phone && (
-              <a href={`tel:${u.phone}`} className="prof-social-btn">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" strokeWidth="2" /></svg>
-                {u.phone}
-              </a>
-            )}
-          </div>
-          <div className="prof-hero__actions">
-            {u.role !== "admin" && <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> {t("addKpi")}</Btn>}
-            <Btn onClick={() => navigate("rating")}><Icon name="rank" /> {t("navRating")}</Btn>
+          {/* Bottom: social + actions */}
+          <div className="prof-hero__bottom">
+            <div className="prof-hero__social">
+              {u.instagram && (
+                <a href={`https://instagram.com/${u.instagram.replace(/^@/, "")}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
+                  {u.instagram.startsWith("@") ? u.instagram : `@${u.instagram}`}
+                </a>
+              )}
+              {u.youtube && (
+                <a href={u.youtube} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--yt">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" /></svg>
+                  YouTube
+                </a>
+              )}
+              {u.phone && (
+                <a href={`tel:${u.phone}`} className="prof-social-btn">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" strokeWidth="2" /></svg>
+                  {u.phone}
+                </a>
+              )}
+            </div>
+            <div className="prof-hero__actions">
+              {u.role !== "admin" && <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> {t("addKpi")}</Btn>}
+              <Btn onClick={() => navigate("rating")}><Icon name="rank" /> {t("navRating")}</Btn>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ══ Stats row ══ */}
+      {/* ══ Stats strip ══ */}
       <div className="prof-stats">
         <div className="prof-stat glass card" style={{ "--di": 1 }}>
-          <div className="prof-stat__icon prof-stat__icon--green">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <div className="prof-stat__head">
+            <div className="prof-stat__icon prof-stat__icon--green">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </div>
+            <div>
+              <div className="prof-stat__num">{fmtPoints(u.totalPoints)}</div>
+              <div className="prof-stat__label">{t("totalPoints")}</div>
+            </div>
           </div>
-          <div className="prof-stat__num">{fmtPoints(u.totalPoints)}</div>
-          <div className="prof-stat__label">{t("totalPoints")}</div>
           <div className="prof-stat__bar"><div className="prof-stat__fill" style={{ width: `${lvl.pct}%` }} /></div>
           {lvl.next && <div className="prof-stat__hint">{t("profileNextLevel")}: {nextPts}</div>}
         </div>
         <div className="prof-stat glass card" style={{ "--di": 2 }}>
-          <div className="prof-stat__icon prof-stat__icon--blue">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="2" /><path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" /></svg>
+          <div className="prof-stat__head">
+            <div className="prof-stat__icon prof-stat__icon--blue">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" strokeWidth="2" /><path d="M14 2v6h6" stroke="currentColor" strokeWidth="2" /></svg>
+            </div>
+            <div>
+              <div className="prof-stat__num">{subs.length}</div>
+              <div className="prof-stat__label">{t("submissions")}</div>
+            </div>
           </div>
-          <div className="prof-stat__num">{subs.length}</div>
-          <div className="prof-stat__label">{t("submissions")}</div>
           <div className="prof-stat__badges">
             <span className="pill ok">{approved.length}</span>
             <span className="pill warn">{pending.length}</span>
@@ -4528,20 +4538,28 @@ function PageProfile() {
           </div>
         </div>
         <div className="prof-stat glass card" style={{ "--di": 3 }}>
-          <div className="prof-stat__icon prof-stat__icon--amber">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <div className="prof-stat__head">
+            <div className="prof-stat__icon prof-stat__icon--amber">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </div>
+            <div>
+              <div className="prof-stat__num">{fmtPoints(approvedPts)}</div>
+              <div className="prof-stat__label">{t("approvedPts")}</div>
+            </div>
           </div>
-          <div className="prof-stat__num">{fmtPoints(approvedPts)}</div>
-          <div className="prof-stat__label">{t("approvedPts")}</div>
           <div className="prof-stat__hint">{t("profApprovalRate")}: {aprPct}%</div>
         </div>
         <div className="prof-stat glass card" style={{ "--di": 4 }}>
-          <div className="prof-stat__icon prof-stat__icon--purple">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <div className="prof-stat__head">
+            <div className="prof-stat__icon prof-stat__icon--purple">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M16 2v4M8 2v4M3 10h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </div>
+            <div>
+              <div className="prof-stat__num">{fmtPoints(u.compDays || 0)}</div>
+              <div className="prof-stat__label">{t("compDays")}</div>
+            </div>
           </div>
-          <div className="prof-stat__num">{fmtPoints(u.compDays || 0)}</div>
-          <div className="prof-stat__label">{t("compDays")}</div>
-          <Btn kind="ghost" style={{ marginTop: 6, fontSize: 12 }} onClick={() => navigate("requests")}>{t("requests")}</Btn>
+          <Btn kind="ghost" style={{ marginTop: 4, fontSize: 11 }} onClick={() => navigate("requests")}>{t("requests")}</Btn>
         </div>
       </div>
 
@@ -4555,9 +4573,7 @@ function PageProfile() {
       {/* Tab: overview */}
       {tab === "overview" && (
         <>
-          {/* Goals on profile */}
           {u.role !== "admin" && <GoalsWidget compact />}
-
           <div className="glass card prof-card" style={{ "--di": 5 }}>
             <div className="h2">{t("recentSubs")}</div>
             <div className="sep"></div>
@@ -4581,7 +4597,7 @@ function PageProfile() {
         <div className="glass card prof-card" style={{ "--di": 5 }}>
           <div className="h2">{t("profilePersonal")}</div>
           <div className="sep"></div>
-          <div className="grid2">
+          <div className="prof-form-grid">
             <div><div className="label">{t("fullName")}</div><Input value={form.displayName} onChange={(e) => setForm(f => ({ ...f, displayName: e.target.value }))} /></div>
             <div><div className="label">{t("position")}</div><Input value={form.position} onChange={(e) => setForm(f => ({ ...f, position: e.target.value }))} /></div>
             <div><div className="label">{t("school")}</div><Input value={form.school} onChange={(e) => setForm(f => ({ ...f, school: e.target.value }))} /></div>
@@ -4590,9 +4606,9 @@ function PageProfile() {
             <div><div className="label">{t("phone")}</div><Input value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
             <div><div className="label">{t("city")}</div><Input value={form.city} onChange={(e) => setForm(f => ({ ...f, city: e.target.value }))} /></div>
             <div><div className="label">{t("instagram")}</div><Input value={form.instagram} onChange={(e) => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder={t("instagramPh")} /></div>
-            <div style={{ gridColumn: "1 / -1" }}><div className="label">{t("youtube")}</div><Input value={form.youtube} onChange={(e) => setForm(f => ({ ...f, youtube: e.target.value }))} placeholder={t("youtubePh")} /></div>
+            <div className="prof-form-grid__full"><div className="label">{t("youtube")}</div><Input value={form.youtube} onChange={(e) => setForm(f => ({ ...f, youtube: e.target.value }))} placeholder={t("youtubePh")} /></div>
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+          <div className="prof-form-actions">
             <Btn kind="primary" onClick={save} disabled={st.loading}><Icon name="check" /> {t("save")}</Btn>
             <Btn onClick={() => setTab("overview")}>{t("cancel")}</Btn>
           </div>
@@ -4603,10 +4619,10 @@ function PageProfile() {
       {tab === "security" && (
         <div className="glass card prof-card" style={{ "--di": 5 }}>
           <div className="h2">{t("security")}</div>
-          <div className="help" style={{ marginBottom: 12 }}>
+          <div className="help" style={{ marginBottom: 10 }}>
             {isPasswordProvider ? t("securityHelp") : t("securityNote")}
           </div>
-          <div className="grid2">
+          <div className="prof-form-grid">
             {isPasswordProvider && (
               <div>
                 <div className="label">{t("currentPwd")}</div>
@@ -4625,7 +4641,7 @@ function PageProfile() {
                 onChange={(e) => setPw(p => ({ ...p, next2: e.target.value }))} />
             </div>
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+          <div className="prof-form-actions">
             <Btn kind="primary" onClick={changePassword} disabled={st.loading}><Icon name="shield" /> {t("changePwd")}</Btn>
             <Btn kind="ghost" onClick={resetPasswordEmail} disabled={st.loading}>{t("resetByEmail")}</Btn>
           </div>
