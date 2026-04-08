@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="ru" data-theme="light">
+<html lang="ru" data-theme="dark">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#ece4d6" />
+  <meta name="theme-color" content="#08090e" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>NIS KPI Platform</title>
@@ -29,14 +29,14 @@
     body {
       height: 100%;
       margin: 0;
-      background: #ece4d6;
-      color: #2a1f10;
+      background: #08090e;
+      color: #eef0f6;
     }
 
-    html[data-theme="dark"],
-    html[data-theme="dark"] body {
-      background: #0c1021;
-      color: #f0f2f8;
+    html[data-theme="light"],
+    html[data-theme="light"] body {
+      background: #e8ecf2;
+      color: #1a1d2e;
     }
 
     body {
@@ -50,10 +50,10 @@
       padding: 6px 12px;
       border-radius: 999px;
       font: 600 11px/1.2 'Onest', system-ui, sans-serif;
-      background: rgba(255, 255, 255, .8);
-      color: rgba(0, 0, 0, .5);
-      border: 1px solid rgba(100, 80, 50, .1);
-      backdrop-filter: blur(12px);
+      background: rgba(255, 255, 255, .06);
+      color: rgba(255, 255, 255, .5);
+      border: 1px solid rgba(255, 255, 255, .08);
+      backdrop-filter: blur(16px);
       z-index: 50;
       user-select: none;
       pointer-events: none;
@@ -79,12 +79,12 @@
       z-index: 100;
       display: grid;
       place-items: center;
-      background: #ece4d6;
+      background: #08090e;
       transition: opacity .3s ease;
     }
 
-    html[data-theme="dark"] #splash {
-      background: #0c1021;
+    html[data-theme="light"] #splash {
+      background: #e8ecf2;
     }
 
     #splash.done {
@@ -96,12 +96,14 @@
       width: 56px;
       height: 56px;
       border-radius: 18px;
-      background: #fff;
+      background: rgba(255, 255, 255, .08);
       display: grid;
       place-items: center;
-      box-shadow: 0 6px 24px rgba(135, 188, 46, .3);
+      box-shadow: 0 6px 32px rgba(125, 211, 252, .25), 0 0 60px rgba(125, 211, 252, .08);
       animation: pulse 1.4s ease-in-out infinite;
       overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, .1);
+      backdrop-filter: blur(12px);
     }
 
     .splash-logo img {

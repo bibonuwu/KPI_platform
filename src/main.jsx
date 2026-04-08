@@ -3608,8 +3608,8 @@ function PageLogin() {
   }, []);
 
   const slides = [
-    { icon: "📊", tTitle: "loginTitle1", tDesc: "loginDesc", accent: "#87BC2E" },
-    { icon: "🏆", tTitle: "loginSlide1Title", tDesc: "loginSlide1Desc", accent: "#4f9cf9" },
+    { icon: "📊", tTitle: "loginTitle1", tDesc: "loginDesc", accent: "#7dd3fc" },
+    { icon: "🏆", tTitle: "loginSlide1Title", tDesc: "loginSlide1Desc", accent: "#818cf8" },
     { icon: "✨", tTitle: "loginSlide2Title", tDesc: "loginSlide2Desc", accent: "#a78bfa" },
   ];
 
@@ -4092,7 +4092,7 @@ function ReadOnlyProfile({ teacher: tc, subs, goals }) {
           <div className="rop-hero__avatar-col">
             <div className="rop-hero__avatar-ring">
               <div className="rop-hero__avatar">
-                {tc.avatarUrl ? <img src={tc.avatarUrl} alt="" /> : <span>{(tc.displayName || tc.email || "?").slice(0, 1).toUpperCase()}</span>}
+                {tc.avatarUrl ? <img src={tc.avatarUrl} alt="" /> : <span>{(tc.displayName || "?").split(/\s+/).filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span>}
               </div>
             </div>
             <div className="rop-hero__rank">#{rank}</div>
@@ -4132,10 +4132,12 @@ function ReadOnlyProfile({ teacher: tc, subs, goals }) {
           </div>
           <div className="rop-hero__right">
             <div className="rop-hero__level-wrap">
-              <LevelRing pct={lvl.pct} />
               <div className="rop-hero__level-inner">
                 <div className="rop-hero__level-pts">{fmtPoints(tc.totalPoints)}</div>
                 <div className="rop-hero__level-label">{t("points")}</div>
+              </div>
+              <div className="rop-hero__progress-track">
+                <div className="rop-hero__progress-fill" style={{ width: `${lvl.pct}%` }} />
               </div>
             </div>
             {lvl.next && <div className="rop-hero__level-hint">{nextPts} {t("profileNextLevel").toLowerCase()}</div>}
