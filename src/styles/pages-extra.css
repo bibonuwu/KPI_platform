@@ -4229,6 +4229,22 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   margin-bottom: 16px;
 }
 
+.admin-users-right select.input {
+  background: rgba(15, 17, 28, .85);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .15);
+  font-weight: 500;
+}
+.admin-users-right select.input:focus {
+  border-color: var(--accent);
+  background: rgba(15, 17, 28, .95);
+}
+.admin-users-right select.input option,
+.admin-users-right select.input optgroup {
+  background: #1a1d2e;
+  color: #fff;
+}
+
 /* -- Admin Documents 3-column layout -- */
 .admin-docs-middle {
   flex: 1;
@@ -5450,4 +5466,168 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   color: var(--muted);
   min-width: 30px;
   text-align: right;
+}
+
+/* ═══ ADMIN/TEACHER HERO CARD ═══════════════════ */
+.at-hero {
+  padding: 20px 24px !important;
+  overflow: hidden;
+}
+
+.at-hero__body {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+/* ── avatar ── */
+.at-hero__avatar-wrap {
+  flex-shrink: 0;
+}
+
+.at-hero__avatar-ring {
+  padding: 3px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 0 20px rgba(56, 189, 248, .25);
+}
+
+.at-hero__avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--surface2);
+  border: 3px solid var(--card-bg, var(--surface));
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--muted);
+  overflow: hidden;
+}
+
+.at-hero__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ── info ── */
+.at-hero__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.at-hero__name {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.02em;
+}
+
+.at-hero__tags {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.at-hero__email {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
+.at-hero__btns {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.at-hero__teams-btn {
+  border-radius: 20px !important;
+  font-size: 12px !important;
+  padding: 4px 14px !important;
+}
+
+/* ── points box ── */
+.at-hero__points-box {
+  flex-shrink: 0;
+  min-width: 140px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.at-hero__points-num {
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.at-hero__points-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-top: 2px;
+}
+
+.at-hero__points-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--border);
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.at-hero__points-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width .8s cubic-bezier(.22, 1, .36, 1);
+}
+
+.at-hero__points-hint {
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 6px;
+  white-space: nowrap;
+}
+
+/* ── responsive ── */
+@media (max-width: 640px) {
+  .at-hero__body {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .at-hero__tags {
+    justify-content: center;
+  }
+
+  .at-hero__email {
+    justify-content: center;
+  }
+
+  .at-hero__btns {
+    justify-content: center;
+  }
+
+  .at-hero__points-box {
+    width: 100%;
+  }
 }

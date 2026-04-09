@@ -7,7 +7,7 @@ import {
   ref, uploadBytes, getDownloadURL
 } from "../firebase-config.js";
 import {
-  store, setState, useStore, navigate, toast
+  store, setState, useStore, navigate, toast, canAccess
 } from "../store.js";
 import {
   fmtPoints, safeText, ymd, tsKey, sum, lastDays, lastMonths, startYMDFromDays,
@@ -34,7 +34,7 @@ import {
   GoalsWidget, LoadingScreen, BarChart, LineChart, AreaLineChart,
   DonutChart, RadarChart, GaugeChart, StackedBarChart, HistogramChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
-  ErrorBoundary, ReadOnlyProfile
+  ErrorBoundary, Guard
 } from "../components.jsx";
 
 export function PageAdminApprovals() {
@@ -1480,21 +1480,23 @@ export function PageAdminUsers() {
         </div>
       </div>
 
-      {/* ===== Two-panel layout ===== */}
-      {usersTab === "users" && <div className="admin-users-layout">
+      {/* Position assignment overlay */}
+      {selUser && createPortal(
+        <div className="tp-overlay" onClick={() => setSelectedUid(null)}>
+          <div className="tp-card tp-card--v2" onClick={e => e.stopPropagation()} style={{ maxHeight: "90vh", overflowY: "auto" }}>
+            <button className="tp-close" onClick={() => setSelectedUid(null)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
 
-        {/* LEFT: Position Assignment */}
-        <div className="admin-users-left">
-          <div className="glass card" style={{ position: "sticky", top: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(135,188,46,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <Icon name="briefcase" />
+            <div style={{ padding: "24px 24px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(135,188,46,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Icon name="briefcase" />
+                </div>
+                <div className="tp-name" style={{ margin: 0, flex: 1 }}>{t("assignPosition")}</div>
               </div>
-              <div className="h2" style={{ margin: 0, flex: 1 }}>{t("assignPosition")}</div>
-            </div>
 
-            {/* Selected user or placeholder */}
-            {selUser ? (
+              {/* Selected user */}
               <div className="admin-users-selected">
                 {selUser.avatarUrl ? (
                   <img src={selUser.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }} />
@@ -1507,105 +1509,101 @@ export function PageAdminUsers() {
                   <b style={{ fontSize: 14 }}>{selUser.displayName || selUser.email}</b>
                   {selUser.position && <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>{selUser.position}</div>}
                 </div>
-                <button className="iconbtn" onClick={() => setSelectedUid(null)} title={t("cancel")}><Icon name="x" /></button>
               </div>
-            ) : (
-              <div className="admin-users-placeholder">
-                <Icon name="user" />
-                <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{t("selectUserHint")}</div>
+
+              {/* Position search */}
+              <div style={{ marginBottom: 10, marginTop: 12 }}>
+                <input className="input" style={{ fontSize: 13 }} placeholder={t("searchPositionPlaceholder")} value={posSearch} onChange={e => setPosSearch(e.target.value)} />
               </div>
-            )}
 
-            {/* Position search */}
-            <div style={{ marginBottom: 10 }}>
-              <input className="input" style={{ fontSize: 13 }} placeholder={t("searchPositionPlaceholder")} value={posSearch} onChange={e => setPosSearch(e.target.value)} />
-            </div>
-
-            {/* Position list grouped — collapsible */}
-            <div className="pos-scroll" style={{ maxHeight: "calc(100vh - 480px)", overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
-              {(() => {
-                const psq = posSearch.trim().toLowerCase();
-                return STAFF_GROUPS.map(g => {
-                  const gPos = DEFAULT_POSITION_LIST.filter(p => p.group === g.key);
-                  const cPos = g.key === "teacher" ? customPos : [];
-                  const filteredGPos = psq ? gPos.filter(p => p.position.toLowerCase().includes(psq)) : gPos;
-                  const filteredCPos = psq ? cPos.filter(p => p.toLowerCase().includes(psq)) : cPos;
-                  if (!filteredGPos.length && !filteredCPos.length) return null;
-                  const grpColor = g.key === "admin" ? "#6366f1" : g.key === "support" ? "#06b6d4" : "var(--accent)";
-                  const totalInGroup = filteredGPos.length + filteredCPos.length;
-                  const isCollapsed = !psq && collapsedGroups[g.key];
-                  const toggleCollapse = () => setCollapsedGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }));
-                  return (
-                    <div key={g.key} className="pos-group-section">
-                      <div className="pos-group-header" style={{ color: grpColor }} onClick={toggleCollapse}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
-                          <span className="pos-group-chevron" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0)" }}><Icon name="chevron" /></span>
-                          <span className="pos-group-title">{g.label}</span>
+              {/* Position list grouped — collapsible */}
+              <div className="pos-scroll" style={{ maxHeight: "calc(90vh - 360px)", overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
+                {(() => {
+                  const psq = posSearch.trim().toLowerCase();
+                  return STAFF_GROUPS.map(g => {
+                    const gPos = DEFAULT_POSITION_LIST.filter(p => p.group === g.key);
+                    const cPos = g.key === "teacher" ? customPos : [];
+                    const filteredGPos = psq ? gPos.filter(p => p.position.toLowerCase().includes(psq)) : gPos;
+                    const filteredCPos = psq ? cPos.filter(p => p.toLowerCase().includes(psq)) : cPos;
+                    if (!filteredGPos.length && !filteredCPos.length) return null;
+                    const grpColor = g.key === "admin" ? "#6366f1" : g.key === "support" ? "#06b6d4" : "var(--accent)";
+                    const totalInGroup = filteredGPos.length + filteredCPos.length;
+                    const isCollapsed = !psq && collapsedGroups[g.key];
+                    const toggleCollapse = () => setCollapsedGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }));
+                    return (
+                      <div key={g.key} className="pos-group-section">
+                        <div className="pos-group-header" style={{ color: grpColor }} onClick={toggleCollapse}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                            <span className="pos-group-chevron" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0)" }}><Icon name="chevron" /></span>
+                            <span className="pos-group-title">{g.label}</span>
+                          </div>
+                          <span className="pos-group-count" style={{ background: `${grpColor}18`, color: grpColor }}>{totalInGroup}</span>
                         </div>
-                        <span className="pos-group-count" style={{ background: `${grpColor}18`, color: grpColor }}>{totalInGroup}</span>
-                      </div>
-                      {!isCollapsed && (
-                        <div className="pos-group-items">
-                          {filteredGPos.map(p => {
-                            const active = selUser?.position === p.position;
-                            const cnt = allUsrs.filter(x => x.position === p.position).length;
-                            return (
-                              <div key={p.position} className={`pos-item${active ? " active" : ""}${!selUser ? " disabled" : ""}`} onClick={() => selUser && assignPos(selUser.uid, p.position)}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                  {active && <Icon name="check" />}
-                                  <span>{p.position}</span>
-                                </div>
-                                {cnt > 0 && <span className="tiny muted">{cnt}</span>}
-                              </div>
-                            );
-                          })}
-                          {filteredCPos.map(p => {
-                            const active = selUser?.position === p;
-                            const cnt = allUsrs.filter(x => x.position === p).length;
-                            return (
-                              <div key={p} className={`pos-item${active ? " active" : ""}${!selUser ? " disabled" : ""}`} style={{ paddingRight: 4 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }} onClick={() => selUser && assignPos(selUser.uid, p)}>
-                                  {active && <Icon name="check" />}
-                                  <span>{p}</span>
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {!isCollapsed && (
+                          <div className="pos-group-items">
+                            {filteredGPos.map(p => {
+                              const active = selUser?.position === p.position;
+                              const cnt = allUsrs.filter(x => x.position === p.position).length;
+                              return (
+                                <div key={p.position} className={`pos-item${active ? " active" : ""}`} onClick={() => assignPos(selUser.uid, p.position)}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                    {active && <Icon name="check" />}
+                                    <span>{p.position}</span>
+                                  </div>
                                   {cnt > 0 && <span className="tiny muted">{cnt}</span>}
-                                  <button className="iconbtn" onClick={(e) => { e.stopPropagation(); removeCustomPos(p); }} style={{ color: "var(--red, #ef4444)", width: 22, height: 22 }}><Icon name="x" /></button>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                              );
+                            })}
+                            {filteredCPos.map(p => {
+                              const active = selUser?.position === p;
+                              const cnt = allUsrs.filter(x => x.position === p).length;
+                              return (
+                                <div key={p} className={`pos-item${active ? " active" : ""}`} style={{ paddingRight: 4 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }} onClick={() => assignPos(selUser.uid, p)}>
+                                    {active && <Icon name="check" />}
+                                    <span>{p}</span>
+                                  </div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                    {cnt > 0 && <span className="tiny muted">{cnt}</span>}
+                                    <button className="iconbtn" onClick={(e) => { e.stopPropagation(); removeCustomPos(p); }} style={{ color: "var(--red, #ef4444)", width: 22, height: 22 }}><Icon name="x" /></button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+
+                {/* Clear position */}
+                {selUser.position && (
+                  <div className="pos-item" style={{ color: "var(--red, #ef4444)", marginTop: 8 }} onClick={() => assignPos(selUser.uid, "")}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Icon name="x" />
+                      <span>{t("noPosition")}</span>
                     </div>
-                  );
-                });
-              })()}
-
-              {/* Clear position */}
-              {selUser && selUser.position && (
-                <div className="pos-item" style={{ color: "var(--red, #ef4444)", marginTop: 8 }} onClick={() => assignPos(selUser.uid, "")}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <Icon name="x" />
-                    <span>{t("noPosition")}</span>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
-            {/* Add custom position */}
-            <div style={{ borderTop: "1px solid var(--border)", marginTop: 14, paddingTop: 12 }}>
-              <div className="label" style={{ fontSize: 12, marginBottom: 6 }}>{t("addPosition")}</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input className="input" style={{ flex: 1 }} placeholder={t("positionName")} value={newPosName} onChange={e => setNewPosName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomPos(); }} />
-                <Btn kind="primary" onClick={addCustomPos} disabled={!newPosName.trim()}><Icon name="plus" /></Btn>
+              {/* Add custom position */}
+              <div style={{ borderTop: "1px solid rgba(255,255,255,.1)", marginTop: 14, paddingTop: 12, paddingBottom: 20 }}>
+                <div className="label" style={{ fontSize: 12, marginBottom: 6 }}>{t("addPosition")}</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input className="input" style={{ flex: 1 }} placeholder={t("positionName")} value={newPosName} onChange={e => setNewPosName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addCustomPos(); }} />
+                  <Btn kind="primary" onClick={addCustomPos} disabled={!newPosName.trim()}><Icon name="plus" /></Btn>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
 
-        {/* RIGHT: Employees */}
-        <div className="admin-users-right">
+      {/* ===== Users layout ===== */}
+      {usersTab === "users" && <div>
           {/* Filters */}
           <div className="glass card" style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
@@ -1728,7 +1726,6 @@ export function PageAdminUsers() {
               </table>
             </div>
           )}
-        </div>
       </div>}
 
       {/* ===== History tab ===== */}
@@ -2010,108 +2007,61 @@ export function PageAdminTeacher() {
     </button>
   );
 
-  const LevelRingAT = ({ pct, size = 64, stroke = 4 }) => {
-    const r = (size - stroke) / 2;
-    const circ = 2 * Math.PI * r;
-    const offset = circ - (circ * Math.min(pct, 100)) / 100;
-    return (
-      <svg width={size} height={size} className="prof-level-ring">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="url(#atGrad)" strokeWidth={stroke}
-          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)" }}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-        <defs><linearGradient id="atGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stopColor="var(--accent)" /><stop offset="100%" stopColor="var(--accent2)" /></linearGradient></defs>
-      </svg>
-    );
-  };
+  const initials = (() => {
+    const name = teacherDoc?.displayName || "";
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase() || "?";
+  })();
+
+  const ptsRemain = tLvl.next ? (tLvl.next - (teacherDoc?.totalPoints || 0)) : 0;
 
   return (
     <div className="prof">
       {/* ══ Hero Card ══ */}
-      <div className="prof-hero glass card" style={{ "--di": 0 }}>
-        <div className="prof-hero__banner" />
-        <div className="prof-hero__content">
+      <div className="at-hero glass card" style={{ "--di": 0 }}>
+        <div className="at-hero__body">
           {/* Avatar */}
-          <div className="prof-hero__avatar-wrap" style={{ cursor: "default" }}>
-            <div className="prof-hero__avatar-ring">
-              <div className="prof-hero__avatar">
+          <div className="at-hero__avatar-wrap">
+            <div className="at-hero__avatar-ring">
+              <div className="at-hero__avatar">
                 {edit.avatarUrl
                   ? <img src={edit.avatarUrl} alt="" />
-                  : <span>{(edit.displayName || teacherDoc?.email || uid).slice(0, 1).toUpperCase()}</span>}
+                  : <span>{initials}</span>}
               </div>
             </div>
-            <div className="prof-hero__badge-role">{teacherDoc?.role === "admin" ? "A" : "T"}</div>
           </div>
 
           {/* Info */}
-          <div className="prof-hero__info">
-            <div className="prof-hero__name">{teacherDoc?.displayName || "—"}</div>
-            <div className="prof-hero__tags">
+          <div className="at-hero__info">
+            <div className="at-hero__name">{teacherDoc?.displayName || "—"}</div>
+            <div className="at-hero__tags">
               <span className="prof-tag prof-tag--role">{teacherDoc?.role === "admin" ? "Admin" : "Teacher"}</span>
               <span className="prof-tag prof-tag--level">{tLvl.name}</span>
               {teacherDoc?.position && <span className="prof-tag">{teacherDoc.position}</span>}
-              {teacherDoc?.onboarded
-                ? <span className="prof-tag prof-tag--ok">{t("completed")}</span>
-                : <span className="prof-tag prof-tag--warn">{t("onboarding")}</span>}
             </div>
-            <div className="prof-hero__meta-row">
-              <span className="prof-hero__meta-item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" /><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" /></svg>
-                {teacherDoc?.email || uid}
-              </span>
-              {teacherDoc?.school && (
-                <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" strokeWidth="2" /></svg>
-                  {teacherDoc.school}
-                </span>
-              )}
-              {teacherDoc?.subject && (
-                <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" strokeWidth="2" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" strokeWidth="2" /></svg>
-                  {teacherDoc.subject}
-                </span>
-              )}
-              {teacherDoc?.city && (
-                <span className="prof-hero__meta-item">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="10" r="3" stroke="currentColor" strokeWidth="2" /></svg>
-                  {teacherDoc.city}
-                </span>
-              )}
+            <div className="at-hero__email">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" /><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" /></svg>
+              {teacherDoc?.email || uid}
+            </div>
+            <div className="at-hero__btns">
+              <Btn kind="ghost" className="at-hero__teams-btn" onClick={() => setAtTab("overview")}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                Teams
+              </Btn>
+              <Btn kind="ghost" onClick={() => navigate("admin/users")}><Icon name="arrow-left" /> {t("back")}</Btn>
+              <Btn kind="ghost" onClick={() => setReloadNonce(x => x + 1)}><Icon name="refresh" /></Btn>
             </div>
           </div>
 
-          {/* Level ring */}
-          <div className="prof-hero__right">
-            <div className="prof-hero__level-wrap">
-              <LevelRingAT pct={tLvl.pct} />
-              <div className="prof-hero__level-inner" style={{ "--sz": "64px" }}>
-                <div className="prof-hero__level-pts" style={{ fontSize: 16 }}>{fmtPoints(teacherDoc?.totalPoints || 0)}</div>
-                <div className="prof-hero__level-label">{t("points")}</div>
-              </div>
+          {/* Points box */}
+          <div className="at-hero__points-box">
+            <div className="at-hero__points-num">{fmtPoints(teacherDoc?.totalPoints || 0)}</div>
+            <div className="at-hero__points-label">{t("points").toUpperCase()}</div>
+            <div className="at-hero__points-bar">
+              <div className="at-hero__points-fill" style={{ width: `${tLvl.pct}%` }} />
             </div>
-          </div>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="prof-hero__bottom">
-          <div className="prof-hero__social">
-            {teacherDoc?.phone && (
-              <a href={`tel:${teacherDoc.phone}`} className="prof-social-btn">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" strokeWidth="2" /></svg>
-                {teacherDoc.phone}
-              </a>
-            )}
-            {(teacherDoc?.experienceYears > 0) && (
-              <span className="prof-social-btn" style={{ cursor: "default" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="2" /></svg>
-                {teacherDoc.experienceYears} {t("profYear")}
-              </span>
-            )}
-          </div>
-          <div className="prof-hero__actions">
-            <Btn onClick={() => navigate("admin/users")}><Icon name="user" /> {t("back")}</Btn>
-            <Btn kind="ghost" onClick={() => setReloadNonce(x => x + 1)}><Icon name="refresh" /></Btn>
+            {tLvl.next && <div className="at-hero__points-hint">{ptsRemain} {t("toNextLevel")}</div>}
           </div>
         </div>
       </div>

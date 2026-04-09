@@ -7,7 +7,7 @@ import {
 } from "../firebase-config.js";
 import {
   store, setState, useStore, navigate, toast, toggleTheme, applyFont, FONT_MAP,
-  applyTheme
+  applyTheme, canAccess
 } from "../store.js";
 import {
   fmtPoints, safeText, ymd, tsKey, sum, lastDays, lastMonths, startYMDFromDays,
@@ -25,14 +25,14 @@ import {
   fetchMyTeacherDocs, createMyTeacherDoc, uploadTeacherDocFile,
   fetchGoals, createGoal, updateGoal, deleteGoalDoc,
   fetchMyBookQuizAttempts, createBookQuizAttempt, createBookQuizRewardSubmission,
-  calcQuizResult, getBookQuizStatus, fmtDateTimeSafe, renderRichDesc
+  renderRichDesc
 } from "../data.js";
 import {
   Icon, Btn, Input, Select, Textarea, Pill, DataCards, QuarterFilter,
   GoalsWidget, LoadingScreen, BarChart, LineChart, AreaLineChart,
   DonutChart, RadarChart, GaugeChart, StackedBarChart, HistogramChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
-  ErrorBoundary
+  ErrorBoundary, Guard
 } from "../components.jsx";
 
 export function PageDashboard() {
@@ -1201,53 +1201,6 @@ const BOOK_QUIZ_LIBRARY = [
     questions: []
   }
 ];
-
-export async function fetchMyBookQuizAttempts(uid) {
-  const qy = query(collection(db, "bookQuizAttempts"), where("uid", "==", uid));
-  const res = await getDocs(qy);
-  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
-  arr.sort((a, b) => tsKey(b) - tsKey(a));
-  return arr;
-}
-
-export async function createBookQuizAttempt(data) {
-  await addDoc(collection(db, "bookQuizAttempts"), {
-    uid: data.uid,
-    bookKey: safeText(data.bookKey),
-    bookTitle: safeText(data.bookTitle),
-    month: safeText(data.month),
-    correctCount: Number(data.correctCount) || 0,
-    totalCount: Number(data.totalCount) || 0,
-    scorePercent: Number(data.scorePercent) || 0,
-    passed: !!data.passed,
-    cooldownUntil: safeText(data.cooldownUntil),
-    thresholdPercent: Number(data.thresholdPercent) || 70,
-    pointsCandidate: Number(data.pointsCandidate) || 0,
-    createdAt: serverTimestamp()
-  });
-}
-
-export async function createBookQuizRewardSubmission({ uid, book, result }) {
-  await addDoc(collection(db, "submissions"), {
-    uid,
-    typeId: `book_quiz:${book.id}`,
-    typeName: "Книжный тест (NIS-пен бірге оқиық)",
-    typeSection: "Чтение",
-    typeSubsection: "Книжный тест",
-    points: Number(book.points) || 20,
-    title: `Книжный тест: ${book.title}`,
-    description: `Результат теста: ${result.correct}/${result.total} (${result.percent}%). Порог: ${book.thresholdPercent || 70}%`,
-    eventDate: ymd(),
-    evidenceLink: "",
-    evidenceFileUrl: "",
-    quizBookKey: book.id,
-    quizScorePercent: Number(result.percent) || 0,
-    quizCorrectCount: Number(result.correct) || 0,
-    quizTotalCount: Number(result.total) || 0,
-    status: "pending",
-    createdAt: serverTimestamp()
-  });
-}
 
 export function calcQuizResult(book, answers) {
   const questions = book?.questions || [];

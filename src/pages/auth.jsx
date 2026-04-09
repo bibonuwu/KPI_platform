@@ -5,13 +5,13 @@ import {
   signInWithRedirect, signInWithEmailAndPassword, sendPasswordResetEmail,
   MICROSOFT_TENANT
 } from "../firebase-config.js";
-import { store, setState, useStore, navigate, toast } from "../store.js";
+import { store, setState, useStore, navigate, toast, canAccess } from "../store.js";
 import { fmtPoints, safeText, ymd, levelFromPoints } from "../utils.js";
 import { DEFAULT_TYPES } from "../constants.js";
 import {
   ensureUserDoc, hasAnyAdmin, seedDefaultTypes, updateProfile, fetchTypesAll
 } from "../data.js";
-import { Icon, Btn, Input, Select, Textarea, Pill } from "../components.jsx";
+import { Icon, Btn, Input, Select, Textarea, Pill, Guard } from "../components.jsx";
 
 export function PageOnboarding() {
   const st = useStore();

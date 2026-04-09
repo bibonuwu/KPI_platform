@@ -97,6 +97,7 @@ export const T = {
   lvlPro: { kz: "Кәсіби", ru: "Профи", en: "Pro" },
   lvlConfident: { kz: "Сенімді", ru: "Уверенный", en: "Confident" },
   lvlNewbie: { kz: "Жаңадан", ru: "Новичок", en: "Newbie" },
+  toNextLevel: { kz: "келесі деңгейге дейін", ru: "до следующего уровня", en: "to next level" },
 
   // ===== DAYS OF WEEK =====
   daySun: { kz: "жексенбі", ru: "воскресенье", en: "Sunday" },

@@ -1,3 +1,4 @@
+import React from "react";
 import { t } from "./i18n.js";
 import {
   auth, db, storage,
@@ -7,6 +8,28 @@ import {
 } from "./firebase-config.js";
 import { store, setState } from "./store.js";
 import { safeText, tsKey, ymd, dateRangeDays, REQUEST_KINDS } from "./utils.js";
+import { NEWS_CATEGORIES } from "./constants.js";
+
+export function renderRichDesc(text) {
+  if (!text) return null;
+  const parts = [];
+  const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)/g;
+  let last = 0;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    if (m[1]) parts.push(React.createElement("strong", { key: m.index }, m[2]));
+    else if (m[3]) parts.push(React.createElement("em", { key: m.index }, m[4]));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+export function newsCatLabel(key) {
+  const c = NEWS_CATEGORIES.find(x => x.key === key);
+  return c ? t(c.tKey) : key;
+}
 
 export async function ensureUserDoc(uid, email) {
   const refU = doc(db, "users", uid);
