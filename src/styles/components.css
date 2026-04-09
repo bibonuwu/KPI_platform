@@ -298,6 +298,20 @@
   color: var(--text);
 }
 
+[data-theme="light"] .select option {
+  background: #fff;
+  color: #131620;
+}
+
+[data-theme="light"] .input:focus,
+[data-theme="light"] .select:focus,
+[data-theme="light"] .textarea:focus {
+  background: #fff;
+  box-shadow:
+    0 0 0 3px rgba(2, 132, 199, .14),
+    0 0 16px rgba(2, 132, 199, .08);
+}
+
 /* Dark mode: ensure all text is visible */
 [data-theme="dark"] .form-label {
   color: var(--muted);
@@ -855,5 +869,76 @@
   position: static;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* ══════════════════════════════════════════════ */
+/* ═══ LIGHT — component visibility fixes ═════ */
+/* ══════════════════════════════════════════════ */
+[data-theme="light"] .card:hover {
+  border-color: rgba(0, 0, 0, .13);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .10);
+}
+
+[data-theme="light"] .sidenav .navlink.active {
+  border-color: rgba(0, 0, 0, .08);
+  box-shadow: none;
+}
+
+[data-theme="light"] .nav-flyout--open > .nav-flyout__head {
+  background: rgba(0, 0, 0, .04);
+  border-color: rgba(0, 0, 0, .08);
+}
+
+[data-theme="light"] .nav-flyout__items {
+  border-left-color: rgba(0, 0, 0, .12);
+}
+
+[data-theme="light"] .podium__item::before {
+  background: linear-gradient(135deg, rgba(2, 132, 199, .06), rgba(3, 105, 161, .03));
+}
+
+[data-theme="light"] .table th,
+[data-theme="light"] .table td {
+  border-bottom-color: rgba(0, 0, 0, .08);
+}
+
+[data-theme="light"] .barchart,
+[data-theme="light"] .chartBox,
+[data-theme="light"] .donutBox,
+[data-theme="light"] .histchart,
+[data-theme="light"] .heatwrap {
+  border-color: rgba(0, 0, 0, .10);
+}
+
+[data-theme="light"] .bottomnav {
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, .12),
+    0 0 1px rgba(0, 0, 0, .10);
+}
+
+[data-theme="light"] .kpi:hover {
+  border-color: rgba(0, 0, 0, .13);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .08);
+}
+
+[data-theme="light"] .btn:hover {
+  border-color: rgba(0, 0, 0, .12);
+}
+
+[data-theme="light"] .iconbtn:hover {
+  border-color: rgba(0, 0, 0, .12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .08);
+}
+
+[data-theme="light"] .podium__item:hover {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, .10);
+}
+
+[data-theme="light"] .sidenav .navlink:hover {
+  border-color: rgba(0, 0, 0, .06);
+}
+
+[data-theme="light"] .nav-flyout__head:hover {
+  border-color: rgba(0, 0, 0, .06);
 }
 
