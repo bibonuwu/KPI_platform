@@ -1911,6 +1911,10 @@ export function PageAdminTeacher() {
     return () => { alive = false; };
   }, [uid, reloadNonce]);
 
+  const [atTab, setAtTab] = useState("overview"); // overview | edit | subs | docs
+  const [teacherDocs, setTeacherDocs] = useState([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
   // Access checks AFTER hooks
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
@@ -1944,10 +1948,6 @@ export function PageAdminTeacher() {
       </div>
     );
   }
-
-  const [atTab, setAtTab] = useState("overview"); // overview | edit | subs | docs
-  const [teacherDocs, setTeacherDocs] = useState([]);
-  const [loadingDocs, setLoadingDocs] = useState(false);
 
   const approved = subs.filter(s => s.status === "approved");
   const pending = subs.filter(s => s.status === "pending");
@@ -2019,49 +2019,51 @@ export function PageAdminTeacher() {
   return (
     <div className="prof">
       {/* ══ Hero Card ══ */}
-      <div className="at-hero glass card" style={{ "--di": 0 }}>
-        <div className="at-hero__body">
-          {/* Avatar */}
-          <div className="at-hero__avatar-wrap">
-            <div className="at-hero__avatar-ring">
-              <div className="at-hero__avatar">
+      <div className="glass card rop-hero" style={{ "--di": 0 }}>
+        <div className="rop-hero__banner" />
+        <div className="rop-hero__content">
+          <div className="rop-hero__avatar-col">
+            <div className="rop-hero__avatar-ring">
+              <div className="rop-hero__avatar">
                 {edit.avatarUrl
                   ? <img src={edit.avatarUrl} alt="" />
                   : <span>{initials}</span>}
               </div>
             </div>
           </div>
-
-          {/* Info */}
-          <div className="at-hero__info">
-            <div className="at-hero__name">{teacherDoc?.displayName || "—"}</div>
-            <div className="at-hero__tags">
+          <div className="rop-hero__info">
+            <div className="rop-hero__name">{teacherDoc?.displayName || "—"}</div>
+            <div className="rop-hero__tags">
               <span className="prof-tag prof-tag--role">{teacherDoc?.role === "admin" ? "Admin" : "Teacher"}</span>
               <span className="prof-tag prof-tag--level">{tLvl.name}</span>
               {teacherDoc?.position && <span className="prof-tag">{teacherDoc.position}</span>}
             </div>
-            <div className="at-hero__email">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" strokeWidth="2" /><polyline points="22,6 12,13 2,6" stroke="currentColor" strokeWidth="2" /></svg>
-              {teacherDoc?.email || uid}
+            <div className="rop-hero__meta">
+              <span className="rop-hero__meta-item"><Icon name="shield" /> {teacherDoc?.email || uid}</span>
+              {teacherDoc?.school && <span className="rop-hero__meta-item"><Icon name="home" /> {teacherDoc.school}</span>}
+              {teacherDoc?.subject && <span className="rop-hero__meta-item"><Icon name="file" /> {teacherDoc.subject}</span>}
             </div>
-            <div className="at-hero__btns">
-              <Btn kind="ghost" className="at-hero__teams-btn" onClick={() => setAtTab("overview")}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-                Teams
-              </Btn>
+            <div className="rop-hero__social">
+              {teacherDoc?.email && (
+                <a href={`https://teams.microsoft.com/l/chat/0/0?users=${teacherDoc.email}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn">
+                  <Icon name="info" /> Teams
+                </a>
+              )}
               <Btn kind="ghost" onClick={() => navigate("admin/users")}><Icon name="arrow-left" /> {t("back")}</Btn>
               <Btn kind="ghost" onClick={() => setReloadNonce(x => x + 1)}><Icon name="refresh" /></Btn>
             </div>
           </div>
-
-          {/* Points box */}
-          <div className="at-hero__points-box">
-            <div className="at-hero__points-num">{fmtPoints(teacherDoc?.totalPoints || 0)}</div>
-            <div className="at-hero__points-label">{t("points").toUpperCase()}</div>
-            <div className="at-hero__points-bar">
-              <div className="at-hero__points-fill" style={{ width: `${tLvl.pct}%` }} />
+          <div className="rop-hero__right">
+            <div className="rop-hero__level-wrap">
+              <div className="rop-hero__level-inner">
+                <div className="rop-hero__level-pts">{fmtPoints(teacherDoc?.totalPoints || 0)}</div>
+                <div className="rop-hero__level-label">{t("points")}</div>
+              </div>
+              <div className="rop-hero__progress-track">
+                <div className="rop-hero__progress-fill" style={{ width: `${tLvl.pct}%` }} />
+              </div>
             </div>
-            {tLvl.next && <div className="at-hero__points-hint">{ptsRemain} {t("toNextLevel")}</div>}
+            {tLvl.next && <div className="rop-hero__level-hint">{ptsRemain} {t("toNextLevel")}</div>}
           </div>
         </div>
       </div>

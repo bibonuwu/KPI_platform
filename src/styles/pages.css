@@ -76,14 +76,11 @@
   }
 }
 
-/* ── hero body ── */
-.prof-hero__body {
+/* ── hero content ── */
+.prof-hero__content {
   position: relative;
   padding: 0 22px 16px;
   margin-top: -28px;
-}
-
-.prof-hero__main {
   display: flex;
   align-items: flex-start;
   gap: 16px;
@@ -337,8 +334,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 12px;
+  margin: 0 22px;
   padding-top: 12px;
+  padding-bottom: 16px;
   border-top: 1px solid var(--border);
   flex-wrap: wrap;
 }
@@ -1161,10 +1159,11 @@
 
 .dash-stat {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  padding: 20px 14px;
-  text-align: center;
+  gap: 12px;
+  padding: 16px 18px;
+  text-align: left;
   position: relative;
   overflow: hidden;
 }
@@ -1183,7 +1182,7 @@
   border-radius: 12px;
   display: grid;
   place-items: center;
-  margin-bottom: 10px;
+  flex-shrink: 0;
   transition: transform .3s ease;
 }
 
