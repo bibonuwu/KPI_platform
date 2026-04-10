@@ -11,7 +11,7 @@ import {
 } from "../store.js";
 import {
   fmtPoints, safeText, ymd, tsKey, sum, lastDays, lastMonths, startYMDFromDays,
-  levelFromPoints, getAcademicYear, QUARTER_RANGES, getQuarterDates, getCurrentQuarter,
+  levelFromPoints, RANK_TABLE, getAcademicYear, QUARTER_RANGES, getQuarterDates, getCurrentQuarter,
   filterByQuarter, getAcademicYearLabel, exportToCsv, exportRatingCsv,
   exportSubmissionsCsv, getQuarterForDate, dateRangeDays, requestKindLabel, REQUEST_KINDS
 } from "../utils.js";
@@ -25,7 +25,7 @@ import {
   fetchMyTeacherDocs, createMyTeacherDoc, uploadTeacherDocFile,
   fetchGoals, createGoal, updateGoal, deleteGoalDoc,
   fetchMyBookQuizAttempts, createBookQuizAttempt, createBookQuizRewardSubmission,
-  renderRichDesc
+  renderRichDesc, ensureUserDoc
 } from "../data.js";
 import {
   Icon, Btn, Input, Select, Textarea, Pill, DataCards, QuarterFilter,
@@ -38,6 +38,19 @@ import {
 export function PageDashboard() {
   const st = useStore();
   const u = st.userDoc;
+  const [showLevelModal, setShowLevelModal] = useState(false);
+  const subs0 = st.mySubmissions || [];
+  const strengths = useMemo(() => {
+    const approved = subs0.filter(s => s.status === "approved" && s.typeSection);
+    const map = {};
+    approved.forEach(s => {
+      const sec = s.typeSection;
+      if (!map[sec]) map[sec] = { section: sec, pts: 0, count: 0 };
+      map[sec].pts += Number(s.points) || 0;
+      map[sec].count++;
+    });
+    return Object.values(map).sort((a, b) => b.pts - a.pts);
+  }, [subs0]);
   if (!u) return <Guard />;
   if (!canAccess("dashboard", u)) return <Guard />;
 
@@ -130,30 +143,148 @@ export function PageDashboard() {
     return <>{fmtPoints(display)}{suffix}</>;
   };
 
+  const lvl = levelFromPoints(u.totalPoints || 0);
+  const nextPts = lvl.next ? lvl.next - (Number(u.totalPoints) || 0) : 0;
+  const igHandle = (u.instagram || "").replace(/^@/, "").trim();
+
   return (
     <div className="dash">
-      {/* Welcome hero */}
-      <div className="dash-hero glass card" style={{ "--di": 0 }}>
-        <div className="dash-hero__text">
-          <div className="dash-hero__greet">{greet}, <strong>{displayName}</strong>!</div>
-          <div className="dash-hero__sub">{t("dashWelcome")}</div>
+      {/* Welcome hero — profile style + animations */}
+      <div className="glass card rop-hero dash-hero-anim" style={{ "--di": 0 }}>
+        <div className="dash-hero-anim__bg">
+          <div className="dash-hero-anim__orb dash-hero-anim__orb--1" />
+          <div className="dash-hero-anim__orb dash-hero-anim__orb--2" />
+          <div className="dash-hero-anim__orb dash-hero-anim__orb--3" />
+          <div className="dash-hero-anim__shimmer" />
         </div>
-        <div className="dash-hero__visual">
-          <div className="dash-hero__ring">
-            <svg viewBox="0 0 120 120" className="dash-hero__svg">
-              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" strokeWidth="8" />
-              <circle cx="60" cy="60" r="52" fill="none" stroke="var(--accent)" strokeWidth="8"
-                strokeDasharray={`${Math.min(totalPts / 100, 1) * 327} 327`}
-                strokeLinecap="round" transform="rotate(-90 60 60)"
-                className="dash-hero__progress" />
-            </svg>
-            <div className="dash-hero__ring-text">
-              <div className="dash-hero__ring-num"><AnimNum value={totalPts} /></div>
-              <div className="dash-hero__ring-label">{t("dashMyPoints")}</div>
+        <div className="rop-hero__content">
+          <div className="rop-hero__avatar-col dash-hero-anim__avatar" onClick={() => navigate("profile")} style={{ cursor: "pointer" }}>
+            <div className="rop-hero__avatar-ring">
+              <div className="rop-hero__avatar">
+                {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : <span>{(u.displayName || u.email || "?").split(/\s+/).filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span>}
+              </div>
             </div>
+          </div>
+          <div className="rop-hero__info dash-hero-anim__info">
+            <div className="rop-hero__name">{greet}, <strong>{displayName}</strong>!</div>
+            <div className="rop-hero__tags">
+              <span className="prof-tag prof-tag--role">{u.role === "admin" ? "Admin" : "Teacher"}</span>
+              <span className="prof-tag prof-tag--level">{lvl.name}</span>
+              {u.position && <span className="prof-tag">{u.position}</span>}
+            </div>
+            <div className="rop-hero__meta">
+              <span className="rop-hero__meta-item"><Icon name="shield" /> {u.email}</span>
+              {u.school && <span className="rop-hero__meta-item"><Icon name="home" /> {u.school}</span>}
+              {u.subject && <span className="rop-hero__meta-item"><Icon name="file" /> {u.subject}</span>}
+            </div>
+            <div className="rop-hero__social">
+              {igHandle && (
+                <a href={`https://instagram.com/${igHandle}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
+                  @{igHandle}
+                </a>
+              )}
+              {u.youtube && (
+                <a href={u.youtube} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--yt">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" /></svg>
+                  YouTube
+                </a>
+              )}
+              {!isAdmin && (
+                <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> {t("addKpi")}</Btn>
+              )}
+              <Btn onClick={() => navigate("profile")}><Icon name="user" /> {t("navProfile")}</Btn>
+            </div>
+          </div>
+          <div className="rop-hero__right dash-hero-anim__right" onClick={() => setShowLevelModal(true)} style={{ cursor: "pointer" }} title={t("lvlModalTitle")}>
+            <div className="rop-hero__level-wrap">
+              <div className="rop-hero__level-inner">
+                <div className="rop-hero__level-pts"><AnimNum value={totalPts} /></div>
+                <div className="rop-hero__level-label">{t("points")}</div>
+              </div>
+              <div className="rop-hero__progress-track">
+                <div className="rop-hero__progress-fill" style={{ width: `${lvl.pct}%` }} />
+              </div>
+            </div>
+            {lvl.next && <div className="rop-hero__level-hint">{nextPts} {t("profileNextLevel").toLowerCase()}</div>}
           </div>
         </div>
       </div>
+
+      {/* Level Modal */}
+      {showLevelModal && createPortal(
+        <div className="lvl-modal-overlay" onClick={() => setShowLevelModal(false)}>
+          <div className="lvl-modal" onClick={e => e.stopPropagation()}>
+            <button className="lvl-modal__close" onClick={() => setShowLevelModal(false)}>&times;</button>
+
+            {/* Header — current rank */}
+            <div className="lvl-modal__header">
+              <div className="lvl-modal__rank-icon" style={{ "--rank-color": lvl.color }}>{lvl.icon}</div>
+              <div className="lvl-modal__rank-info">
+                <div className="lvl-modal__rank-name" style={{ color: lvl.color }}>{lvl.name}</div>
+                <div className="lvl-modal__rank-pts">{fmtPoints(totalPts)} {t("lvlModalPtsRange")}</div>
+                <div className="lvl-modal__rank-desc">{t(`lvlDesc${RANK_TABLE[lvl.idx].key.replace("lvl", "")}`)}</div>
+              </div>
+            </div>
+
+            {/* XP bar */}
+            <div className="lvl-modal__xp">
+              <div className="lvl-modal__xp-track">
+                <div className="lvl-modal__xp-fill" style={{ width: `${lvl.pct}%`, background: `linear-gradient(90deg, ${lvl.color}, ${lvl.color}dd)` }} />
+              </div>
+              <div className="lvl-modal__xp-label">
+                {lvl.next ? <>{fmtPoints(totalPts)} / {fmtPoints(lvl.next)} — {nextPts} {t("toNextLevel")}</> : <>{t("lvlModalCurrent")}: MAX</>}
+              </div>
+            </div>
+
+            {/* All ranks */}
+            <div className="lvl-modal__section-title">{t("lvlModalAllRanks")}</div>
+            <div className="lvl-modal__ranks">
+              {RANK_TABLE.map((r, i) => {
+                const isCurrent = i === lvl.idx;
+                const isLocked = i > lvl.idx;
+                return (
+                  <div key={r.key} className={`lvl-modal__rank-card${isCurrent ? " lvl-modal__rank-card--active" : ""}${isLocked ? " lvl-modal__rank-card--locked" : ""}`} style={{ "--rc": r.color, "--di": i }}>
+                    <div className="lvl-modal__rank-card-icon">{r.icon}</div>
+                    <div className="lvl-modal__rank-card-body">
+                      <div className="lvl-modal__rank-card-name">{t(r.key)}</div>
+                      <div className="lvl-modal__rank-card-range">{r.min}–{r.max} {t("lvlModalPtsRange")}</div>
+                    </div>
+                    {isCurrent && <span className="lvl-modal__rank-badge">{t("lvlModalCurrent")}</span>}
+                    {isLocked && <span className="lvl-modal__rank-lock"><Icon name="shield" /></span>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Strengths */}
+            <div className="lvl-modal__section-title">{t("lvlModalStrengths")}</div>
+            {strengths.length === 0 ? (
+              <div className="lvl-modal__empty">{t("lvlModalNoSubs")}</div>
+            ) : (
+              <div className="lvl-modal__strengths">
+                {strengths.slice(0, 5).map((s, i) => {
+                  const maxPts = strengths[0].pts;
+                  const pct = maxPts ? Math.round((s.pts / maxPts) * 100) : 0;
+                  const colors = ["#87bc2e", "#3b82f6", "#f59e0b", "#a855f7", "#ec4899"];
+                  return (
+                    <div key={s.section} className="lvl-modal__str-row" style={{ "--di": i }}>
+                      <div className="lvl-modal__str-label">
+                        <span className="lvl-modal__str-name">{s.section}</span>
+                        <span className="lvl-modal__str-stat">{s.pts} {t("lvlModalPtsRange")} · {s.count}x</span>
+                      </div>
+                      <div className="lvl-modal__str-bar-track">
+                        <div className="lvl-modal__str-bar-fill" style={{ width: `${pct}%`, background: colors[i % colors.length] }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Stat cards row */}
       <div className="dash-stats">
@@ -261,7 +392,7 @@ export function PageDashboard() {
             <div className="h2">{t("dashTopTeachers")}</div>
             <div className="dash-top">
               {top5.map((tc, idx) => (
-                <div key={tc.uid} className="dash-top__row" style={{ "--delay": `${idx * 0.08}s` }}>
+                <div key={tc.uid} className="dash-top__row" style={{ "--delay": `${idx * 0.08}s` }} onClick={() => setState({ modal: { kind: "teacherProfile", teacher: tc } })}>
                   <div className={`dash-top__rank${idx < 3 ? " dash-top__rank--medal" : ""}`} data-rank={idx + 1}>{idx + 1}</div>
                   <div className="dash-top__info">
                     <div className="dash-top__name">{tc.displayName || tc.email}</div>
@@ -664,7 +795,6 @@ export function PageProfile() {
       const fresh = await ensureUserDoc(u.uid, u.email);
       setState({ userDoc: fresh });
       toast(t("profileUpdated"), "ok");
-      setOpen(false);
     } catch (e) {
       console.error(e);
       toast(e?.message || t("saveError"), "error");

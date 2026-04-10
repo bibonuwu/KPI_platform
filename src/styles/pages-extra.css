@@ -926,60 +926,77 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
 }
 
 [data-theme="light"] .news-sidebar-card {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: rgba(255, 255, 255, .8);
-  border-color: rgba(0, 0, 0, .10);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, .08);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  background: rgba(255, 255, 255, .70);
+  border-color: rgba(0, 0, 0, .06);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, .04),
+    inset 0 1px 0 rgba(255, 255, 255, .8);
 }
 
 [data-theme="light"] .news-sidebar-card:hover {
-  border-color: rgba(0, 0, 0, .14);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, .10);
+  border-color: rgba(14, 165, 233, .18);
+  box-shadow:
+    0 4px 20px rgba(14, 165, 233, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .9);
 }
 
 [data-theme="light"] .news-hero {
-  background: linear-gradient(135deg, rgba(2, 132, 199, .10), rgba(3, 105, 161, .07), rgba(2, 132, 199, .04));
-  border-color: rgba(2, 132, 199, .18);
+  background: linear-gradient(135deg, rgba(14, 165, 233, .08), rgba(139, 92, 246, .04), rgba(14, 165, 233, .03));
+  border-color: rgba(0, 0, 0, .06);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
 }
 
 [data-theme="light"] .news-card {
-  background: rgba(255, 255, 255, .8);
-  border-color: rgba(0, 0, 0, .10);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, .07);
+  background: rgba(255, 255, 255, .72);
+  border-color: rgba(0, 0, 0, .06);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, .04),
+    inset 0 1px 0 rgba(255, 255, 255, .8);
 }
 
 [data-theme="light"] .news-card:hover {
-  border-color: rgba(0, 0, 0, .14);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, .10);
+  border-color: rgba(14, 165, 233, .18);
+  box-shadow:
+    0 6px 24px rgba(14, 165, 233, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .9);
 }
 
 [data-theme="light"] .news-form-card {
-  background: rgba(255, 255, 255, .8);
-  border-color: rgba(2, 132, 199, .18);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, .06);
+  background: rgba(255, 255, 255, .75);
+  border-color: rgba(14, 165, 233, .12);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow:
+    0 2px 12px rgba(0, 0, 0, .04),
+    inset 0 1px 0 rgba(255, 255, 255, .8);
 }
 
 [data-theme="light"] .news-stat-item {
-  background: rgba(255, 255, 255, .7);
-  border-color: rgba(0, 0, 0, .08);
+  background: rgba(255, 255, 255, .60);
+  border-color: rgba(0, 0, 0, .05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7);
 }
 
 [data-theme="light"] .news-desc-toolbar {
-  background: rgba(255, 255, 255, .7);
-  border-color: rgba(0, 0, 0, .10);
+  background: rgba(255, 255, 255, .65);
+  border-color: rgba(0, 0, 0, .05);
 }
 
 [data-theme="light"] .news-filter__btn {
-  border-color: rgba(0, 0, 0, .10);
+  border-color: rgba(0, 0, 0, .06);
 }
 
 [data-theme="light"] .news-comment {
-  background: rgba(0, 0, 0, .03);
+  background: rgba(255, 255, 255, .45);
 }
 
 [data-theme="light"] .news-comment:hover {
-  background: rgba(0, 0, 0, .05);
+  background: rgba(255, 255, 255, .60);
 }
 
 .news-sidebar-card h3 {
@@ -1376,7 +1393,7 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
 
 .news-tb-font {
   border: 1px solid var(--border2);
-  background: rgb(62 65 78);
+  background: var(--bg2);
   color: var(--text);
   font-size: 12px;
   padding: 4px 8px;
@@ -1559,6 +1576,10 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   font-size: 13.5px;
   font-weight: 700;
   color: var(--text);
+  transition: color 0.15s;
+}
+.news-card__author:hover {
+  color: var(--accent);
 }
 
 /* Category pill */
@@ -4071,15 +4092,15 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
 }
 
 .sett__font-card--sans .sett__font-preview {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Times New Roman', Times, serif;
 }
 
 .sett__font-card--system .sett__font-preview {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Roboto', sans-serif;
 }
 
 .sett__font-card--dyslexic .sett__font-preview {
-  font-family: 'Open Dyslexic', 'OpenDyslexic', sans-serif;
+  font-family: 'Montserrat', sans-serif;
 }
 
 .sett__font-label {
@@ -4277,22 +4298,78 @@ body:has([data-route="login"]:not([hidden])) .online-widget {
   margin-bottom: 16px;
 }
 
-.admin-users-right select.input {
-  background: rgba(15, 17, 28, .85);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, .15);
+/* -- Custom position dropdown (admin/users) -- */
+.pos-dd-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: auto;
+  min-width: 240px;
+  max-width: 100%;
+  font-size: 13px;
   font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--glass-border);
 }
-
-.admin-users-right select.input:focus {
+.pos-dd-toggle:focus {
   border-color: var(--accent);
-  background: rgba(15, 17, 28, .95);
 }
-
-.admin-users-right select.input option,
-.admin-users-right select.input optgroup {
-  background: #1a1d2e;
-  color: #fff;
+.pos-dd-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pos-dd-arrow {
+  font-size: 10px;
+  opacity: .5;
+  flex-shrink: 0;
+}
+.pos-dd-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  max-height: 340px;
+  overflow-y: auto;
+  border-radius: var(--radius3);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  z-index: 120;
+  padding: 4px 0;
+}
+[data-theme="dark"] .pos-dd-menu {
+  background: #131620;
+}
+[data-theme="light"] .pos-dd-menu {
+  background: #fff;
+}
+.pos-dd-group {
+  padding: 8px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.pos-dd-item {
+  padding: 7px 14px 7px 22px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background .15s;
+}
+.pos-dd-item:hover {
+  background: var(--hover-bg);
+}
+.pos-dd-item.active {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* -- Admin Documents 3-column layout -- */

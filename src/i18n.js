@@ -92,12 +92,57 @@ export const T = {
   bottomNews: { kz: "Жаңалық", ru: "Жаңалық", en: "News" },
 
   // ===== LEVELS =====
-  lvlLegend: { kz: "Аңыз", ru: "Легенда", en: "Legend" },
-  lvlLeader: { kz: "Лидер", ru: "Лидер", en: "Leader" },
-  lvlPro: { kz: "Кәсіби", ru: "Профи", en: "Pro" },
-  lvlConfident: { kz: "Сенімді", ru: "Уверенный", en: "Confident" },
   lvlNewbie: { kz: "Жаңадан", ru: "Новичок", en: "Newbie" },
+  lvlConfident: { kz: "Сенімді", ru: "Уверенный", en: "Confident" },
+  lvlPro: { kz: "Кәсіби", ru: "Профи", en: "Pro" },
+  lvlLeader: { kz: "Лидер", ru: "Лидер", en: "Leader" },
+  lvlMaster: { kz: "Шебер", ru: "Мастер", en: "Master" },
+  lvlGrandmaster: { kz: "Грандмастер", ru: "Грандмастер", en: "Grandmaster" },
+  lvlLegend: { kz: "Аңыз", ru: "Легенда", en: "Legend" },
   toNextLevel: { kz: "келесі деңгейге дейін", ru: "до следующего уровня", en: "to next level" },
+
+  // ===== LEVEL MODAL =====
+  lvlModalTitle: { kz: "Менің деңгейім", ru: "Мой уровень", en: "My Level" },
+  lvlModalAllRanks: { kz: "Барлық рангтар", ru: "Все ранги", en: "All Ranks" },
+  lvlModalStrengths: { kz: "Менің күшті жақтарым", ru: "Мои сильные стороны", en: "My Strengths" },
+  lvlModalCurrent: { kz: "Ағымдағы", ru: "Текущий", en: "Current" },
+  lvlModalPtsRange: { kz: "балл", ru: "баллов", en: "pts" },
+  lvlModalNoSubs: { kz: "Әзірге жетістіктер жоқ", ru: "Пока нет достижений", en: "No achievements yet" },
+  lvlDescNewbie: {
+    kz: "Сіз жаңа ғана жолға шықтыңыз! Алғашқы KPI-ларыңызды жинаңыз.",
+    ru: "Вы только начали свой путь! Собирайте первые KPI.",
+    en: "You just started your journey! Collect your first KPIs."
+  },
+  lvlDescConfident: {
+    kz: "Жақсы қарқын! Сіз өз күшіңізді көрсете бастадыңыз.",
+    ru: "Хороший темп! Вы начинаете проявлять свою силу.",
+    en: "Good pace! You're starting to show your strength."
+  },
+  lvlDescPro: {
+    kz: "Кәсіби деңгей! Сіз тұрақты нәтижелер көрсетесіз.",
+    ru: "Профессиональный уровень! Вы показываете стабильные результаты.",
+    en: "Professional level! You show consistent results."
+  },
+  lvlDescLeader: {
+    kz: "Сіз лидерсіз! Әріптестер сізден үйренеді.",
+    ru: "Вы лидер! Коллеги учатся у вас.",
+    en: "You're a leader! Colleagues learn from you."
+  },
+  lvlDescMaster: {
+    kz: "Шебер дәрежесі! Сіз шынайы кәсіби маман.",
+    ru: "Уровень мастера! Вы настоящий профессионал.",
+    en: "Master level! You're a true professional."
+  },
+  lvlDescGrandmaster: {
+    kz: "Грандмастер! Сіздің жетістіктеріңіз ерекше.",
+    ru: "Грандмастер! Ваши достижения выдающиеся.",
+    en: "Grandmaster! Your achievements are outstanding."
+  },
+  lvlDescLegend: {
+    kz: "Аңыз! Сіз KPI шыңына жеттіңіз!",
+    ru: "Легенда! Вы достигли вершины KPI!",
+    en: "Legend! You've reached the KPI summit!"
+  },
 
   // ===== DAYS OF WEEK =====
   daySun: { kz: "жексенбі", ru: "воскресенье", en: "Sunday" },
@@ -390,6 +435,33 @@ export const T = {
   reject: { kz: "Қабылдамау", ru: "Reject", en: "Reject" },
   approvedToast: { kz: "Мақұлданды", ru: "Одобрено", en: "Approved" },
   rejectedToast: { kz: "Қабылданбады", ru: "Отклонено", en: "Rejected" },
+  // approvals page extras
+  pendingCount: { kz: "Күтуде", ru: "На проверке", en: "Pending" },
+  approvedCount: { kz: "Мақұлданған", ru: "Одобрено", en: "Approved" },
+  rejectedCount: { kz: "Қабылданбаған", ru: "Отклонено", en: "Rejected" },
+  totalPtsLabel: { kz: "Жалпы балл", ru: "Всего баллов", en: "Total pts" },
+  tabPending: { kz: "Күтуде", ru: "На проверке", en: "Pending" },
+  tabHistory: { kz: "Тарих", ru: "История", en: "History" },
+  searchTeacher: { kz: "Мұғалімді іздеу…", ru: "Поиск учителя…", en: "Search teacher…" },
+  sortBy: { kz: "Сұрыптау", ru: "Сортировка", en: "Sort by" },
+  sortNewest: { kz: "Жаңадан", ru: "Новые", en: "Newest" },
+  sortOldest: { kz: "Ескіден", ru: "Старые", en: "Oldest" },
+  sortPointsHigh: { kz: "Балл ↓", ru: "Баллы ↓", en: "Points ↓" },
+  sortPointsLow: { kz: "Балл ↑", ru: "Баллы ↑", en: "Points ↑" },
+  sortTeacherAZ: { kz: "A-Я", ru: "А-Я", en: "A-Z" },
+  bulkApproveAll: { kz: "Барлығын мақұлдау", ru: "Одобрить все", en: "Approve all" },
+  bulkRejectAll: { kz: "Барлығын қабылдамау", ru: "Отклонить все", en: "Reject all" },
+  bulkSelected: { kz: "таңдалды", ru: "выбрано", en: "selected" },
+  bulkApprove: { kz: "Мақұлдау", ru: "Одобрить", en: "Approve" },
+  bulkReject: { kz: "Қабылдамау", ru: "Отклонить", en: "Reject" },
+  confirmBulk: { kz: "Сенімдісіз бе?", ru: "Вы уверены?", en: "Are you sure?" },
+  groupByTeacher: { kz: "Мұғалім бойынша", ru: "По учителю", en: "By teacher" },
+  expandDetails: { kz: "Толығырақ", ru: "Подробнее", en: "Details" },
+  collapseDetails: { kz: "Жасыру", ru: "Свернуть", en: "Collapse" },
+  noEvidence: { kz: "Дәлелдеме жоқ", ru: "Без доказательств", en: "No evidence" },
+  filterByType: { kz: "Түрі бойынша", ru: "По типу", en: "By type" },
+  allTypes: { kz: "Барлық түрлер", ru: "Все типы", en: "All types" },
+  decidedBy: { kz: "Шешім қабылдаған", ru: "Решение принял", en: "Decided by" },
 
   // ===== ADMIN REQUESTS =====
   adminReqTitle: { kz: "Өтініштер", ru: "Заявления", en: "Requests" },
@@ -811,9 +883,9 @@ export const T = {
 
   settingsGroupFont: { kz: "Қаріп", ru: "Шрифт", en: "Font" },
   settFontDefault: { kz: "Стандартты", ru: "Стандартный", en: "Default" },
-  settFontSans: { kz: "Sans", ru: "Sans", en: "Sans" },
-  settFontSystem: { kz: "Жүйелік", ru: "Системный", en: "System" },
-  settFontDyslexic: { kz: "Дислексия", ru: "Для дислексии", en: "Dyslexic friendly" },
+  settFontSans: { kz: "Times New Roman", ru: "Times New Roman", en: "Times New Roman" },
+  settFontSystem: { kz: "Roboto", ru: "Roboto", en: "Roboto" },
+  settFontDyslexic: { kz: "Montserrat", ru: "Montserrat", en: "Montserrat" },
 
   settGreetMorning: { kz: "Қайырлы таң", ru: "Доброе утро", en: "Good morning" },
   settGreetDay: { kz: "Қайырлы күн", ru: "Добрый день", en: "Good afternoon" },

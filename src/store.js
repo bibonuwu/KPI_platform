@@ -83,9 +83,9 @@ export function toggleTheme() {
 
 export const FONT_MAP = {
   default: "'Onest', system-ui, sans-serif",
-  sans: "'Inter', sans-serif",
-  system: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  dyslexic: "'Open Dyslexic', 'OpenDyslexic', sans-serif"
+  sans: "'Times New Roman', Times, serif",
+  system: "'Roboto', sans-serif",
+  dyslexic: "'Montserrat', sans-serif"
 };
 
 export function applyFont(f) {

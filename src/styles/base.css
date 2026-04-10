@@ -55,9 +55,10 @@ body::before {
 
 [data-theme="light"] body::before {
   background:
-    radial-gradient(ellipse 900px 500px at 10% -5%, rgba(14, 165, 233, .06) 0%, transparent 60%),
-    radial-gradient(ellipse 700px 400px at 90% 95%, rgba(139, 92, 246, .04) 0%, transparent 55%),
-    radial-gradient(ellipse 600px 500px at 50% 50%, rgba(56, 189, 248, .03) 0%, transparent 65%);
+    radial-gradient(ellipse 900px 600px at 5% -10%, rgba(14, 165, 233, .10) 0%, transparent 55%),
+    radial-gradient(ellipse 800px 500px at 90% 95%, rgba(139, 92, 246, .08) 0%, transparent 50%),
+    radial-gradient(ellipse 700px 600px at 50% 40%, rgba(56, 189, 248, .06) 0%, transparent 60%),
+    radial-gradient(ellipse 500px 400px at 75% 20%, rgba(244, 114, 182, .05) 0%, transparent 55%);
 }
 
 /* Floating ambient orb */
@@ -115,9 +116,23 @@ body::before {
   }
 }
 
+/* Light mode — softer floating orbs */
+[data-theme="light"] .bg::before,
+[data-theme="light"] .bg::after {
+  opacity: .10;
+  filter: blur(120px);
+}
+
+[data-theme="light"] .bg::before {
+  background: #0ea5e9;
+}
+
+[data-theme="light"] .bg::after {
+  background: #8b5cf6;
+}
+
 /* Glass utility — liquid glass core */
 .glass {
-  background: var(--surface);
   border: 1px solid var(--glass-border, var(--border));
   backdrop-filter: blur(var(--glass-blur, 28px)) saturate(1.4);
   -webkit-backdrop-filter: blur(var(--glass-blur, 28px)) saturate(1.4);
@@ -181,6 +196,18 @@ body::before {
   transition: background .3s ease, border-color .3s ease, box-shadow .3s ease;
 }
 
+/* Light mode sidebar — frosted glass */
+[data-theme="light"] .sidebar {
+  background: rgba(255, 255, 255, .72);
+  backdrop-filter: blur(36px) saturate(1.4);
+  -webkit-backdrop-filter: blur(36px) saturate(1.4);
+  border-right-color: rgba(0, 0, 0, .06);
+  box-shadow:
+    1px 0 0 rgba(0, 0, 0, .04),
+    4px 0 24px rgba(0, 0, 0, .04),
+    inset -1px 0 0 rgba(255, 255, 255, .6);
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -241,7 +268,7 @@ body::before {
   position: sticky;
   top: 10px;
   z-index: 10;
-  margin: 14px 14px 0;
+  margin: 14px 20px 0;
   padding: 11px 16px;
   border-radius: var(--radius);
   display: flex;
@@ -351,4 +378,3 @@ body::before {
 .route-inner {
   margin: 0 auto;
 }
-

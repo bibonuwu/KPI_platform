@@ -40,65 +40,345 @@ import {
 export function PageAdminApprovals() {
   const st = useStore();
   const u = st.userDoc;
+
+  const [tab, setTab] = useState("pending");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("newest");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [selected, setSelected] = useState(new Set());
+  const [expanded, setExpanded] = useState(new Set());
+  const [groupByTeacher, setGroupByTeacher] = useState(false);
+  const [confirmBulk, setConfirmBulk] = useState(null);
+
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
 
-  const pending = st.pendingSubmissions;
-  const usersMap = new Map(st.users.map(x => [x.uid, x]));
+  const pending = st.pendingSubmissions || [];
+  const allSubs = st.adminRecentSubs || [];
+  const usersMap = new Map((st.users || []).map(x => [x.uid, x]));
 
+  /* ---------- stats ---------- */
+  const approvedAll = allSubs.filter(s => s.status === "approved");
+  const rejectedAll = allSubs.filter(s => s.status === "rejected");
+  const totalPtsPending = pending.reduce((a, s) => a + (Number(s.points) || 0), 0);
+
+  /* ---------- unique KPI types for filter ---------- */
+  const uniqueTypes = useMemo(() => {
+    const m = new Map();
+    pending.forEach(s => { if (s.typeName && !m.has(s.typeName)) m.set(s.typeName, s.typeName); });
+    return [...m.values()].sort();
+  }, [pending]);
+
+  /* ---------- filter + sort pending ---------- */
+  const filtered = useMemo(() => {
+    let arr = [...pending];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      arr = arr.filter(s => {
+        const tu = usersMap.get(s.uid);
+        return (tu?.displayName || "").toLowerCase().includes(q) ||
+               (tu?.email || "").toLowerCase().includes(q) ||
+               (s.typeName || "").toLowerCase().includes(q) ||
+               (s.title || "").toLowerCase().includes(q);
+      });
+    }
+    if (typeFilter !== "all") arr = arr.filter(s => s.typeName === typeFilter);
+    if (sort === "oldest") arr.sort((a, b) => (a.eventDate || "").localeCompare(b.eventDate || ""));
+    else if (sort === "newest") arr.sort((a, b) => (b.eventDate || "").localeCompare(a.eventDate || ""));
+    else if (sort === "ptsHigh") arr.sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0));
+    else if (sort === "ptsLow") arr.sort((a, b) => (Number(a.points) || 0) - (Number(b.points) || 0));
+    else if (sort === "az") arr.sort((a, b) => ((usersMap.get(a.uid)?.displayName || "").localeCompare(usersMap.get(b.uid)?.displayName || "")));
+    return arr;
+  }, [pending, search, typeFilter, sort]);
+
+  /* ---------- group by teacher ---------- */
+  const grouped = useMemo(() => {
+    if (!groupByTeacher) return null;
+    const m = new Map();
+    filtered.forEach(s => {
+      const key = s.uid;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key).push(s);
+    });
+    return [...m.entries()].map(([uid, subs]) => ({ uid, teacher: usersMap.get(uid), subs }));
+  }, [filtered, groupByTeacher]);
+
+  /* ---------- history ---------- */
+  const history = useMemo(() => {
+    return allSubs.filter(s => s.status !== "pending")
+      .sort((a, b) => {
+        const ta = a.decidedAt?.seconds || 0;
+        const tb = b.decidedAt?.seconds || 0;
+        return tb - ta;
+      }).slice(0, 50);
+  }, [allSubs]);
+
+  /* ---------- toggle helpers ---------- */
+  const toggleSelect = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setSelected(new Set(filtered.map(s => s.id)));
+  const deselectAll = () => setSelected(new Set());
+  const toggleExpand = (id) => setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  /* ---------- single decide ---------- */
   async function decide(id, action) {
     try {
       setState({ loading: true });
       if (action === "approve") await approveSubmission(id, u.uid);
       else await rejectSubmission(id, u.uid);
-
       toast(action === "approve" ? t("approvedToast") : t("rejectedToast"), "ok");
-
-      const [p, users] = await Promise.all([fetchPendingSubmissions(), fetchUsersAll()]);
-      setState({ pendingSubmissions: p, users });
+      const [p, recent, users] = await Promise.all([fetchPendingSubmissions(), fetchAdminRecentSubs(), fetchUsersAll()]);
+      setState({ pendingSubmissions: p, adminRecentSubs: recent, users });
+      setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
     } catch (e) {
       console.error(e);
       toast(e?.message || t("error"), "error");
     } finally { setState({ loading: false }); }
   }
 
-  return (
-    <div className="glass card">
-      {!pending.length && <p className="p muted" style={{ padding: "12px 0" }}>{t("noSubsToReview")}</p>}
-      <div className="mobile-cards">
-        {pending.map(s => {
-          const tu = usersMap.get(s.uid);
-          return (
-            <div key={s.id} className="mobile-card glass">
-              <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("teacher")}</span>
-                <span className="mobile-card__val"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || s.uid}</div></span>
-              </div>
-              <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("typeAndTitle")}</span>
-                <span className="mobile-card__val"><b>{s.typeName}</b><div className="muted tiny">{s.title}</div>{s.description ? <div className="muted tiny">{s.description}</div> : null}</span>
-              </div>
-              <div className="mobile-card__row">
-                <span className="mobile-card__label">{t("dateAndPts")}</span>
-                <span className="mobile-card__val">{s.eventDate} · <b>{fmtPoints(s.points)} pts</b></span>
-              </div>
-              {(s.evidenceLink || s.evidenceFileUrl) && (
-                <div className="mobile-card__row">
-                  <span className="mobile-card__label">{t("evidence")}</span>
-                  <span className="mobile-card__val" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {s.evidenceLink ? <a className="btn" href={s.evidenceLink} target="_blank" rel="noreferrer">{t("link")}</a> : null}
-                    {s.evidenceFileUrl ? <a className="btn" href={s.evidenceFileUrl} target="_blank" rel="noreferrer">{t("file")}</a> : null}
-                  </span>
-                </div>
-              )}
-              <div className="mobile-card__actions">
-                <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /> {t("approve")}</Btn>
-                <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /> {t("reject")}</Btn>
-              </div>
-            </div>
-          );
-        })}
+  /* ---------- bulk decide ---------- */
+  async function bulkDecide(action) {
+    if (!selected.size) return;
+    setConfirmBulk(null);
+    try {
+      setState({ loading: true });
+      const ids = [...selected];
+      for (const id of ids) {
+        if (action === "approve") await approveSubmission(id, u.uid);
+        else await rejectSubmission(id, u.uid);
+      }
+      toast(`${action === "approve" ? t("approvedToast") : t("rejectedToast")} (${ids.length})`, "ok");
+      const [p, recent, users] = await Promise.all([fetchPendingSubmissions(), fetchAdminRecentSubs(), fetchUsersAll()]);
+      setState({ pendingSubmissions: p, adminRecentSubs: recent, users });
+      setSelected(new Set());
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || t("error"), "error");
+    } finally { setState({ loading: false }); }
+  }
+
+  /* ---------- render a single submission card ---------- */
+  const renderCard = (s, idx) => {
+    const tu = usersMap.get(s.uid);
+    const isSelected = selected.has(s.id);
+    const isExpanded = expanded.has(s.id);
+    const hasEvidence = s.evidenceLink || s.evidenceFileUrl;
+    const initials = (tu?.displayName || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+    return (
+      <div key={s.id} className={`appr-card glass${isSelected ? " appr-card--selected" : ""}`} style={{ "--di": idx }}>
+        {/* select checkbox */}
+        <label className="appr-card__check">
+          <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(s.id)} />
+          <span className="appr-card__checkmark" />
+        </label>
+
+        {/* avatar + teacher info */}
+        <div className="appr-card__header">
+          <div className="appr-card__avatar" title={tu?.displayName || ""}>{initials}</div>
+          <div className="appr-card__teacher">
+            <b>{tu?.displayName || "—"}</b>
+            <span className="muted tiny">{tu?.email || s.uid}</span>
+          </div>
+          <div className="appr-card__pts">
+            <span className="appr-card__pts-num">{fmtPoints(s.points)}</span>
+            <span className="appr-card__pts-label">pts</span>
+          </div>
+        </div>
+
+        {/* main info */}
+        <div className="appr-card__body">
+          <div className="appr-card__type">
+            <Pill kind="pending">{s.typeName}</Pill>
+            {s.typeSection && <span className="muted tiny">{s.typeSection}{s.typeSubsection ? ` / ${s.typeSubsection}` : ""}</span>}
+          </div>
+          <div className="appr-card__title">{s.title}</div>
+          <div className="appr-card__meta">
+            <span className="appr-card__date"><Icon name="file" /> {s.eventDate}</span>
+            {hasEvidence && (
+              <span className="appr-card__evidence">
+                {s.evidenceLink && <a className="appr-card__ev-link" href={s.evidenceLink} target="_blank" rel="noreferrer"><Icon name="eye" /> {t("link")}</a>}
+                {s.evidenceFileUrl && <a className="appr-card__ev-link" href={s.evidenceFileUrl} target="_blank" rel="noreferrer"><Icon name="file" /> {t("file")}</a>}
+              </span>
+            )}
+            {!hasEvidence && <span className="muted tiny">{t("noEvidence")}</span>}
+          </div>
+        </div>
+
+        {/* expandable description */}
+        {s.description && (
+          <>
+            <button className={`appr-card__expand${isExpanded ? " appr-card__expand--open" : ""}`} onClick={() => toggleExpand(s.id)}>
+              {isExpanded ? t("collapseDetails") : t("expandDetails")}
+              <Icon name="chevron" />
+            </button>
+            {isExpanded && <div className="appr-card__desc">{s.description}</div>}
+          </>
+        )}
+
+        {/* actions */}
+        <div className="appr-card__actions">
+          <Btn kind="ok" onClick={() => decide(s.id, "approve")} disabled={st.loading}><Icon name="check" /> {t("approve")}</Btn>
+          <Btn kind="danger" onClick={() => decide(s.id, "reject")} disabled={st.loading}><Icon name="x" /> {t("reject")}</Btn>
+        </div>
       </div>
+    );
+  };
+
+  return (
+    <div className="appr-page">
+      {/* ── stat cards ── */}
+      <div className="appr-stats">
+        <div className="appr-stat appr-stat--pending">
+          <div className="appr-stat__icon"><Icon name="clipboard" /></div>
+          <div className="appr-stat__body">
+            <div className="appr-stat__num">{pending.length}</div>
+            <div className="appr-stat__label">{t("pendingCount")}</div>
+          </div>
+        </div>
+        <div className="appr-stat appr-stat--approved">
+          <div className="appr-stat__icon"><Icon name="check" /></div>
+          <div className="appr-stat__body">
+            <div className="appr-stat__num">{approvedAll.length}</div>
+            <div className="appr-stat__label">{t("approvedCount")}</div>
+          </div>
+        </div>
+        <div className="appr-stat appr-stat--rejected">
+          <div className="appr-stat__icon"><Icon name="x" /></div>
+          <div className="appr-stat__body">
+            <div className="appr-stat__num">{rejectedAll.length}</div>
+            <div className="appr-stat__label">{t("rejectedCount")}</div>
+          </div>
+        </div>
+        <div className="appr-stat appr-stat--pts">
+          <div className="appr-stat__icon"><Icon name="chart" /></div>
+          <div className="appr-stat__body">
+            <div className="appr-stat__num">{fmtPoints(totalPtsPending)}</div>
+            <div className="appr-stat__label">{t("totalPtsLabel")}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── tabs ── */}
+      <div className="appr-tabs">
+        <button className={`appr-tab${tab === "pending" ? " appr-tab--active" : ""}`} onClick={() => setTab("pending")}>
+          <Icon name="clipboard" /> {t("tabPending")}
+          {pending.length > 0 && <span className="appr-tab__badge">{pending.length}</span>}
+        </button>
+        <button className={`appr-tab${tab === "history" ? " appr-tab--active" : ""}`} onClick={() => setTab("history")}>
+          <Icon name="file" /> {t("tabHistory")}
+        </button>
+      </div>
+
+      {/* ── PENDING TAB ── */}
+      {tab === "pending" && (
+        <div className="appr-pending">
+          {/* toolbar */}
+          <div className="appr-toolbar glass card">
+            <div className="appr-toolbar__row">
+              <div className="appr-toolbar__search">
+                <Icon name="user" />
+                <input className="input" placeholder={t("searchTeacher")} value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+
+              <Select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ maxWidth: 200 }}>
+                <option value="all">{t("allTypes")}</option>
+                {uniqueTypes.map(tp => <option key={tp} value={tp}>{tp}</option>)}
+              </Select>
+
+              <Select value={sort} onChange={e => setSort(e.target.value)} style={{ maxWidth: 170 }}>
+                <option value="newest">{t("sortNewest")}</option>
+                <option value="oldest">{t("sortOldest")}</option>
+                <option value="ptsHigh">{t("sortPointsHigh")}</option>
+                <option value="ptsLow">{t("sortPointsLow")}</option>
+                <option value="az">{t("sortTeacherAZ")}</option>
+              </Select>
+
+              <label className="appr-toolbar__toggle">
+                <input type="checkbox" checked={groupByTeacher} onChange={e => setGroupByTeacher(e.target.checked)} />
+                <span>{t("groupByTeacher")}</span>
+              </label>
+            </div>
+
+            {/* bulk actions bar */}
+            {selected.size > 0 && (
+              <div className="appr-bulk">
+                <span className="appr-bulk__count"><b>{selected.size}</b> {t("bulkSelected")}</span>
+                <Btn kind="ok" onClick={() => setConfirmBulk("approve")} disabled={st.loading}><Icon name="check" /> {t("bulkApprove")}</Btn>
+                <Btn kind="danger" onClick={() => setConfirmBulk("reject")} disabled={st.loading}><Icon name="x" /> {t("bulkReject")}</Btn>
+                <Btn kind="" onClick={deselectAll}>{t("deselectAll")}</Btn>
+              </div>
+            )}
+            {selected.size === 0 && filtered.length > 0 && (
+              <div className="appr-bulk appr-bulk--hint">
+                <Btn kind="" onClick={selectAll}>{t("selectAll")} ({filtered.length})</Btn>
+              </div>
+            )}
+          </div>
+
+          {/* bulk confirm overlay */}
+          {confirmBulk && createPortal(
+            <div className="appr-overlay" onClick={() => setConfirmBulk(null)}>
+              <div className="appr-confirm glass" onClick={e => e.stopPropagation()}>
+                <div className={`appr-confirm__icon appr-confirm__icon--${confirmBulk}`}>
+                  <Icon name={confirmBulk === "approve" ? "check" : "x"} />
+                </div>
+                <p className="appr-confirm__title">{t("confirmBulk")}</p>
+                <p className="appr-confirm__sub">{selected.size} {t("bulkSelected")}</p>
+                <div className="appr-confirm__btns">
+                  <Btn kind={confirmBulk === "approve" ? "ok" : "danger"} onClick={() => bulkDecide(confirmBulk)}>
+                    <Icon name={confirmBulk === "approve" ? "check" : "x"} /> {confirmBulk === "approve" ? t("approve") : t("reject")} ({selected.size})
+                  </Btn>
+                  <Btn onClick={() => setConfirmBulk(null)}>{t("cancel")}</Btn>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )}
+
+          {/* empty state */}
+          {!filtered.length && <div className="appr-empty glass card"><Icon name="check" /><p>{t("noSubsToReview")}</p></div>}
+
+          {/* cards — grouped or flat */}
+          {groupByTeacher && grouped ? (
+            <div className="appr-groups">
+              {grouped.map(g => (
+                <div key={g.uid} className="appr-group">
+                  <div className="appr-group__header glass">
+                    <div className="appr-card__avatar">{(g.teacher?.displayName || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}</div>
+                    <div>
+                      <b>{g.teacher?.displayName || "—"}</b>
+                      <div className="muted tiny">{g.teacher?.email || g.uid} · {g.subs.length} {t("tabPending").toLowerCase()}</div>
+                    </div>
+                  </div>
+                  <div className="appr-cards">{g.subs.map((s, i) => renderCard(s, i))}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="appr-cards">{filtered.map((s, i) => renderCard(s, i))}</div>
+          )}
+        </div>
+      )}
+
+      {/* ── HISTORY TAB ── */}
+      {tab === "history" && (
+        <div className="appr-history glass card">
+          <div className="h2">{t("recentDecisions")}</div>
+          <div className="sep" />
+          <DataCards
+            emptyText={t("noHistory")}
+            columns={[
+              { key: "teacher", label: t("teacher"), render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
+              { key: "type", label: t("typeAndTitle"), render: r => <><b>{r.typeName}</b><div className="muted tiny">{r.title}</div></> },
+              { key: "date", label: t("date"), render: r => r.eventDate },
+              { key: "pts", label: t("points"), render: r => <b>{fmtPoints(r.points)}</b> },
+              { key: "status", label: t("status"), render: r => <Pill kind={r.status}>{r.status}</Pill> },
+              { key: "decidedBy", label: t("decidedBy"), render: r => { const a = usersMap.get(r.decidedBy); return a?.displayName || "—"; } }
+            ]}
+            rows={history.map(r => ({ ...r, __key: r.id }))}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1263,6 +1543,8 @@ export function PageAdminUsers() {
   const [confirmRole, setConfirmRole] = useState(null);
   const [groupFilter, setGroupFilter] = useState("");
   const [posFilter, setPosFilter] = useState("");
+  const [posDdOpen, setPosDdOpen] = useState(false);
+  const posDdRef = useRef(null);
   const [selectedUid, setSelectedUid] = useState(null);
   const [customPos, setCustomPos] = useState([]);
   const [newPosName, setNewPosName] = useState("");
@@ -1280,6 +1562,13 @@ export function PageAdminUsers() {
   useEffect(() => {
     fetchCustomPositions().then(setCustomPos).catch(() => { });
   }, []);
+
+  useEffect(() => {
+    if (!posDdOpen) return;
+    const h = (e) => { if (posDdRef.current && !posDdRef.current.contains(e.target)) setPosDdOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [posDdOpen]);
 
   const loadLogs = async () => {
     try {
@@ -1605,7 +1894,7 @@ export function PageAdminUsers() {
       {/* ===== Users layout ===== */}
       {usersTab === "users" && <div>
           {/* Filters */}
-          <div className="glass card" style={{ marginBottom: 16 }}>
+          <div className="glass card" style={{ marginBottom: 16, overflow: "visible", zIndex: 10 }}>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
               <div style={{ flex: 1, minWidth: 200 }}>
                 <Input value={q} onChange={e => setQ(e.target.value)} placeholder={t("searchPlaceholder")} />
@@ -1623,24 +1912,35 @@ export function PageAdminUsers() {
               ))}
             </div>
             {uniquePositions.length > 0 && (
-              <div style={{ marginTop: 10 }}>
-                <select className="input" style={{ width: "auto", minWidth: 240, maxWidth: "100%", fontSize: 13 }} value={posFilter} onChange={e => setPosFilter(e.target.value)}>
-                  <option value="">{t("allStaff")} ({afterGroupFilter.length})</option>
-                  {STAFF_GROUPS.map(g => {
-                    const gPositions = uniquePositions.filter(p => {
-                      const pg = POSITION_GROUP_MAP[p.toLowerCase()];
-                      return pg ? pg === g.key : g.key === "teacher";
-                    });
-                    if (!gPositions.length) return null;
-                    return (
-                      <optgroup key={g.key} label={`${g.label} (${gPositions.reduce((s, p) => s + (posCounts[p] || 0), 0)})`}>
-                        {gPositions.map(p => (
-                          <option key={p} value={p}>{p} ({posCounts[p] || 0})</option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
-                </select>
+              <div style={{ marginTop: 10, position: "relative" }} ref={posDdRef}>
+                <button type="button" className="input pos-dd-toggle" onClick={() => setPosDdOpen(!posDdOpen)}>
+                  <span className="pos-dd-text">{posFilter ? `${posFilter} (${posCounts[posFilter] || 0})` : `${t("allStaff")} (${afterGroupFilter.length})`}</span>
+                  <span className="pos-dd-arrow">{posDdOpen ? "\u25B2" : "\u25BC"}</span>
+                </button>
+                {posDdOpen && (
+                  <div className="pos-dd-menu">
+                    <div className={"pos-dd-item" + (!posFilter ? " active" : "")} onClick={() => { setPosFilter(""); setPosDdOpen(false); }}>
+                      {t("allStaff")} ({afterGroupFilter.length})
+                    </div>
+                    {STAFF_GROUPS.map(g => {
+                      const gPositions = uniquePositions.filter(p => {
+                        const pg = POSITION_GROUP_MAP[p.toLowerCase()];
+                        return pg ? pg === g.key : g.key === "teacher";
+                      });
+                      if (!gPositions.length) return null;
+                      return (
+                        <React.Fragment key={g.key}>
+                          <div className="pos-dd-group">{g.label} ({gPositions.reduce((s, p) => s + (posCounts[p] || 0), 0)})</div>
+                          {gPositions.map(p => (
+                            <div key={p} className={"pos-dd-item" + (posFilter === p ? " active" : "")} onClick={() => { setPosFilter(p); setPosDdOpen(false); }}>
+                              {p} ({posCounts[p] || 0})
+                            </div>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

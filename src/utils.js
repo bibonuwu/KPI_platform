@@ -50,13 +50,28 @@ export function startYMDFromDays(days) {
   return ymd(d);
 }
 
+export const RANK_TABLE = [
+  { key: "lvlNewbie",     min: 0,    max: 49,   icon: "🌱", color: "#9ca3af" },
+  { key: "lvlConfident",  min: 50,   max: 149,  icon: "⚡", color: "#60a5fa" },
+  { key: "lvlPro",        min: 150,  max: 299,  icon: "🔥", color: "#f59e0b" },
+  { key: "lvlLeader",     min: 300,  max: 499,  icon: "👑", color: "#a855f7" },
+  { key: "lvlMaster",     min: 500,  max: 699,  icon: "💎", color: "#3b82f6" },
+  { key: "lvlGrandmaster",min: 700,  max: 899,  icon: "🏆", color: "#ec4899" },
+  { key: "lvlLegend",     min: 900,  max: 1000, icon: "🐉", color: "#ef4444" },
+];
+
 export function levelFromPoints(p) {
   const x = Number(p) || 0;
-  if (x >= 500) return { name: t("lvlLegend"), next: null, pct: 100 };
-  if (x >= 300) return { name: t("lvlLeader"), next: 500, pct: Math.round(((x - 300) / (200)) * 100) };
-  if (x >= 150) return { name: t("lvlPro"), next: 300, pct: Math.round(((x - 150) / (150)) * 100) };
-  if (x >= 50) return { name: t("lvlConfident"), next: 150, pct: Math.round(((x - 50) / (100)) * 100) };
-  return { name: t("lvlNewbie"), next: 50, pct: Math.round((x / 50) * 100) };
+  for (let i = RANK_TABLE.length - 1; i >= 0; i--) {
+    const r = RANK_TABLE[i];
+    if (x >= r.min) {
+      const next = i < RANK_TABLE.length - 1 ? RANK_TABLE[i + 1].min : null;
+      const range = (r.max + 1) - r.min;
+      const pct = next ? Math.min(100, Math.round(((x - r.min) / range) * 100)) : 100;
+      return { name: t(r.key), next, pct, idx: i, icon: r.icon, color: r.color };
+    }
+  }
+  return { name: t("lvlNewbie"), next: 50, pct: Math.round((x / 50) * 100), idx: 0, icon: "🌱", color: "#9ca3af" };
 }
 
 export function getAcademicYear(date = new Date()) {

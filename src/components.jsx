@@ -19,7 +19,8 @@ import {
 import { DEFAULT_TYPES, NEWS_CAT_ICONS, NEWS_CATEGORIES } from "./constants.js";
 import {
   fetchGoals, createGoal, updateGoal, deleteGoalDoc, uploadAvatar,
-  updateProfile, setUserOnline, fetchNewsAll, renderRichDesc, newsCatLabel
+  updateProfile, setUserOnline, fetchNewsAll, renderRichDesc, newsCatLabel,
+  ensureUserDoc
 } from "./data.js";
 
 export function Icon({ name }) {
@@ -1224,7 +1225,7 @@ export function TeacherProfileModal() {
         {!loadingGoals && teacherGoals.length > 0 && (
           <div className="tp-goals">
             <div className="tp-goals__title">{t("teacherGoals")}</div>
-            {activeGoals.map(g => {
+            {activeGoals.slice(0, 1).map(g => {
               const pct = goalPct(g);
               const dl = daysUntil(g.deadline);
               const barColor = pct >= 100 ? "var(--green)" : (dl !== null && dl < 0) ? "var(--red)" : "var(--accent)";
@@ -1246,10 +1247,11 @@ export function TeacherProfileModal() {
                 </div>
               );
             })}
+            {activeGoals.length > 1 && <div className="tiny muted" style={{ textAlign: "center" }}>+{activeGoals.length - 1} {t("goals").toLowerCase()}</div>}
             {completedGoals.length > 0 && (
               <div className="tp-goals__completed">
                 <div className="tiny muted" style={{ marginBottom: 4 }}>{t("goalCompleted")} ({completedGoals.length})</div>
-                {completedGoals.slice(0, 3).map(g => (
+                {completedGoals.slice(0, 2).map(g => (
                   <div key={g.id} className="tp-goal tp-goal--done">
                     <div className="tp-goal__head">
                       <span style={{ color: "var(--green)", marginRight: 4 }}>✓</span>
@@ -1841,7 +1843,7 @@ export function generateDocHTML(request, user, signatureUrl, adminSignatureUrl) 
     <div class="sub">${t("toSchoolPrincipal")}</div>
   </div>
   <div class="title">${t("statement")}</div>
-  <div class="field"><span class="field-label">${t("fromWhom")}:</span> ${user.displayName || user.email || "—"}</div>
+  <div class="field"><span class="field-label">${t("fullName")}:</span> ${user.displayName || user.email || "—"}</div>
   <div class="field"><span class="field-label">${t("positionLabel")}:</span> ${user.position || user.subject || "—"}</div>
   ${user.school ? `<div class="field"><span class="field-label">${t("schoolLabel")}:</span> ${user.school}</div>` : ""}
   <div class="field"><span class="field-label">${t("requestTypeLabel")}:</span> <b>${kindLabel}</b></div>
@@ -1902,7 +1904,7 @@ export function DocumentPreview({ request, user, signatureUrl, adminSignatureUrl
 
       <div className="doc-preview__body">
         <div className="doc-preview__field">
-          <span className="doc-preview__field-label">{t("fromWhom")}:</span>
+          <span className="doc-preview__field-label">{t("fullName")}:</span>
           <span className="doc-preview__field-value">{user.displayName || user.email || "—"}</span>
         </div>
         <div className="doc-preview__field">

@@ -29,6 +29,7 @@ import {
 } from "../components.jsx";
 
 export function NewsCard({ item, user, index }) {
+  const st = useStore();
   const [liked, setLiked] = useState((item.likes || []).includes(user?.uid));
   const [likesCount, setLikesCount] = useState((item.likes || []).length);
   const [likeAnim, setLikeAnim] = useState(false);
@@ -126,7 +127,11 @@ export function NewsCard({ item, user, index }) {
             : <div className="news-card__avatar news-card__avatar--ph">{(item.authorName || "A")[0].toUpperCase()}</div>
           }
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="news-card__author">{item.authorName || t("anonymous")}</div>
+            <div className="news-card__author" style={{ cursor: "pointer" }} onClick={(e) => {
+              e.stopPropagation();
+              const teacher = (st.users || []).find(u => u.uid === item.uid);
+              if (teacher) setState({ modal: { kind: "teacherProfile", teacher } });
+            }}>{item.authorName || t("anonymous")}</div>
             <div className="tiny muted">{timeAgo}</div>
           </div>
           <span className={`news-pill news-pill--${item.category}`}>{catLabel}</span>
@@ -331,7 +336,7 @@ export function PageNews() {
   const authorMap = new Map();
   localNews.forEach(n => {
     const name = n.authorName || t("anonymous");
-    const prev = authorMap.get(name) || { name, avatarUrl: n.avatarUrl || "", count: 0 };
+    const prev = authorMap.get(name) || { name, avatarUrl: n.avatarUrl || "", uid: n.uid, count: 0 };
     prev.count++;
     authorMap.set(name, prev);
   });
@@ -512,7 +517,10 @@ export function PageNews() {
                 {t("topAuthors")}
               </h3>
               {topAuthors.map((a, i) => (
-                <div key={i} className="news-author-item">
+                <div key={i} className="news-author-item" style={{ cursor: "pointer" }} onClick={() => {
+                  const teacher = (st.users || []).find(u => u.uid === a.uid);
+                  if (teacher) setState({ modal: { kind: "teacherProfile", teacher } });
+                }}>
                   {a.avatarUrl
                     ? <img className="news-author-av" src={a.avatarUrl} alt="" />
                     : <div className="news-author-av news-author-av--ph">{a.name[0].toUpperCase()}</div>
