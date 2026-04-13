@@ -208,6 +208,12 @@ body::before {
     inset -1px 0 0 rgba(255, 255, 255, .6);
 }
 
+[data-theme="light"] .brand__logo {
+  background: rgba(14, 165, 233, .08);
+  border-color: rgba(0, 0, 0, .06);
+  box-shadow: 0 3px 12px rgba(14, 165, 233, .10);
+}
+
 .brand {
   display: flex;
   align-items: center;

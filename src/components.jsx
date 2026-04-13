@@ -50,6 +50,10 @@ export function Icon({ name }) {
     case "settings": return <svg {...common}><circle {...s} cx="12" cy="12" r="3" /><path {...s} d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1.08-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1.08 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001.08 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1.08z" /></svg>;
     case "refresh": return <svg {...common}><path {...s} d="M23 4v6h-6" /><path {...s} d="M1 20v-6h6" /><path {...s} d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" /></svg>;
     case "bell": return <svg {...common}><path {...s} d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path {...s} d="M13.73 21a2 2 0 01-3.46 0" /></svg>;
+    case "calendar": return <svg {...common}><rect {...s} x="3" y="4" width="18" height="18" rx="2" /><path {...s} d="M16 2v4M8 2v4M3 10h18" /></svg>;
+    case "clock": return <svg {...common}><circle {...s} cx="12" cy="12" r="10" /><path {...s} d="M12 6v6l4 2" /></svg>;
+    case "trending-up": return <svg {...common}><path {...s} d="M23 6l-9.5 9.5-5-5L1 18" /><path {...s} d="M17 6h6v6" /></svg>;
+    case "hash": return <svg {...common}><path {...s} d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" /></svg>;
     default: return null;
   }
 }
@@ -163,6 +167,18 @@ export function GoalsWidget({ compact = false }) {
       return { earned, pct: Math.min(100, goal.manualProgress) };
     }
     let relevantSubs = approvedSubs;
+    // Only count submissions created after the goal was created
+    if (goal.createdAt) {
+      const goalCreated = goal.createdAt?.seconds ? goal.createdAt.seconds * 1000
+        : goal.createdAt?.toDate ? goal.createdAt.toDate().getTime()
+        : new Date(goal.createdAt).getTime();
+      relevantSubs = relevantSubs.filter(s => {
+        const subTime = s.createdAt?.seconds ? s.createdAt.seconds * 1000
+          : s.createdAt?.toDate ? s.createdAt.toDate().getTime()
+          : new Date(s.createdAt || 0).getTime();
+        return subTime >= goalCreated;
+      });
+    }
     if (goal.section) {
       relevantSubs = relevantSubs.filter(s => s.typeSection === goal.section);
     }
@@ -185,6 +201,7 @@ export function GoalsWidget({ compact = false }) {
   };
 
   const startEdit = (g) => {
+    if (editId === g.id && showForm) { resetForm(); return; }
     setEditId(g.id);
     setTarget(String(g.targetPoints || ""));
     setDeadline(g.deadline || "");
@@ -1926,14 +1943,18 @@ export function DocumentPreview({ request, user, signatureUrl, adminSignatureUrl
           <span className="doc-preview__field-value">{request.dateFrom}{request.dateTo && request.dateTo !== request.dateFrom ? ` — ${request.dateTo}` : ""}</span>
         </div>
         {request.note && (
-          <div className="doc-preview__field">
+          <div className="doc-preview__field doc-preview__field--reason">
             <span className="doc-preview__field-label">{t("reasonLabel")}:</span>
             <span className="doc-preview__field-value">{request.note}</span>
           </div>
         )}
         <div className="doc-preview__field">
-          <span className="doc-preview__field-label">{t("daysCount")}:</span>
-          <span className="doc-preview__field-value">{request.days || dateRangeDays(request.dateFrom, request.dateTo)}</span>
+          <span className="doc-preview__field-label">{request.timeFrom && request.timeTo ? t("leaveTimeLabel") : t("daysCount")}:</span>
+          <span className="doc-preview__field-value">
+            {request.timeFrom && request.timeTo
+              ? (() => { const [h1,m1]=request.timeFrom.split(":").map(Number), [h2,m2]=request.timeTo.split(":").map(Number); return `${Math.max(0,Math.round(((h2*60+m2)-(h1*60+m1))/30)/2)} ${t("hours")}  (${request.timeFrom} — ${request.timeTo})`; })()
+              : (request.days || dateRangeDays(request.dateFrom, request.dateTo))}
+          </span>
         </div>
         <div className="doc-preview__field">
           <span className="doc-preview__field-label">{t("statusLabel")}:</span>

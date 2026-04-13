@@ -21,10 +21,10 @@ import {
   deleteTypeDoc, updateType, fetchUsersAll, fetchMySubmissions,
   fetchPendingSubmissions, fetchAdminRecentSubs, createSubmission,
   approveSubmission, rejectSubmission, fetchMyRequests, fetchPendingRequests,
-  fetchAdminRecentRequests, createTeacherRequest, decideTeacherRequest,
+  fetchAdminRecentRequests, createTeacherRequest, decideTeacherRequest, clearRequestHistory,
   setRole, setPosition, logAdminAction, fetchAdminLogs, updateProfile,
   uploadAvatar, uploadEvidence, fetchDocumentsForTeacher, fetchAllDocuments,
-  signDocument, markDocumentViewed, createDocument,
+  signDocument, markDocumentViewed, createDocument, uploadFile,
   fetchMyTeacherDocs, createMyTeacherDoc, uploadTeacherDocFile,
   deleteUserAndData, fetchCustomPositions, saveCustomPositions,
   fetchGoals, fetchNewsAll, renderRichDesc
@@ -386,19 +386,14 @@ export function PageAdminApprovals() {
 export function PageAdminRequests() {
   const st = useStore();
   const u = st.userDoc;
-  const [deltas, setDeltas] = useState({}); // hook before early return
+  const [tab, setTab] = useState("pending");
+  const [viewReq, setViewReq] = useState(null);
 
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
 
   const pending = st.pendingRequests || [];
   const usersMap = new Map((st.users || []).map(x => [x.uid, x]));
-
-  const getDelta = (id) => {
-    const v = deltas[id];
-    return (v === 0 || v) ? Number(v) : 0;
-  };
-  const setDelta = (id, v) => setDeltas(m => ({ ...m, [id]: v }));
 
   const compPreview = (r) => {
     const days = Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo);
@@ -410,11 +405,24 @@ export function PageAdminRequests() {
     return x > 0 ? `+${x}` : String(x);
   };
 
+  const fmtHours = (tf, tt) => {
+    if (!tf || !tt) return "";
+    const [h1, m1] = tf.split(":").map(Number);
+    const [h2, m2] = tt.split(":").map(Number);
+    const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+    return Math.max(0, Math.round(diff / 30) / 2);
+  };
+
+  const actionLabels = (kind) => {
+    if (kind === "weekend_work") return { ok: t("addDayOff"), no: t("dontAddDayOff") };
+    if (kind === "early_leave") return { ok: t("allowEarlyLeave"), no: t("denyEarlyLeave") };
+    return { ok: t("allowLeave"), no: t("denyLeave") };
+  };
+
   async function decide(id, action) {
     try {
       setState({ loading: true });
-      const delta = getDelta(id);
-      await decideTeacherRequest(id, u.uid, action, delta);
+      await decideTeacherRequest(id, u.uid, action, 0);
       toast(action === "approve" ? t("approvedToast") : t("rejectedToast"), "ok");
       const [pendReq, recentReq, users] = await Promise.all([
         fetchPendingRequests(),
@@ -428,68 +436,219 @@ export function PageAdminRequests() {
     } finally { setState({ loading: false }); }
   }
 
-  const recent = (st.adminRecentRequests || []).filter(r => r.status !== "pending").slice(0, 30);
+  const allRequests = st.adminRecentRequests || [];
+  const recent = allRequests.filter(r => r.status !== "pending").slice(0, 30);
+  const myTotalSigned = allRequests.filter(r => r.decidedBy === u.uid && r.status !== "pending").length;
+
+  /* view-request user for DocumentPreview */
+  const viewUser = viewReq ? usersMap.get(viewReq.uid) : null;
 
   return (
-    <div className="grid2">
-      <div className="glass card">
-        {!pending.length && <p className="p muted" style={{ padding: "12px 0" }}>{t("noReqToReview")}</p>}
-        <div className="mobile-cards">
-          {pending.map(r => {
-            const tu = usersMap.get(r.uid);
-            const delta = getDelta(r.id);
-            const cd = compPreview(r);
-            return (
-              <div key={r.id} className="mobile-card glass">
-                <div className="mobile-card__row">
-                  <span className="mobile-card__label">{t("teacher")}</span>
-                  <span className="mobile-card__val"><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></span>
+    <div className="req-page">
+      {/* ── Document modal ── */}
+      {viewReq && createPortal(
+        <div className="tp-overlay" onClick={() => setViewReq(null)}>
+          <div className="tp-card tp-card--v2" onClick={e => e.stopPropagation()} style={{ width: 700, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }}>
+            <button className="tp-close" onClick={() => setViewReq(null)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+            <DocumentPreview
+              request={viewReq}
+              user={viewUser || { displayName: "—", email: "" }}
+              showDownload
+            />
+            {viewReq.status === "pending" && (() => {
+              const mcd = compPreview(viewReq);
+              return (
+                <div className="req-modal-actions">
+                  <Btn kind="ok" onClick={() => { decide(viewReq.id, "approve"); setViewReq(null); }} disabled={st.loading}>
+                    {actionLabels(viewReq.kind).ok}<span className={`req-btn-delta ${mcd > 0 ? "req-btn-delta--plus" : mcd < 0 ? "req-btn-delta--minus" : "req-btn-delta--zero"}`}>{signNum(mcd)}</span>
+                  </Btn>
+                  <Btn kind="danger" onClick={() => { decide(viewReq.id, "reject"); setViewReq(null); }} disabled={st.loading}>
+                    {actionLabels(viewReq.kind).no}<span className="req-btn-delta req-btn-delta--zero">+0</span>
+                  </Btn>
                 </div>
-                <div className="mobile-card__row">
-                  <span className="mobile-card__label">{t("typeAndPeriod")}</span>
-                  <span className="mobile-card__val"><b>{r.kindLabel || requestKindLabel(r.kind)}</b><div className="muted tiny">{r.dateFrom}{r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""} · дней: {Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo)}</div>{r.note ? <div className="muted tiny">{r.note}</div> : null}</span>
-                </div>
-                <div className="mobile-card__row">
-                  <span className="mobile-card__label">Баланс отгулов / Δ</span>
-                  <span className="mobile-card__val"><b>{fmtPoints(tu?.compDays || 0)}</b> {t("compDaysShort")} · {t("compDeltaLabel")} <b>{signNum(cd)}</b></span>
-                </div>
-                <div className="mobile-card__row">
-                  <span className="mobile-card__label">{t("pointsDelta")}</span>
-                  <span className="mobile-card__val" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <Input type="number" value={delta} onChange={(e) => setDelta(r.id, e.target.value)} style={{ maxWidth: 100 }} />
-                    <Btn type="button" onClick={() => setDelta(r.id, -2)}>-2</Btn>
-                    <Btn type="button" onClick={() => setDelta(r.id, +2)}>+2</Btn>
-                  </span>
-                </div>
-                <div className="mobile-card__actions">
-                  <Btn kind="ok" onClick={() => decide(r.id, "approve")} disabled={st.loading}><Icon name="check" /> {t("ok")}</Btn>
-                  <Btn kind="danger" onClick={() => decide(r.id, "reject")} disabled={st.loading}><Icon name="x" /> {t("no")}</Btn>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })()}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── stat cards ── */}
+      <div className="appr-stats appr-stats--2">
+        <div className="appr-stat appr-stat--pending">
+          <div className="appr-stat__icon"><Icon name="clock" /></div>
+          <div className="appr-stat__body">
+            <div className="appr-stat__num">{pending.length}</div>
+            <div className="appr-stat__label">{t("pendingCount")}</div>
+          </div>
+        </div>
+        <div className="appr-stat appr-stat--signed">
+          <div className="appr-stat__icon"><Icon name="shield" /></div>
+          <div className="appr-stat__body">
+            <div className="appr-stat__num">{myTotalSigned}</div>
+            <div className="appr-stat__label">{t("totalSigned")}</div>
+          </div>
         </div>
       </div>
 
-      <div className="glass card">
-        <div className="h2">{t("recentDecisions")}</div>
-        <div className="sep"></div>
-        <DataCards
-          emptyText={t("noHistory")}
-          columns={[
-            { key: "teacher", label: t("teacher"), render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
-            { key: "kind", label: t("type"), render: r => r.kindLabel || requestKindLabel(r.kind) },
-            { key: "period", label: t("period"), render: r => `${r.dateFrom}${r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}` },
-            { key: "status", label: t("status"), render: r => <Pill kind={r.status}>{r.status}</Pill> },
-            { key: "pts", label: t("pointsDelta"), render: r => <b>{signNum(r.pointsDelta || 0)}</b> },
-            { key: "cd", label: t("compDaysDeltaCol"), render: r => <b>{signNum(r.compDaysDelta || 0)}</b> }
-          ]}
-          rows={recent.map(r => ({ ...r, __key: r.id }))}
-        />
-
-        <div className="sep"></div>
-        <div className="help">{t("compRules")}</div>
+      {/* ── tabs ── */}
+      <div className="appr-tabs">
+        <button className={`appr-tab${tab === "pending" ? " appr-tab--active" : ""}`} onClick={() => setTab("pending")}>
+          <Icon name="clipboard" /> {t("tabPending")}
+          {pending.length > 0 && <span className="appr-tab__badge">{pending.length}</span>}
+        </button>
+        <button className={`appr-tab${tab === "history" ? " appr-tab--active" : ""}`} onClick={() => setTab("history")}>
+          <Icon name="file" /> {t("recentDecisions")}
+        </button>
       </div>
+
+      {/* ── PENDING TAB (table) ── */}
+      {tab === "pending" && (
+        <div className="req-table-wrap glass card">
+          {!pending.length ? (
+            <div className="req-empty">
+              <div className="req-empty__icon"><Icon name="check" /></div>
+              <p>{t("noReqToReview")}</p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop table */}
+              <div className="heatwrap desktop-table">
+                <table className="table req-table">
+                  <thead>
+                    <tr>
+                      <th>№</th>
+                      <th>{t("teacher")}</th>
+                      <th>{t("type")}</th>
+                      <th>{t("period")}</th>
+                      <th>{t("daysCount")}</th>
+                      <th>{t("compDays")}</th>
+                      <th>{t("document")}</th>
+                      <th>{t("actions")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pending.map((r, idx) => {
+                      const tu = usersMap.get(r.uid);
+                      const cd = compPreview(r);
+                      const days = Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo);
+                      const labels = actionLabels(r.kind);
+                      return (
+                        <tr key={r.id}>
+                          <td className="req-table__num">{idx + 1}</td>
+                          <td><b>{tu?.displayName || "—"}</b></td>
+                          <td>
+                            <span className={`req-table__kind req-table__kind--${r.kind}`}>
+                              {r.kindLabel || requestKindLabel(r.kind)}
+                            </span>
+                          </td>
+                          <td className="nowrap">{r.dateFrom}{r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}</td>
+                          <td className="center nowrap">
+                            {r.timeFrom && r.timeTo
+                              ? <span className="req-table__hours">{fmtHours(r.timeFrom, r.timeTo)}{t("hours")} <span className="req-table__time-inline">{r.timeFrom} → {r.timeTo}</span></span>
+                              : days}
+                          </td>
+                          <td className="center"><span className="req-table__comp-pill">{Number(tu?.compDays) || 0}</span></td>
+                          <td>
+                            <Btn kind="ghost" className="req-table__doc-btn" onClick={() => setViewReq(r)}>
+                              <Icon name="file" /> {t("openDoc")}
+                            </Btn>
+                          </td>
+                          <td className="req-table__actions">
+                            <Btn kind="ok" onClick={() => decide(r.id, "approve")} disabled={st.loading}>
+                              {labels.ok}<span className={`req-btn-delta ${cd > 0 ? "req-btn-delta--plus" : cd < 0 ? "req-btn-delta--minus" : "req-btn-delta--zero"}`}>{signNum(cd)}</span>
+                            </Btn>
+                            <Btn kind="danger" onClick={() => decide(r.id, "reject")} disabled={st.loading}>
+                              {labels.no}<span className="req-btn-delta req-btn-delta--zero">+0</span>
+                            </Btn>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* Mobile cards */}
+              <div className="mobile-cards">
+                {pending.map((r, idx) => {
+                  const tu = usersMap.get(r.uid);
+                  const cd = compPreview(r);
+                  const days = Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo);
+                  const labels = actionLabels(r.kind);
+                  return (
+                    <div key={r.id} className="mobile-card glass">
+                      <div className="mobile-card__row"><span className="mobile-card__label">№</span><span className="mobile-card__val">{idx + 1}</span></div>
+                      <div className="mobile-card__row"><span className="mobile-card__label">{t("teacher")}</span><span className="mobile-card__val"><b>{tu?.displayName || "—"}</b></span></div>
+                      <div className="mobile-card__row"><span className="mobile-card__label">{t("type")}</span><span className="mobile-card__val">{r.kindLabel || requestKindLabel(r.kind)}</span></div>
+                      <div className="mobile-card__row"><span className="mobile-card__label">{t("period")}</span><span className="mobile-card__val">{r.dateFrom}{r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}</span></div>
+                      <div className="mobile-card__row"><span className="mobile-card__label">{t("daysCount")}</span><span className="mobile-card__val">{r.timeFrom && r.timeTo ? `${fmtHours(r.timeFrom, r.timeTo)}${t("hours")}  ${r.timeFrom} → ${r.timeTo}` : days}</span></div>
+                      <div className="mobile-card__row"><span className="mobile-card__label">{t("compDays")}</span><span className="mobile-card__val"><span className="req-table__comp-pill">{Number(tu?.compDays) || 0}</span></span></div>
+                      <div className="mobile-card__row">
+                        <span className="mobile-card__label">{t("document")}</span>
+                        <span className="mobile-card__val">
+                          <Btn kind="ghost" onClick={() => setViewReq(r)}><Icon name="file" /> {t("openDoc")}</Btn>
+                        </span>
+                      </div>
+                      <div className="mobile-card__row">
+                        <span className="mobile-card__label">{t("actions")}</span>
+                        <span className="mobile-card__val" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <Btn kind="ok" onClick={() => decide(r.id, "approve")} disabled={st.loading}>
+                            {labels.ok}<span className={`req-btn-delta ${cd > 0 ? "req-btn-delta--plus" : cd < 0 ? "req-btn-delta--minus" : "req-btn-delta--zero"}`}>{signNum(cd)}</span>
+                          </Btn>
+                          <Btn kind="danger" onClick={() => decide(r.id, "reject")} disabled={st.loading}>
+                            {labels.no}<span className="req-btn-delta req-btn-delta--zero">+0</span>
+                          </Btn>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── HISTORY TAB ── */}
+      {tab === "history" && (
+        <div className="req-history glass card">
+          <DataCards
+            emptyText={t("noHistory")}
+            columns={[
+              { key: "teacher", label: t("teacher"), render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
+              { key: "kind", label: t("type"), render: r => r.kindLabel || requestKindLabel(r.kind) },
+              { key: "period", label: t("period"), render: r => <>{r.dateFrom}{r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}{r.timeFrom && r.timeTo && <div className="req-table__time"><Icon name="clock" /> {fmtHours(r.timeFrom, r.timeTo)}{t("hours")} ({r.timeFrom} → {r.timeTo})</div>}</> },
+              { key: "status", label: t("status"), render: r => <Pill kind={r.status}>{r.status}</Pill> },
+              { key: "cd", label: t("compDaysDeltaCol"), render: r => <b>{signNum(r.compDaysDelta || 0)}</b> },
+              { key: "doc", label: t("document"), render: r => <Btn kind="ghost" className="req-table__doc-btn" onClick={() => setViewReq(r)}><Icon name="file" /> {t("openDoc")}</Btn> }
+            ]}
+            rows={recent.map(r => ({ ...r, __key: r.id }))}
+          />
+          <div className="sep"></div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <div className="help">{t("compRules")}</div>
+            {recent.length > 0 && (
+              <Btn kind="danger" onClick={async () => {
+                if (!confirm(t("clearHistoryConfirm"))) return;
+                try {
+                  setState({ loading: true });
+                  await clearRequestHistory();
+                  const recentReq = await fetchAdminRecentRequests();
+                  setState({ adminRecentRequests: recentReq });
+                  toast(t("clear"), "ok");
+                } catch (e) {
+                  console.error(e);
+                  toast(e?.message || t("error"), "error");
+                } finally { setState({ loading: false }); }
+              }} disabled={st.loading}>
+                <Icon name="x" /> {t("clearHistory")}
+              </Btn>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -499,7 +658,7 @@ export function PageDocuments() {
   const st = useStore();
   // All hooks before any conditional returns
   const canvasRef = useRef(null);
-  const [drawing, setDrawing] = useState(false);
+  const drawingRef = useRef(false);
   const [signed, setSigned] = useState(false);
   const [signingDoc, setSigningDoc] = useState(null);
   const [viewDoc, setViewDoc] = useState(null);
@@ -530,23 +689,24 @@ export function PageDocuments() {
   };
   const onDown = (e) => {
     e.preventDefault();
-    setDrawing(true);
+    drawingRef.current = true;
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
+    ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1a1d2e";
     const [x, y] = getPos(e);
     ctx.beginPath(); ctx.moveTo(x, y);
   };
   const onMove = (e) => {
-    if (!drawing) return;
+    if (!drawingRef.current) return;
     e.preventDefault();
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const [x, y] = getPos(e);
-    ctx.lineWidth = 5; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctx.strokeStyle = "#ffffff"; ctx.lineTo(x, y); ctx.stroke();
-    setSigned(true);
+    ctx.lineTo(x, y); ctx.stroke();
+    if (!signed) setSigned(true);
   };
-  const onUp = () => setDrawing(false);
+  const onUp = () => { drawingRef.current = false; };
   const clearSig = () => {
     const c = canvasRef.current;
     if (!c) return;
@@ -702,17 +862,19 @@ export function PageDocuments() {
                   {/* Signature pad (right side) */}
                   {needsSign && (
                     <div style={{ flex: "1 1 280px", minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                      <div className="glass card" style={{ padding: 20 }}>
-                        <div className="h2" style={{ marginBottom: 12 }}>{t("putSignature")}</div>
-                        <canvas
-                          ref={canvasRef}
-                          width={800} height={200}
-                          className="signature-pad"
-                          style={{ width: "100%", height: 140, display: "block", cursor: "crosshair", marginBottom: 12, borderRadius: 10, border: "2px dashed var(--border)" }}
-                          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-                          onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
-                        />
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <div className="glass card" style={{ padding: 24, borderRadius: 16 }}>
+                        <div className="h2" style={{ marginBottom: 14 }}>{t("putSignature")}</div>
+                        <div style={{ background: "#f4f6fa", borderRadius: 12, padding: 8, boxShadow: "inset 0 2px 6px rgba(0,0,0,.06)" }}>
+                          <canvas
+                            ref={canvasRef}
+                            width={800} height={200}
+                            className="signature-pad"
+                            style={{ width: "100%", height: 150, display: "block", cursor: "crosshair", borderRadius: 8, border: "2px dashed #c0c8d8", background: "#fff" }}
+                            onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+                            onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
                           <Btn onClick={clearSig}>{t("clear")}</Btn>
                           <Btn kind="primary" onClick={submitSign} disabled={saving || !signed}>
                             {saving ? t("loading") : t("signBtn")}

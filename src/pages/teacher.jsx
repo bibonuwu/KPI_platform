@@ -472,7 +472,19 @@ export function ReadOnlyProfile({ teacher: tc, subs, goals }) {
   const daysUntil = (d) => d ? Math.ceil((new Date(d + "T00:00:00") - new Date()) / 86400000) : null;
   const goalPct = (g) => {
     if (g.manualProgress != null && g.manualProgress > 0) return Math.min(100, g.manualProgress);
-    const rel = g.section ? approved.filter(s => s.typeSection === g.section) : approved;
+    let rel = g.section ? approved.filter(s => s.typeSection === g.section) : approved;
+    // Only count submissions created after the goal was created
+    if (g.createdAt) {
+      const goalCreated = g.createdAt?.seconds ? g.createdAt.seconds * 1000
+        : g.createdAt?.toDate ? g.createdAt.toDate().getTime()
+        : new Date(g.createdAt).getTime();
+      rel = rel.filter(s => {
+        const subTime = s.createdAt?.seconds ? s.createdAt.seconds * 1000
+          : s.createdAt?.toDate ? s.createdAt.toDate().getTime()
+          : new Date(s.createdAt || 0).getTime();
+        return subTime >= goalCreated;
+      });
+    }
     const earned = sum(rel, s => s.points);
     return Math.min(100, Math.round((earned / (Number(g.targetPoints) || 1)) * 100));
   };
@@ -1746,16 +1758,29 @@ export function PageAdd() {
 
 export function PageRequests() {
   const st = useStore();
-  const u = st.userDoc; // read early, guard comes AFTER all hooks
+  const u = st.userDoc;
 
-  // ALL hooks before any early return
+  const [tab, setTab] = useState("form");
   const [kind, setKind] = useState(REQUEST_KINDS[0]?.key || "leave");
   const [dateFrom, setDateFrom] = useState(ymd());
   const [dateTo, setDateTo] = useState(ymd());
+  const [timeFrom, setTimeFrom] = useState("09:00");
+  const [timeTo, setTimeTo] = useState("11:00");
   const [note, setNote] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [viewReq, setViewReq] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState("all");
   const days = useMemo(() => dateRangeDays(dateFrom, dateTo), [dateFrom, dateTo]);
+  const isEarlyLeave = kind === "early_leave";
+  const hoursCalc = useMemo(() => {
+    if (!isEarlyLeave) return 0;
+    const [h1, m1] = timeFrom.split(":").map(Number);
+    const [h2, m2] = timeTo.split(":").map(Number);
+    const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+    return Math.max(0, Math.round(diff / 30) / 2);
+  }, [timeFrom, timeTo, isEarlyLeave]);
 
   if (!u) return <Guard />;
   if (!canAccess("requests", u)) return <Guard />;
@@ -1767,6 +1792,15 @@ export function PageRequests() {
   const pending = reqs.filter(r => r.status === "pending");
   const approved = reqs.filter(r => r.status === "approved");
   const rejected = reqs.filter(r => r.status === "rejected");
+
+  const filteredReqs = historyFilter === "all" ? reqs : reqs.filter(r => r.status === historyFilter);
+
+  const kindIcon = (kk) => {
+    if (kk === "leave") return "briefcase";
+    if (kk === "early_leave") return "clock";
+    if (kk === "weekend_work") return "trending-up";
+    return "clipboard";
+  };
 
   async function refresh() {
     try {
@@ -1787,14 +1821,21 @@ export function PageRequests() {
     e.preventDefault();
     try {
       const f = safeText(dateFrom);
-      const to = safeText(dateTo) || f;
+      const to = isEarlyLeave ? f : (safeText(dateTo) || f);
       const df = new Date(`${f}T00:00:00`);
       const dt = new Date(`${to}T00:00:00`);
       if (Number.isNaN(df.getTime()) || Number.isNaN(dt.getTime())) { toast(t("invalidDateRange"), "error"); return; }
       if (dt.getTime() < df.getTime()) { toast(t("invalidDateRange"), "error"); return; }
 
+      setSending(true);
       setState({ loading: true });
-      await createTeacherRequest({ uid: u.uid, kind, dateFrom: f, dateTo: to, note, evidenceFileUrl: "" });
+      await createTeacherRequest({
+        uid: u.uid, kind, dateFrom: f, dateTo: to, note, evidenceFileUrl: "",
+        timeFrom: isEarlyLeave ? timeFrom : "",
+        timeTo: isEarlyLeave ? timeTo : ""
+      });
+      setSent(true);
+      setTimeout(() => setSent(false), 2500);
       toast(t("requestSent"), "ok");
       const myReq = await fetchMyRequests(u.uid);
       setState({ myRequests: myReq });
@@ -1802,7 +1843,7 @@ export function PageRequests() {
     } catch (err) {
       console.error(err);
       toast(err?.message || t("sendError"), "error");
-    } finally { setState({ loading: false }); }
+    } finally { setState({ loading: false }); setSending(false); }
   }
 
   const signNum = (n) => {
@@ -1810,15 +1851,16 @@ export function PageRequests() {
     return x > 0 ? `+${x}` : String(x);
   };
 
-  // Preview data for the form
   const previewReq = {
-    kind, kindLabel: t(k.tKey), dateFrom, dateTo,
-    days, note, status: "pending", id: Math.random().toString(36).slice(2, 8).toUpperCase(),
-    evidenceFileUrl: ""
+    kind, kindLabel: t(k.tKey), dateFrom, dateTo: isEarlyLeave ? dateFrom : dateTo,
+    days: isEarlyLeave ? 1 : days, note, status: "pending",
+    id: Math.random().toString(36).slice(2, 8).toUpperCase(),
+    evidenceFileUrl: "",
+    ...(isEarlyLeave ? { timeFrom, timeTo } : {})
   };
 
   return (
-    <>
+    <div className="treq">
       {/* Modal: view document for a specific request */}
       {viewReq && createPortal(
         <div className="tp-overlay" onClick={() => setViewReq(null)}>
@@ -1838,90 +1880,246 @@ export function PageRequests() {
         document.body
       )}
 
-      <div className="grid2">
-        <div className="glass card">
-          <form onSubmit={submit}>
-            <div className="label">{t("requestType")}</div>
-            <Select value={kind} onChange={(e) => setKind(e.target.value)}>
-              {REQUEST_KINDS.map(x => <option key={x.key} value={x.key}>{t(x.tKey)}</option>)}
-            </Select>
-
-            <div className="grid2">
-              <div>
-                <div className="label">{t("dateFrom")}</div>
-                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} required />
-              </div>
-              <div>
-                <div className="label">{t("dateTo")}</div>
-                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} required />
-              </div>
-            </div>
-
-            <div className="label">{t("reason")}</div>
-            <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("reasonPlaceholder")} />
-
-            <div className="help" style={{ marginTop: 8 }}>
-              Кезеңдегі күндер: <b>{days}</b>. {k.compMode === "earn" && <>{t("earnedDays")}: <b>+{days}</b>.</>}
-              {k.compMode === "use" && <>{t("usedDays")}: <b>-{days}</b>.</>}
-            </div>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-              <Btn kind="primary" type="submit" disabled={st.loading}><Icon name="check" /> {t("send")}</Btn>
-              <Btn type="button" onClick={() => setShowPreview(!showPreview)}><Icon name="file" /> {showPreview ? t("hide") : t("preview")}</Btn>
-              <Btn type="button" onClick={refresh} disabled={st.loading}>{t("refresh")}</Btn>
-            </div>
-          </form>
-
-          {showPreview && (
-            <>
-              <div className="sep" />
-              <div className="h2">{t("preview")}</div>
-              <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} showDownload />
-            </>
-          )}
+      {/* ── Stat cards row ── */}
+      <div className="treq-stats">
+        <div className="treq-stat treq-stat--balance" style={{ "--di": 0 }}>
+          <div className="treq-stat__icon"><Icon name="calendar" /></div>
+          <div className="treq-stat__body">
+            <div className="treq-stat__num">{fmtPoints(u.compDays || 0)}</div>
+            <div className="treq-stat__label">{t("compBalance")}</div>
+          </div>
+          <div className="treq-stat__glow"></div>
         </div>
-
-        <div className="glass card">
-          <div className="h2">{t("myRequests")}</div>
-          <div className="sep"></div>
-
-          <div className="grid3">
-            <div className="kpi">
-              <div><div className="muted tiny">{t("compBalance")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(u.compDays || 0)}</div></div>
-              <Pill kind="approved">{t("compDaysPill")}</Pill>
-            </div>
-            <div className="kpi">
-              <div><div className="muted tiny">{t("requests")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{fmtPoints(reqs.length)}</div></div>
-              <span className="tiny muted">{t("reqPending")} {pending.length}</span>
-            </div>
-            <div className="kpi">
-              <div><div className="muted tiny">{t("compForecast")}</div><div style={{ fontWeight: 900, fontSize: 22 }}>{compPreview ? signNum(compPreview) : "0"}</div></div>
-              <span className="tiny muted">{t("forNew")}</span>
-            </div>
+        <div className="treq-stat treq-stat--total" style={{ "--di": 1 }}>
+          <div className="treq-stat__icon"><Icon name="clipboard" /></div>
+          <div className="treq-stat__body">
+            <div className="treq-stat__num">{reqs.length}</div>
+            <div className="treq-stat__label">{t("totalRequests")}</div>
           </div>
-
-          <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Pill kind="approved">{t("reqApproved")}: {approved.length}</Pill>
-            <Pill kind="pending">{t("reqPending")}: {pending.length}</Pill>
-            <Pill kind="rejected">{t("reqRejected")}: {rejected.length}</Pill>
+        </div>
+        <div className="treq-stat treq-stat--pending" style={{ "--di": 2 }}>
+          <div className="treq-stat__icon"><Icon name="clock" /></div>
+          <div className="treq-stat__body">
+            <div className="treq-stat__num">{pending.length}</div>
+            <div className="treq-stat__label">{t("reqPending")}</div>
           </div>
-
-          <div className="sep"></div>
-
-          <DataCards
-            emptyText={t("noRequests")}
-            columns={[
-              { key: "period", label: "Кезең", render: r => `${r.dateFrom}${r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}` },
-              { key: "kind", label: "Түрі", render: r => <><b>{r.kindLabel || requestKindLabel(r.kind)}</b>{r.note ? <div className="muted tiny">{r.note}</div> : null}</> },
-              { key: "status", label: t("status"), render: r => <Pill kind={r.status}>{r.status === "approved" ? t("reqApproved") : r.status === "rejected" ? t("reqRejected") : t("reqPending")}</Pill> },
-              { key: "pts", label: t("pointsDelta"), render: r => r.status === "approved" ? <b>{signNum(Number(r.pointsDelta) || 0)}</b> : <span className="muted">—</span> },
-              { key: "actions", label: "", render: r => <Btn kind="ghost" onClick={() => setViewReq(r)}><Icon name="file" /></Btn> }
-            ]}
-            rows={reqs.slice(0, 20).map(r => ({ ...r, __key: r.id }))}
-          />
+        </div>
+        <div className="treq-stat treq-stat--approved" style={{ "--di": 3 }}>
+          <div className="treq-stat__icon"><Icon name="check" /></div>
+          <div className="treq-stat__body">
+            <div className="treq-stat__num">{approved.length}</div>
+            <div className="treq-stat__label">{t("reqApproved")}</div>
+          </div>
         </div>
       </div>
-    </>
+
+      {/* ── Tabs ── */}
+      <div className="treq-tabs">
+        <button className={`treq-tab${tab === "form" ? " treq-tab--active" : ""}`} onClick={() => setTab("form")}>
+          <Icon name="plus" /> {t("newRequest")}
+        </button>
+        <button className={`treq-tab${tab === "history" ? " treq-tab--active" : ""}`} onClick={() => setTab("history")}>
+          <Icon name="file" /> {t("history")}
+          {reqs.length > 0 && <span className="treq-tab__badge">{reqs.length}</span>}
+        </button>
+        <div className="treq-tabs__actions">
+          <Btn kind="ghost" onClick={refresh} disabled={st.loading}><Icon name="refresh" /></Btn>
+        </div>
+      </div>
+
+      {/* ══ NEW REQUEST TAB ══ */}
+      {tab === "form" && (
+        <div className="treq-form-wrap" style={{ "--di": 0 }}>
+          <div className="treq-form glass card">
+            {/* Kind selector as visual cards */}
+            <div className="treq-kind-grid treq-kind-grid--2">
+              {/* Combined leave card with switch */}
+              <button
+                type="button"
+                className={`treq-kind-btn treq-kind-btn--leave${kind === "leave" || kind === "early_leave" ? " treq-kind-btn--active" : ""}`}
+                onClick={() => setKind(isEarlyLeave ? "leave" : kind === "leave" ? "leave" : "leave")}
+              >
+                <span className="treq-kind-btn__icon"><Icon name={isEarlyLeave ? "clock" : "briefcase"} /></span>
+                <span className="treq-kind-btn__text">{t("rkLeave")}</span>
+                {/* Hours toggle */}
+                <label className="treq-switch" onClick={e => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={isEarlyLeave}
+                    onChange={(e) => setKind(e.target.checked ? "early_leave" : "leave")}
+                  />
+                  <span className="treq-switch__track">
+                    <span className="treq-switch__thumb"></span>
+                  </span>
+                  <span className="treq-switch__label">{t("hours")}</span>
+                </label>
+              </button>
+
+              {REQUEST_KINDS.filter(rk => rk.key !== "leave" && rk.key !== "early_leave").map((rk) => (
+                <button
+                  key={rk.key}
+                  type="button"
+                  className={`treq-kind-btn${kind === rk.key ? " treq-kind-btn--active" : ""} treq-kind-btn--${rk.key}`}
+                  onClick={() => setKind(rk.key)}
+                >
+                  <span className="treq-kind-btn__icon"><Icon name={kindIcon(rk.key)} /></span>
+                  <span className="treq-kind-btn__text">{t(rk.tKey)}</span>
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={submit} className="treq-fields">
+              {/* Date fields */}
+              {!isEarlyLeave ? (
+                <div className="treq-date-row">
+                  <div className="treq-field">
+                    <label className="treq-field__label"><Icon name="calendar" /> {t("dateFrom")}</label>
+                    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} required />
+                  </div>
+                  <div className="treq-date-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                  <div className="treq-field">
+                    <label className="treq-field__label"><Icon name="calendar" /> {t("dateTo")}</label>
+                    <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} required />
+                  </div>
+                </div>
+              ) : (
+                <div className="treq-date-row treq-date-row--early">
+                  <div className="treq-field">
+                    <label className="treq-field__label"><Icon name="calendar" /> {t("requestDate")}</label>
+                    <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} required />
+                  </div>
+                  <div className="treq-field">
+                    <label className="treq-field__label"><Icon name="clock" /> {t("timeFrom")}</label>
+                    <Input type="time" value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} required />
+                  </div>
+                  <div className="treq-date-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                  <div className="treq-field">
+                    <label className="treq-field__label"><Icon name="clock" /> {t("timeTo")}</label>
+                    <Input type="time" value={timeTo} onChange={(e) => setTimeTo(e.target.value)} required />
+                  </div>
+                </div>
+              )}
+
+              {/* Info chip */}
+              <div className="treq-info-chip">
+                {isEarlyLeave ? (
+                  <><Icon name="clock" /> {hoursCalc} {t("hours")}</>
+                ) : (
+                  <>
+                    <Icon name="calendar" /> {days} {days === 1 ? "день" : "дней"}
+                    {k.compMode === "earn" && <span className="treq-info-chip__comp treq-info-chip__comp--earn">+{days} {t("compDaysPill")}</span>}
+                    {k.compMode === "use" && <span className="treq-info-chip__comp treq-info-chip__comp--use">-{days} {t("compDaysPill")}</span>}
+                  </>
+                )}
+              </div>
+
+              {/* Reason */}
+              <div className="treq-field">
+                <label className="treq-field__label"><Icon name="info" /> {t("reason")}</label>
+                <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("reasonPlaceholder")} rows={3} />
+              </div>
+
+              {/* Actions */}
+              <div className="treq-form-actions">
+                <button type="submit" className={`treq-submit${sending ? " treq-submit--sending" : ""}${sent ? " treq-submit--sent" : ""}`} disabled={st.loading || sending}>
+                  {sent ? (
+                    <><Icon name="check" /> {t("requestSent")}</>
+                  ) : sending ? (
+                    <><span className="treq-spinner"></span></>
+                  ) : (
+                    <><Icon name="check" /> {t("submitRequest")}</>
+                  )}
+                </button>
+                <Btn type="button" onClick={() => setShowPreview(!showPreview)}>
+                  <Icon name="eye" /> {showPreview ? t("hide") : t("preview")}
+                </Btn>
+              </div>
+            </form>
+
+            {showPreview && (
+              <div className="treq-preview-wrap">
+                <div className="sep" />
+                <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} showDownload />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ HISTORY TAB ══ */}
+      {tab === "history" && (
+        <div className="treq-history" style={{ "--di": 0 }}>
+          {/* Filter pills */}
+          <div className="treq-history-filters">
+            {["all", "pending", "approved", "rejected"].map(f => (
+              <button
+                key={f}
+                className={`treq-filter-pill${historyFilter === f ? " treq-filter-pill--active" : ""} treq-filter-pill--${f}`}
+                onClick={() => setHistoryFilter(f)}
+              >
+                {f === "all" ? t("totalRequests") : f === "pending" ? t("reqPending") : f === "approved" ? t("reqApproved") : t("reqRejected")}
+                <span className="treq-filter-pill__count">
+                  {f === "all" ? reqs.length : f === "pending" ? pending.length : f === "approved" ? approved.length : rejected.length}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Request timeline cards */}
+          <div className="treq-timeline">
+            {!filteredReqs.length && (
+              <div className="treq-empty glass card">
+                <div className="treq-empty__icon"><Icon name="clipboard" /></div>
+                <p>{t("noRequests")}</p>
+              </div>
+            )}
+            {filteredReqs.slice(0, 30).map((r, idx) => {
+              const statusClass = r.status === "approved" ? "treq-tcard--approved" : r.status === "rejected" ? "treq-tcard--rejected" : "treq-tcard--pending";
+              const period = r.dateFrom + (r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : "");
+              const timeInfo = r.timeFrom && r.timeTo ? `${r.timeFrom} → ${r.timeTo}` : "";
+              return (
+                <div key={r.id} className={`treq-tcard glass ${statusClass}`} style={{ "--di": idx }}>
+                  <div className="treq-tcard__status-bar"></div>
+                  <div className="treq-tcard__content">
+                    <div className="treq-tcard__top">
+                      <div className={`treq-tcard__kind treq-tcard__kind--${r.kind}`}>
+                        <Icon name={kindIcon(r.kind)} />
+                        <span>{r.kindLabel || requestKindLabel(r.kind)}</span>
+                      </div>
+                      <Pill kind={r.status}>
+                        {r.status === "approved" ? t("reqApproved") : r.status === "rejected" ? t("reqRejected") : t("reqPending")}
+                      </Pill>
+                    </div>
+                    <div className="treq-tcard__details">
+                      <div className="treq-tcard__detail">
+                        <Icon name="calendar" />
+                        <span>{period}</span>
+                      </div>
+                      {timeInfo && (
+                        <div className="treq-tcard__detail">
+                          <Icon name="clock" />
+                          <span>{timeInfo}</span>
+                        </div>
+                      )}
+                      {r.status === "approved" && (Number(r.pointsDelta) !== 0) && (
+                        <div className="treq-tcard__detail">
+                          <Icon name="hash" />
+                          <span>{signNum(Number(r.pointsDelta) || 0)} {t("pointsDelta")}</span>
+                        </div>
+                      )}
+                    </div>
+                    {r.note && <div className="treq-tcard__note">{r.note}</div>}
+                  </div>
+                  <button className="treq-tcard__doc-btn" onClick={() => setViewReq(r)} title={t("document")}>
+                    <Icon name="file" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

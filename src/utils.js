@@ -193,8 +193,8 @@ export function dateRangeDays(fromYmd, toYmd) {
 
 export function requestKindLabel(key) {
   const REQUEST_KINDS = [
-    { key: "leave", tKey: "rkLeave", compMode: "none" },
-    { key: "weekday_off", tKey: "rkWeekdayOff", compMode: "use" },
+    { key: "leave", tKey: "rkLeave", compMode: "use" },
+    { key: "early_leave", tKey: "rkEarlyLeave", compMode: "use" },
     { key: "weekend_work", tKey: "rkWeekendWork", compMode: "earn" }
   ];
   const k = REQUEST_KINDS.find(x => x.key === key);
@@ -202,7 +202,7 @@ export function requestKindLabel(key) {
 }
 
 export const REQUEST_KINDS = [
-  { key: "leave", tKey: "rkLeave", compMode: "none" },
-  { key: "weekday_off", tKey: "rkWeekdayOff", compMode: "use" },
+  { key: "leave", tKey: "rkLeave", compMode: "use" },
+  { key: "early_leave", tKey: "rkEarlyLeave", compMode: "use" },
   { key: "weekend_work", tKey: "rkWeekendWork", compMode: "earn" }
 ];

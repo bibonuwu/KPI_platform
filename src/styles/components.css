@@ -330,15 +330,15 @@
 }
 
 [data-theme="dark"] .admin-support-stat--new {
-  background: linear-gradient(rgb(239 68 68 / 16%));
+  background: rgb(239 68 68 / 16%);
 }
 
 [data-theme="dark"] .admin-support-stat--progress {
-  background: linear-gradient(rgb(245 158 11 / 16%));
+  background: rgb(245 158 11 / 16%);
 }
 
 [data-theme="dark"] .admin-support-stat--done {
-  background: linear-gradient(rgb(135 188 46 / 16%));
+  background: rgb(135 188 46 / 16%);
 }
 
 .textarea {

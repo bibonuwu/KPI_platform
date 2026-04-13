@@ -209,13 +209,18 @@ export async function fetchAdminRecentRequests() {
   const res = await getDocs(qy);
   return res.docs.map(d => ({ id: d.id, ...d.data() }));
 }
+export async function clearRequestHistory() {
+  const qy = query(collection(db, "requests"), where("status", "!=", "pending"));
+  const res = await getDocs(qy);
+  await Promise.all(res.docs.map(d => deleteDoc(d.ref)));
+}
 
-export async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, evidenceFileUrl }) {
+export async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, evidenceFileUrl, timeFrom, timeTo }) {
   const k = REQUEST_KINDS.find(x => x.key === kind) || REQUEST_KINDS[0];
   const from = safeText(dateFrom);
   const to = safeText(dateTo) || from;
   const days = dateRangeDays(from, to);
-  await addDoc(collection(db, "requests"), {
+  const doc = {
     uid,
     kind: k.key,
     kindLabel: t(k.tKey),
@@ -229,7 +234,10 @@ export async function createTeacherRequest({ uid, kind, dateFrom, dateTo, note, 
     pointsDelta: 0,
     compDaysDelta: 0,
     createdAt: serverTimestamp()
-  });
+  };
+  if (timeFrom) doc.timeFrom = safeText(timeFrom);
+  if (timeTo) doc.timeTo = safeText(timeTo);
+  await addDoc(collection(db, "requests"), doc);
 }
 
 /* -------- Online presence -------- */
