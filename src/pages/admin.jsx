@@ -27,14 +27,15 @@ import {
   signDocument, markDocumentViewed, createDocument, uploadFile,
   fetchMyTeacherDocs, createMyTeacherDoc, uploadTeacherDocFile,
   deleteUserAndData, fetchCustomPositions, saveCustomPositions,
-  fetchGoals, fetchNewsAll, renderRichDesc
+  fetchGoals, fetchNewsAll, renderRichDesc,
+  fetchEvents, createEvent, updateEvent, deleteEvent
 } from "../data.js";
 import {
   Icon, Btn, Input, Select, Textarea, Pill, DataCards, QuarterFilter,
   GoalsWidget, LoadingScreen, BarChart, LineChart, AreaLineChart,
   DonutChart, RadarChart, GaugeChart, StackedBarChart, HistogramChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
-  ErrorBoundary, Guard
+  FileDrop, ErrorBoundary, Guard
 } from "../components.jsx";
 
 export function PageAdminApprovals() {
@@ -954,7 +955,12 @@ export function PageDocuments() {
                 <Textarea value={docDesc} onChange={(e) => setDocDesc(e.target.value)} placeholder={t("docDescPlaceholder")} />
 
                 <div className="label">{t("docFileLabel")}</div>
-                <Input type="file" accept=".pdf,.doc,.docx,image/png,image/jpeg" onChange={(e) => setDocFile(e.target.files?.[0] || null)} required />
+                <FileDrop
+                  accept=".pdf,.doc,.docx,image/png,image/jpeg"
+                  value={docFile}
+                  onChange={(e) => setDocFile(e.target.files?.[0] || null)}
+                  required
+                />
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
                   <Btn kind="primary" type="submit" disabled={st.loading}>{t("uploadBtn")}</Btn>
@@ -2808,5 +2814,500 @@ export function PageAdminTeacher() {
   );
 }
 
+
+/** ---------- PageAdminEvents ---------- */
+const EVENT_COLORS = [
+  "#38bdf8", "#818cf8", "#a78bfa", "#f472b6", "#fb923c",
+  "#34d399", "#facc15", "#f87171", "#22d3ee", "#94a3b8"
+];
+
+function _evDaysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+function _evStartDow(y, m) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; }
+function _evYmd(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+}
+function _evGetWeekDates(baseDate) {
+  const d = new Date(baseDate);
+  const dow = d.getDay() === 0 ? 6 : d.getDay() - 1; // Mon=0
+  d.setDate(d.getDate() - dow);
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    dates.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return dates;
+}
+
+export function PageAdminEvents() {
+  const st = useStore();
+  const u = st.userDoc;
+  const [events, setEventsLocal] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [view, setView] = useState("week"); // week | month | list
+
+  // week navigation
+  const today = new Date();
+  const [weekBase, setWeekBase] = useState(today);
+
+  // mini calendar
+  const [miniYear, setMiniYear] = useState(today.getFullYear());
+  const [miniMonth, setMiniMonth] = useState(today.getMonth());
+
+  // form
+  const [editId, setEditId] = useState(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [color, setColor] = useState(EVENT_COLORS[0]);
+
+  const load = async () => {
+    setLoading(true);
+    try { setEventsLocal(await fetchEvents()); } catch (e) { toast(t("error"), "error"); }
+    setLoading(false);
+  };
+  useEffect(() => { load(); }, []);
+
+  const resetForm = () => { setEditId(null); setTitle(""); setDescription(""); setDateFrom(""); setDateTo(""); setColor(EVENT_COLORS[0]); setShowForm(false); };
+
+  const startEdit = (ev) => {
+    setEditId(ev.id);
+    setTitle(ev.title || "");
+    setDescription(ev.description || "");
+    setDateFrom(ev.dateFrom || "");
+    setDateTo(ev.dateTo || "");
+    setColor(ev.color || EVENT_COLORS[0]);
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!title.trim()) { toast(t("eventTitle") + "!", "error"); return; }
+    if (!dateFrom) { toast(t("eventDateFrom") + "!", "error"); return; }
+    if (!dateTo) { toast(t("eventDateTo") + "!", "error"); return; }
+    if (dateTo < dateFrom) { toast(t("eventDateTo") + " ≥ " + t("eventDateFrom"), "error"); return; }
+    setSending(true);
+    try {
+      if (editId) {
+        await updateEvent(editId, { title: title.trim(), description: description.trim(), dateFrom, dateTo, color });
+        toast(t("eventUpdated"), "ok");
+      } else {
+        await createEvent({ title: title.trim(), description: description.trim(), dateFrom, dateTo, color });
+        toast(t("eventCreated"), "ok");
+      }
+      resetForm();
+      await load();
+      setState({ events: await fetchEvents() });
+    } catch (e) { toast(e?.message || t("error"), "error"); }
+    setSending(false);
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm(t("eventDeleteConfirm"))) return;
+    setDeleting(id);
+    try {
+      await deleteEvent(id);
+      toast(t("eventDeleted"), "ok");
+      await load();
+      setState({ events: await fetchEvents() });
+    } catch (e) { toast(e?.message || t("error"), "error"); }
+    setDeleting(null);
+  };
+
+  const todayStr = _evYmd(today);
+  const getStatus = (ev) => {
+    if (ev.dateTo < todayStr) return "past";
+    if (ev.dateFrom > todayStr) return "future";
+    return "active";
+  };
+
+  // Week dates
+  const weekDates = _evGetWeekDates(weekBase);
+  const weekStart = _evYmd(weekDates[0]);
+  const weekEnd = _evYmd(weekDates[6]);
+  const prevWeek = () => { const d = new Date(weekBase); d.setDate(d.getDate() - 7); setWeekBase(d); };
+  const nextWeek = () => { const d = new Date(weekBase); d.setDate(d.getDate() + 7); setWeekBase(d); };
+  const goThisWeek = () => setWeekBase(new Date());
+
+  // Mini calendar
+  const miniDays = _evDaysInMonth(miniYear, miniMonth);
+  const miniOff = _evStartDow(miniYear, miniMonth);
+  const miniCells = [];
+  for (let i = 0; i < miniOff; i++) miniCells.push(null);
+  for (let d = 1; d <= miniDays; d++) miniCells.push(d);
+
+  const monthNames = t("monthNames");
+  const weekDaysShort = t("weekDays");
+  const weekDaysFull = t("weekDaysFull");
+
+  // Map events per date
+  const evMap = useMemo(() => {
+    const map = {};
+    events.forEach(ev => {
+      let cur = new Date(ev.dateFrom + "T00:00:00");
+      const end = new Date((ev.dateTo || ev.dateFrom) + "T00:00:00");
+      while (cur <= end) {
+        const k = _evYmd(cur);
+        if (!map[k]) map[k] = [];
+        map[k].push(ev);
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
+    return map;
+  }, [events]);
+
+  // Events for the week
+  const weekEvents = useMemo(() => {
+    const res = {};
+    weekDates.forEach(d => {
+      const k = _evYmd(d);
+      res[k] = evMap[k] || [];
+    });
+    return res;
+  }, [evMap, weekStart]);
+
+  // Upcoming events
+  const upcoming = useMemo(() => {
+    const futureDate = new Date(today);
+    futureDate.setDate(futureDate.getDate() + 30);
+    const fStr = _evYmd(futureDate);
+    return events
+      .filter(ev => ev.dateTo >= todayStr && ev.dateFrom <= fStr)
+      .sort((a, b) => a.dateFrom.localeCompare(b.dateFrom))
+      .slice(0, 8);
+  }, [events, todayStr]);
+
+  if (!u || u.role !== "admin") return <Guard />;
+
+  // Click mini calendar day => jump week to that day
+  const onMiniDayClick = (day) => {
+    const d = new Date(miniYear, miniMonth, day);
+    setWeekBase(d);
+  };
+
+  const miniPrev = () => { if (miniMonth === 0) { setMiniMonth(11); setMiniYear(y => y-1); } else setMiniMonth(m => m-1); };
+  const miniNext = () => { if (miniMonth === 11) { setMiniMonth(0); setMiniYear(y => y+1); } else setMiniMonth(m => m+1); };
+
+  return (
+    <div className="aev-page">
+      <div className="page-head">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h1 className="h1">{t("adminEventsTitle")}</h1>
+            <p className="p muted">{t("adminEventsDesc")}</p>
+          </div>
+          <Btn kind="primary" onClick={() => { resetForm(); setShowForm(true); setEditId(null); }}>
+            + {t("eventNew")}
+          </Btn>
+        </div>
+      </div>
+
+      {/* Form modal/panel */}
+      {showForm && (
+        <div className="aev-form-panel glass slide-up" style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <h2 className="h2">{editId ? t("eventEdit") : t("eventNew")}</h2>
+            <button className="cal-nav-btn" onClick={resetForm}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+            </button>
+          </div>
+
+          <div className="ev-form-grid">
+            <div className="ev-field">
+              <label className="label">{t("eventTitle")}</label>
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={t("eventTitle")} />
+            </div>
+            <div className="ev-field">
+              <label className="label">{t("eventDescription")}</label>
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={t("eventDescription")} rows={2} />
+            </div>
+            <div className="ev-row">
+              <div className="ev-field">
+                <label className="label">{t("eventDateFrom")}</label>
+                <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              </div>
+              <div className="ev-field">
+                <label className="label">{t("eventDateTo")}</label>
+                <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              </div>
+            </div>
+            <div className="ev-field">
+              <label className="label">{t("eventColor")}</label>
+              <div className="ev-color-grid">
+                {EVENT_COLORS.map(c => (
+                  <button key={c} type="button" className={`ev-color-btn ${color === c ? "ev-color-btn--active" : ""}`}
+                    style={{ background: c }} onClick={() => setColor(c)} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {title.trim() && dateFrom && (
+            <div className="ev-preview" style={{ marginTop: 8 }}>
+              <div className="ev-preview-card" style={{ borderLeft: `4px solid ${color}` }}>
+                <div className="ev-preview-card__title">{title}</div>
+                {description && <div className="ev-preview-card__desc muted tiny">{description}</div>}
+                <div className="ev-preview-card__dates tiny muted">{dateFrom} — {dateTo || dateFrom}</div>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <Btn kind="primary" onClick={handleSave} disabled={sending}>
+              {sending ? "..." : t("eventSave")}
+            </Btn>
+            {editId && <Btn onClick={resetForm}>{t("cancel")}</Btn>}
+            {editId && (
+              <Btn
+                kind="primary"
+                style={{ background: "var(--red, #ef4444)", marginLeft: "auto" }}
+                onClick={async () => { await handleDelete(editId); resetForm(); }}
+                disabled={deleting === editId}
+              >
+                {deleting === editId ? t("deleting") : `\u2715 ${t("delete")}`}
+              </Btn>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="aev-layout">
+        {/* LEFT SIDEBAR */}
+        <div className="aev-sidebar">
+          {/* Mini month calendar */}
+          <div className="aev-mini glass slide-up">
+            <div className="aev-mini__head">
+              <button className="cal-nav-btn" onClick={miniPrev} style={{ width: 28, height: 28 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <span className="aev-mini__title">
+                {Array.isArray(monthNames) ? monthNames[miniMonth] : (miniMonth+1)} <span className="muted">{miniYear}</span>
+              </span>
+              <button className="cal-nav-btn" onClick={miniNext} style={{ width: 28, height: 28 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
+            <div className="aev-mini__grid aev-mini__wdays">
+              {(Array.isArray(weekDaysShort) ? weekDaysShort : ["Mo","Tu","We","Th","Fr","Sa","Su"]).map(d => (
+                <div key={d} className="aev-mini__wday">{d}</div>
+              ))}
+            </div>
+            <div className="aev-mini__grid">
+              {miniCells.map((day, i) => {
+                if (day === null) return <div key={`e${i}`} />;
+                const ds = `${miniYear}-${String(miniMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                const isToday = ds === todayStr;
+                const hasEv = (evMap[ds] || []).length > 0;
+                const inWeek = ds >= weekStart && ds <= weekEnd;
+                return (
+                  <button key={ds}
+                    className={`aev-mini__day${isToday ? " aev-mini__day--today" : ""}${inWeek ? " aev-mini__day--inweek" : ""}${hasEv ? " aev-mini__day--has" : ""}`}
+                    onClick={() => onMiniDayClick(day)}>
+                    {day}
+                    {hasEv && (
+                      <span className="aev-mini__dots">
+                        {(evMap[ds] || []).slice(0, 3).map((ev, j) => (
+                          <span key={j} className="aev-mini__dot" style={{ background: ev.color || "#38bdf8" }} />
+                        ))}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Today's events */}
+          {(evMap[todayStr] || []).length > 0 && (
+            <div className="aev-today glass slide-up" style={{ animationDelay: ".05s" }}>
+              <h3 className="aev-section-title">{t("calendarToday")}</h3>
+              {(evMap[todayStr] || []).map(ev => (
+                <div key={ev.id} className="aev-ev-mini" style={{ borderLeft: `3px solid ${ev.color || "#38bdf8"}` }}>
+                  <div className="aev-ev-mini__title">{ev.title}</div>
+                  <div className="muted tiny">{ev.dateFrom} — {ev.dateTo}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Upcoming */}
+          <div className="aev-upcoming glass slide-up" style={{ animationDelay: ".1s" }}>
+            <h3 className="aev-section-title">{t("calendarUpcoming")}</h3>
+            {upcoming.length === 0 ? (
+              <p className="muted tiny">{t("calendarNoUpcoming")}</p>
+            ) : (
+              upcoming.map(ev => {
+                const daysAway = Math.max(0, Math.ceil((new Date(ev.dateFrom + "T00:00:00") - today) / 86400000));
+                return (
+                  <div key={ev.id} className="aev-ev-mini" style={{ borderLeft: `3px solid ${ev.color || "#38bdf8"}`, cursor: "pointer" }}
+                    onClick={() => startEdit(ev)}>
+                    <div className="aev-ev-mini__title">{ev.title}</div>
+                    <div className="muted tiny">{ev.dateFrom} — {ev.dateTo}
+                      {daysAway > 0 && <span className="cal-upcoming-card__badge" style={{ marginLeft: 6 }}>{daysAway} {t("calendarDays")}</span>}
+                      {daysAway === 0 && <span className="cal-upcoming-card__badge cal-upcoming-card__badge--today" style={{ marginLeft: 6 }}>{t("calendarToday")}</span>}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* MAIN: View switch + week/month/list */}
+        <div className="aev-main">
+          {/* Toolbar */}
+          <div className="aev-toolbar glass">
+            <div className="aev-toolbar__nav">
+              <button className="cal-nav-btn" onClick={prevWeek}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <Btn kind="ghost" size="sm" onClick={goThisWeek}>{t("calendarToday")}</Btn>
+              <button className="cal-nav-btn" onClick={nextWeek}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
+            <div className="aev-toolbar__period">
+              {Array.isArray(monthNames) ? monthNames[weekDates[0].getMonth()] : ""} {weekDates[0].getDate()} – {weekDates[6].getDate()}, {weekDates[0].getFullYear()}
+            </div>
+            <div className="aev-toolbar__views">
+              {["week","month","list"].map(v => (
+                <button key={v} className={`aev-view-btn${view === v ? " aev-view-btn--active" : ""}`}
+                  onClick={() => setView(v)}>
+                  {t(v + "View")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {loading && <LoadingScreen />}
+
+          {/* WEEK VIEW */}
+          {!loading && view === "week" && (
+            <div className="aev-week glass slide-up">
+              {/* Header row */}
+              <div className="aev-week__header">
+                <div className="aev-week__corner" />
+                {weekDates.map((d, i) => {
+                  const ds = _evYmd(d);
+                  const isToday = ds === todayStr;
+                  return (
+                    <div key={ds} className={`aev-week__dayhead${isToday ? " aev-week__dayhead--today" : ""}`}>
+                      <span className="aev-week__dayname">{Array.isArray(weekDaysShort) ? weekDaysShort[i] : ""}</span>
+                      <span className={`aev-week__daynum${isToday ? " aev-week__daynum--today" : ""}`}>{d.getDate()}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Time grid */}
+              <div className="aev-week__body">
+                {Array.from({ length: 13 }, (_, hi) => hi + 7).map(hour => (
+                  <div key={hour} className="aev-week__row">
+                    <div className="aev-week__time">{String(hour).padStart(2, "0")}:00</div>
+                    {weekDates.map(d => {
+                      const ds = _evYmd(d);
+                      const isToday = ds === todayStr;
+                      return <div key={ds} className={`aev-week__cell${isToday ? " aev-week__cell--today" : ""}`} />;
+                    })}
+                  </div>
+                ))}
+
+                {/* Event blocks overlay */}
+                <div className="aev-week__events">
+                  {weekDates.map((d, colIdx) => {
+                    const ds = _evYmd(d);
+                    const dayEv = weekEvents[ds] || [];
+                    return dayEv.map((ev, evIdx) => (
+                      <div key={ev.id + colIdx}
+                        className="aev-week__block"
+                        style={{
+                          gridColumn: colIdx + 2,
+                          gridRow: `${2 + evIdx * 2} / span 2`,
+                          background: (ev.color || "#38bdf8") + "22",
+                          borderLeft: `3px solid ${ev.color || "#38bdf8"}`,
+                          color: ev.color || "#38bdf8",
+                        }}
+                        onClick={() => startEdit(ev)}
+                        title={`${ev.title}\n${ev.dateFrom} — ${ev.dateTo}`}>
+                        <div className="aev-week__block-title">{ev.title}</div>
+                        {ev.description && <div className="aev-week__block-desc">{ev.description}</div>}
+                      </div>
+                    ));
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MONTH VIEW */}
+          {!loading && view === "month" && (
+            <div className="aev-month glass slide-up">
+              <div className="cal-grid cal-weekdays">
+                {(Array.isArray(weekDaysShort) ? weekDaysShort : ["Mo","Tu","We","Th","Fr","Sa","Su"]).map(d => (
+                  <div key={d} className="cal-wday">{d}</div>
+                ))}
+              </div>
+              <div className="cal-grid cal-days">
+                {miniCells.map((day, i) => {
+                  if (day === null) return <div key={`e${i}`} className="cal-cell cal-cell--empty" />;
+                  const ds = `${miniYear}-${String(miniMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                  const dayEv = evMap[ds] || [];
+                  const isToday = ds === todayStr;
+                  return (
+                    <div key={ds} className={`cal-cell${isToday ? " cal-cell--today" : ""}${dayEv.length ? " cal-cell--has-events" : ""}`}>
+                      <span className="cal-cell__num">{day}</span>
+                      {dayEv.length > 0 && (
+                        <div className="cal-cell__dots">
+                          {dayEv.slice(0, 3).map((ev, j) => (
+                            <span key={j} className="cal-cell__dot" style={{ background: ev.color || "#38bdf8" }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* LIST VIEW */}
+          {!loading && view === "list" && (
+            <div className="aev-list-view">
+              {events.length === 0 && <p className="p muted">{t("eventsEmpty")}</p>}
+              <div className="ev-list">
+                {events.map((ev, i) => {
+                  const status = getStatus(ev);
+                  return (
+                    <div key={ev.id} className={`ev-card glass fade-in ev-card--${status}`}
+                      style={{ animationDelay: `${i * 0.04}s`, borderLeft: `4px solid ${ev.color || "#38bdf8"}` }}>
+                      <div className="ev-card__top">
+                        <div className="ev-card__info">
+                          <span className="ev-card__title">{ev.title}</span>
+                          {ev.description && <span className="ev-card__desc muted tiny">{ev.description}</span>}
+                        </div>
+                        <Pill kind={status === "active" ? "approved" : status === "future" ? "pending" : "rejected"}>
+                          {status === "active" ? t("eventActive") : status === "future" ? t("eventFuture") : t("eventPast")}
+                        </Pill>
+                      </div>
+                      <div className="ev-card__meta tiny muted">{ev.dateFrom} — {ev.dateTo}</div>
+                      <div className="ev-card__actions">
+                        <Btn size="sm" onClick={() => startEdit(ev)}><Icon name="file" /> {t("eventEdit")}</Btn>
+                        <button className="ev-card__del" onClick={() => handleDelete(ev.id)} disabled={deleting === ev.id} title={t("delete")}>
+                          {deleting === ev.id ? "..." : <Icon name="x" />}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** ---------- PageNews ---------- */

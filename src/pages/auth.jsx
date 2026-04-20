@@ -12,7 +12,7 @@ import {
   ensureUserDoc, hasAnyAdmin, seedDefaultTypes, updateProfile, fetchTypesAll,
   uploadFile
 } from "../data.js";
-import { Icon, Btn, Input, Select, Textarea, Pill, Guard } from "../components.jsx";
+import { Icon, Btn, Select, Textarea, Pill, Guard } from "../components.jsx";
 
 export function PageOnboarding() {
   const st = useStore();
@@ -365,7 +365,9 @@ export function PageLogin() {
   const st = useStore();
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
   const [slide, setSlide] = useState(0);
+  const [focused, setFocused] = useState(null);
 
   useEffect(() => { if (st.userDoc) navigate("dashboard"); }, [st.userDoc]);
 
@@ -384,7 +386,8 @@ export function PageLogin() {
     e.preventDefault();
     try {
       setState({ loading: true });
-      await signInWithEmailAndPassword(auth, email, pass);
+      const fullEmail = email.includes("@") ? email : email + "@kzl.nis.edu.kz";
+      await signInWithEmailAndPassword(auth, fullEmail, pass);
       toast(t("loginWelcome"), "ok");
     } catch (err) {
       console.error(err);
@@ -490,18 +493,69 @@ export function PageLogin() {
           <div className="login-divider"><span>{t("or")}</span></div>
 
           <form onSubmit={submit}>
-            <div className="login-field">
+            <div className={`login-field login-field--big${focused === "email" ? " login-field--focused" : ""}`}>
               <label className="login-label">{t("email")}</label>
-              <Input value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="name@nis.edu.kz" required />
+              <div className="login-input-suffix-wrap">
+                <input
+                  className="login-input"
+                  value={email}
+                  onChange={e => setEmail(e.target.value.replace(/@.*$/, ""))}
+                  onFocus={() => setFocused("email")}
+                  onBlur={() => setFocused(null)}
+                  type="text"
+                  placeholder="abeken_a"
+                  autoComplete="username"
+                  required
+                />
+                <span className="login-input-suffix">@kzl.nis.edu.kz</span>
+              </div>
             </div>
-            <div className="login-field" style={{ marginTop: 10 }}>
+            <div className={`login-field login-field--big${focused === "pass" ? " login-field--focused" : ""}`} style={{ marginTop: 14 }}>
               <label className="login-label">{t("password")}</label>
-              <Input value={pass} onChange={e => setPass(e.target.value)} type="password" placeholder="••••••••" required />
+              <div className="login-pass-wrap">
+                <input
+                  className="login-input login-input--pass"
+                  value={pass}
+                  onChange={e => setPass(e.target.value)}
+                  onFocus={() => setFocused("pass")}
+                  onBlur={() => setFocused(null)}
+                  type={showPass ? "text" : "password"}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-pass-toggle"
+                  onClick={() => setShowPass(v => !v)}
+                  tabIndex={-1}
+                  aria-label={showPass ? "Hide password" : "Show password"}
+                >
+                  {showPass ? (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
+                      <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  ) : (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
-            <Btn kind="primary" type="submit" disabled={st.loading}
-              style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: "12px 20px", fontSize: 15 }}>
-              {st.loading ? t("signingIn") : t("signIn")}
-            </Btn>
+            <button
+              type="submit"
+              className="login-submit-btn"
+              disabled={st.loading}
+            >
+              <span className="login-submit-btn__text">
+                {st.loading ? t("signingIn") : t("signIn")}
+              </span>
+              <span className="login-submit-btn__shine" />
+            </button>
           </form>
 
           <div className="login-form-footer">{t("copyright")}</div>

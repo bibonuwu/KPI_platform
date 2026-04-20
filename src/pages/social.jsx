@@ -22,10 +22,11 @@ import {
   addNewsComment, deleteNewsPost, toggleNewsPin, uploadFile, uploadEvidence,
   fetchAllTickets, fetchMyTickets, createTicket, updateTicketStatus,
   fetchAnnouncements, createAnnouncement, deleteAnnouncement,
-  updateProfile, renderRichDesc, newsCatLabel
+  updateProfile, renderRichDesc, newsCatLabel,
+  fetchEvents
 } from "../data.js";
 import {
-  Icon, Btn, Input, Select, Textarea, Pill, DataCards, LoadingScreen, ErrorBoundary, Guard
+  Icon, Btn, Input, Select, Textarea, Pill, DataCards, LoadingScreen, FileDrop, ErrorBoundary, Guard
 } from "../components.jsx";
 
 export function NewsCard({ item, user, index }) {
@@ -330,6 +331,60 @@ export function PageNews() {
   const filteredRaw = filter === "all" ? localNews : localNews.filter(n => n.category === filter);
   const filtered = [...filteredRaw].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
+  // Mini calendar for sidebar
+  const calToday = useMemo(() => new Date(), []);
+  const [calYear, setCalYear] = useState(calToday.getFullYear());
+  const [calMonth, setCalMonth] = useState(calToday.getMonth());
+  const [calSelDate, setCalSelDate] = useState(null);
+  const calEvents = st.events || [];
+
+  useEffect(() => {
+    if (calEvents.length === 0) {
+      fetchEvents().then(ev => setState({ events: ev })).catch(() => {});
+    }
+  }, []);
+
+  const calTodayStr = useMemo(() => {
+    const y = calToday.getFullYear();
+    const m = String(calToday.getMonth()+1).padStart(2,"0");
+    const d = String(calToday.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  }, [calToday]);
+
+  const calDaysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const calStartOff = (() => { const d = new Date(calYear, calMonth, 1).getDay(); return d === 0 ? 6 : d - 1; })();
+  const calCells = useMemo(() => {
+    const c = [];
+    for (let i = 0; i < calStartOff; i++) c.push(null);
+    for (let d = 1; d <= calDaysInMonth; d++) c.push(d);
+    return c;
+  }, [calStartOff, calDaysInMonth]);
+
+  const calEvMap = useMemo(() => {
+    const map = {};
+    const mStart = `${calYear}-${String(calMonth+1).padStart(2,"0")}-01`;
+    const mEnd = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(calDaysInMonth).padStart(2,"0")}`;
+    calEvents.forEach(ev => {
+      if (ev.dateTo < mStart || ev.dateFrom > mEnd) return;
+      const from = ev.dateFrom > mStart ? ev.dateFrom : mStart;
+      const to = ev.dateTo < mEnd ? ev.dateTo : mEnd;
+      let cur = new Date(from + "T00:00:00");
+      const end = new Date(to + "T00:00:00");
+      while (cur <= end) {
+        const k = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,"0")}-${String(cur.getDate()).padStart(2,"0")}`;
+        if (!map[k]) map[k] = [];
+        map[k].push(ev);
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
+    return map;
+  }, [calEvents, calYear, calMonth, calDaysInMonth]);
+
+  const calMonthNames = t("monthNames");
+  const calWeekDays = t("weekDays");
+  const calPrev = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(y => y-1); } else setCalMonth(m => m-1); };
+  const calNext = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(y => y+1); } else setCalMonth(m => m+1); };
+
   // Sidebar data
   const totalLikes = localNews.reduce((s, n) => s + (n.likes || []).length, 0);
   const popular = [...localNews].sort((a, b) => (b.likes || []).length - (a.likes || []).length).slice(0, 5);
@@ -417,11 +472,16 @@ export function PageNews() {
             </div>
             <div className="field">
               <label className="label">{t("photoMax10")}</label>
-              <input ref={photoInputRef} type="file" accept="image/*" className="input" onChange={e => setPhoto(e.target.files[0] || null)} />
+              <FileDrop
+                ref={photoInputRef}
+                accept="image/*"
+                value={photo}
+                onChange={e => setPhoto(e.target.files?.[0] || null)}
+              />
               {photo && (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
                   <img src={URL.createObjectURL(photo)} alt="" style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, border: "1px solid var(--border2)" }} />
-                  <span className="tiny muted">{photo.name} ({(photo.size / 1024 / 1024).toFixed(1)} MB)</span>
+                  <span className="tiny muted">{t("clearPhoto")}?</span>
                   <button type="button" className="news-clear-photo" onClick={() => { setPhoto(null); if (photoInputRef.current) photoInputRef.current.value = ""; }}>✕ {t("clearPhoto")}</button>
                 </div>
               )}
@@ -466,6 +526,75 @@ export function PageNews() {
 
         {/* RIGHT: sidebar */}
         <div className="news-sidebar">
+          {/* Mini Calendar */}
+          <div className="news-sidebar-card news-sidebar-card--calendar">
+            <div className="ncal-head">
+              <button className="ncal-nav" onClick={calPrev}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <span className="ncal-title">
+                <span className="ncal-month">{Array.isArray(calMonthNames) ? calMonthNames[calMonth] : (calMonth+1)}</span>
+                <span className="ncal-year">{calYear}</span>
+              </span>
+              <button className="ncal-nav" onClick={calNext}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
+            <div className="ncal-grid ncal-wdays">
+              {(Array.isArray(calWeekDays) ? calWeekDays : ["Mo","Tu","We","Th","Fr","Sa","Su"]).map(d => (
+                <div key={d} className="ncal-wday">{d}</div>
+              ))}
+            </div>
+            <div className="ncal-grid">
+              {calCells.map((day, i) => {
+                if (day === null) return <div key={`e${i}`} />;
+                const ds = `${calYear}-${String(calMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                const isToday = ds === calTodayStr;
+                const isSel = ds === calSelDate;
+                const dayEv = calEvMap[ds] || [];
+                return (
+                  <button key={ds}
+                    className={`ncal-day${isToday ? " ncal-day--today" : ""}${isSel ? " ncal-day--sel" : ""}${dayEv.length ? " ncal-day--has" : ""}`}
+                    onClick={() => setCalSelDate(ds === calSelDate ? null : ds)}>
+                    {day}
+                    {dayEv.length > 0 && (
+                      <span className="ncal-dots">
+                        {dayEv.slice(0, 3).map((ev, j) => (
+                          <span key={j} className="ncal-dot" style={{ background: ev.color || "#38bdf8" }} />
+                        ))}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected day events */}
+            {calSelDate && (
+              <div className="ncal-events fade-in">
+                <div className="ncal-events__head">
+                  <span className="ncal-events__date">{calSelDate}</span>
+                  <button className="ncal-nav" onClick={() => setCalSelDate(null)} style={{ width: 22, height: 22 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                  </button>
+                </div>
+                {(calEvMap[calSelDate] || []).length === 0 ? (
+                  <p className="muted tiny" style={{ margin: "4px 0 0" }}>{t("calendarNoEvents")}</p>
+                ) : (
+                  <div className="ncal-events__list">
+                    {(calEvMap[calSelDate] || []).map((ev) => (
+                      <div key={ev.id} className="ncal-ev" style={{ borderLeft: `3px solid ${ev.color || "#38bdf8"}` }}>
+                        <div className="ncal-ev__title">{ev.title}</div>
+                        {ev.description && <div className="ncal-ev__desc muted tiny">{ev.description}</div>}
+                        <div className="ncal-ev__dates muted tiny">{ev.dateFrom} — {ev.dateTo}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Stats */}
           <div className="news-sidebar-card news-sidebar-card--stats">
             <h3>
@@ -584,7 +713,6 @@ export function PageSettings() {
   const changeLang = (code) => {
     setLang(code);
     setState({ lang: code });
-    render();
   };
 
   const changeTheme = (theme) => {
@@ -1162,10 +1290,11 @@ export function AnnouncementBanner() {
 
   return (
     <div className="ann-banners-wrap">
-      {active.map(a => {
+      {active.map((a, i) => {
         const parsedLink = (a.link || "").includes("||") ? a.link.split("||") : [a.link, a.link];
         return (
-          <div key={a.id} className="ann-banner slide-down">
+          <div key={a.id} className="ann-banner" style={{ animationDelay: `${i * 0.1}s` }}>
+            <div className="ann-banner__shimmer" />
             <div className="ann-banner__content">
               <span className="ann-banner__emoji">{a.emoji}</span>
               <span className="ann-banner__text">{a.text}</span>

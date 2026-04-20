@@ -54,6 +54,7 @@ export function Icon({ name }) {
     case "clock": return <svg {...common}><circle {...s} cx="12" cy="12" r="10" /><path {...s} d="M12 6v6l4 2" /></svg>;
     case "trending-up": return <svg {...common}><path {...s} d="M23 6l-9.5 9.5-5-5L1 18" /><path {...s} d="M17 6h6v6" /></svg>;
     case "hash": return <svg {...common}><path {...s} d="M4 9h16M4 15h16M10 3L8 21M16 3l-2 18" /></svg>;
+    case "tools": return <svg {...common}><path {...s} d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" /></svg>;
     default: return null;
   }
 }
@@ -61,6 +62,103 @@ export const Btn = ({ kind = "", children, ...props }) => <button className={["b
 export const Input = (p) => <input className="input" {...p} />;
 export const Select = (p) => <select className="select" {...p} />;
 export const Textarea = (p) => <textarea className="textarea" {...p} />;
+
+export const FileDrop = React.forwardRef(function FileDrop(
+  { accept, onChange, value, required, multiple, disabled, hint, className = "", children, ...rest },
+  ref
+) {
+  const inputRef = useRef(null);
+  React.useImperativeHandle(ref, () => inputRef.current, []);
+  const [drag, setDrag] = useState(false);
+
+  const openPicker = () => { if (!disabled) inputRef.current?.click(); };
+
+  const fireChange = (files) => {
+    if (!files || !files.length) return;
+    try {
+      const dt = new DataTransfer();
+      for (const f of files) dt.items.add(f);
+      if (inputRef.current) inputRef.current.files = dt.files;
+    } catch { /* Safari/older browsers: fall through to synthetic event */ }
+    if (onChange) onChange({ target: { files, value: "" } });
+  };
+
+  const mime = (accept || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  const matchesAccept = (f) => {
+    if (!mime.length) return true;
+    const name = (f.name || "").toLowerCase();
+    const type = (f.type || "").toLowerCase();
+    return mime.some(a => {
+      if (a.startsWith(".")) return name.endsWith(a);
+      if (a.endsWith("/*")) return type.startsWith(a.slice(0, -1));
+      return type === a;
+    });
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDrag(false);
+    if (disabled) return;
+    const list = Array.from(e.dataTransfer?.files || []).filter(matchesAccept);
+    if (!list.length) return;
+    fireChange(multiple ? list : [list[0]]);
+  };
+
+  const clear = (e) => {
+    e.stopPropagation();
+    if (inputRef.current) inputRef.current.value = "";
+    if (onChange) onChange({ target: { files: [], value: "" } });
+  };
+
+  const file = value && typeof value === "object" && "name" in value ? value : null;
+  const label = hint || t("dropFileHint");
+
+  return (
+    <div
+      className={`filedrop${drag ? " is-drag" : ""}${disabled ? " is-disabled" : ""}${file ? " has-file" : ""} ${className}`.trim()}
+      onClick={openPicker}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPicker(); } }}
+      onDragOver={(e) => { e.preventDefault(); if (!disabled) setDrag(true); }}
+      onDragEnter={(e) => { e.preventDefault(); if (!disabled) setDrag(true); }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDrag(false); }}
+      onDrop={handleDrop}
+      role="button"
+      tabIndex={disabled ? -1 : 0}
+      aria-disabled={disabled || undefined}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        required={required && !file}
+        multiple={multiple}
+        disabled={disabled}
+        onChange={onChange}
+        className="filedrop__native"
+        tabIndex={-1}
+        {...rest}
+      />
+      <div className="filedrop__icon"><Icon name="file" /></div>
+      {file ? (
+        <div className="filedrop__body">
+          <div className="filedrop__name" title={file.name}>{file.name}</div>
+          <div className="filedrop__meta">{(file.size / 1024 / 1024).toFixed(2)} MB · {t("clickToReplace")}</div>
+        </div>
+      ) : (
+        <div className="filedrop__body">
+          <div className="filedrop__title">{label}</div>
+          <div className="filedrop__meta">{t("orClickToSelect")}</div>
+        </div>
+      )}
+      {file && !disabled && (
+        <button type="button" className="filedrop__clear" onClick={clear} aria-label={t("clearFile")}>
+          <Icon name="x" />
+        </button>
+      )}
+      {children}
+    </div>
+  );
+});
 export const Pill = ({ kind, children, style }) => <span className={`pill ${kind}`} style={style}>{children}</span>;
 // Mobile-friendly data display: cards on mobile, table on desktop
 export function DataCards({ columns, rows, emptyText }) {
@@ -700,27 +798,35 @@ export function SidebarNav() {
     if (["rating", "stats"].includes(p)) return "analytics";
     if (["requests", "documents", "add"].includes(p)) return "work";
     if (["support", "onboarding"].includes(p)) return "info";
+    if (["admin/approvals", "admin/requests"].includes(p)) return "adminModeration";
+    if (["admin/documents", "admin/types", "admin/announcements", "admin/events"].includes(p)) return "adminContent";
+    if (["admin/users", "admin/support"].includes(p)) return "adminPeople";
     return null;
   };
   const [openGroup, setOpenGroup] = useState(() => groupFor(path));
   useEffect(() => { setOpenGroup(groupFor(path)); }, [path]);
   const toggle = (key) => setOpenGroup(prev => prev === key ? null : key);
 
-  // Admin panel items
-  const adminItems = [
+  // Admin panel items grouped
+  const adminModerationItems = [
     { p: "admin/approvals", tKey: "navApprovals", i: "check" },
     { p: "admin/requests", tKey: "navRequests", i: "file" },
+  ];
+  const adminContentItems = [
     { p: "admin/documents", tKey: "navDocuments", i: "shield" },
     { p: "admin/types", tKey: "navKpiTypes", i: "file" },
+    { p: "admin/announcements", tKey: "navAnnouncements", i: "bell" },
+    { p: "admin/events", tKey: "navAdminEvents", i: "calendar" },
+  ];
+  const adminPeopleItems = [
     { p: "admin/users", tKey: "navUsers", i: "user" },
     { p: "admin/support", tKey: "navSupport", i: "bug" },
-    { p: "admin/announcements", tKey: "navAnnouncements", i: "bell" },
   ];
 
   // Flyout group badges (sum of children)
   const workBadge = badgeFor("documents");
-  const adminReqBadge = badgeFor("admin/approvals") + badgeFor("admin/requests");
-  const adminSupportBadge = badgeFor("admin/support");
+  const adminModerationBadge = badgeFor("admin/approvals") + badgeFor("admin/requests");
+  const adminPeopleBadge = badgeFor("admin/support");
 
   if (!u) {
     return (
@@ -745,6 +851,9 @@ export function SidebarNav() {
 
       {/* News — standalone */}
       <NavLink it={{ p: "news", tKey: "navNews", i: "news" }} />
+
+      {/* Classroom Tools — standalone */}
+      <NavLink it={{ p: "classroomtools", tKey: "navClassroomTools", i: "tools" }} />
 
       {/* Group 1: Рейтинг + Статистика */}
       <NavFlyout icon="rank" label={t("navGroupAnalytics")} open={openGroup === "analytics"} onToggle={() => toggle("analytics")}>
@@ -775,7 +884,41 @@ export function SidebarNav() {
       {u.role === "admin" && (
         <>
           <div className="navsec">{t("navAdmin")}</div>
-          {adminItems.map(it => <NavLink key={it.p} it={it} />)}
+
+          {/* Director dashboard — standalone */}
+          <NavLink it={{ p: "admin/director", tKey: "navDirector", i: "chart" }} />
+
+          {/* Group: Moderation */}
+          <NavFlyout
+            icon="check"
+            label={t("navGroupModeration")}
+            badge={adminModerationBadge}
+            open={openGroup === "adminModeration"}
+            onToggle={() => toggle("adminModeration")}
+          >
+            {adminModerationItems.map(it => <NavLink key={it.p} it={it} />)}
+          </NavFlyout>
+
+          {/* Group: Content */}
+          <NavFlyout
+            icon="file"
+            label={t("navGroupContent")}
+            open={openGroup === "adminContent"}
+            onToggle={() => toggle("adminContent")}
+          >
+            {adminContentItems.map(it => <NavLink key={it.p} it={it} />)}
+          </NavFlyout>
+
+          {/* Group: People & Support */}
+          <NavFlyout
+            icon="user"
+            label={t("navGroupPeople")}
+            badge={adminPeopleBadge}
+            open={openGroup === "adminPeople"}
+            onToggle={() => toggle("adminPeople")}
+          >
+            {adminPeopleItems.map(it => <NavLink key={it.p} it={it} />)}
+          </NavFlyout>
         </>
       )}
 
@@ -919,6 +1062,8 @@ const ROUTE_META = {
   "admin/teacher":     { icon: "user",      tKey: "navProfile",        desc: "teacherPageDesc" },
   "admin/support":     { icon: "bug",       tKey: "navSupport",        desc: "adminSupportDesc" },
   "admin/announcements": { icon: "bell",    tKey: "navAnnouncements",  desc: "annPageDesc" },
+  "admin/events":      { icon: "calendar",  tKey: "navAdminEvents",    desc: "adminEventsDesc" },
+  "admin/director":    { icon: "chart",     tKey: "navDirector",       desc: "dirSubtitle" },
 };
 
 export function TopbarTitle() {

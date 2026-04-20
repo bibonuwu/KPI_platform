@@ -615,3 +615,26 @@ export async function createBookQuizRewardSubmission({ uid, book, result }) {
     createdAt: serverTimestamp()
   });
 }
+
+/** ---------- events / calendar api ---------- */
+export async function fetchEvents() {
+  const qy = query(collection(db, "events"), orderBy("dateFrom", "asc"), limit(500));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+export async function createEvent({ title, description, dateFrom, dateTo, color }) {
+  await addDoc(collection(db, "events"), {
+    title: safeText(title),
+    description: safeText(description),
+    dateFrom: dateFrom || "",
+    dateTo: dateTo || "",
+    color: color || "#38bdf8",
+    createdAt: serverTimestamp()
+  });
+}
+export async function updateEvent(id, patch) {
+  await updateDoc(doc(db, "events", id), patch);
+}
+export async function deleteEvent(id) {
+  await deleteDoc(doc(db, "events", id));
+}

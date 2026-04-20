@@ -32,7 +32,7 @@ import {
   GoalsWidget, LoadingScreen, BarChart, LineChart, AreaLineChart,
   DonutChart, RadarChart, GaugeChart, StackedBarChart, HistogramChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
-  ErrorBoundary, Guard
+  FileDrop, ErrorBoundary, Guard
 } from "../components.jsx";
 
 export function PageDashboard() {
@@ -1709,7 +1709,11 @@ export function PageAdd() {
           <Input value={evidenceLink} onChange={(e) => setEvidenceLink(e.target.value)} placeholder="https://..." />
 
           <div className="label">Файл (optional)</div>
-          <Input type="file" accept=".pdf,image/png,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+          <FileDrop
+            accept=".pdf,image/png,image/jpeg"
+            value={file}
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+          />
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
             <Btn kind="primary" type="submit" disabled={st.loading}>{goalMode ? t("setGoal") : "Отправить"}</Btn>

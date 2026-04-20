@@ -267,6 +267,8 @@ body::before {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 /* ── Topbar ── */
@@ -363,6 +365,8 @@ body::before {
 .content {
   padding: 14px;
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .route-section {

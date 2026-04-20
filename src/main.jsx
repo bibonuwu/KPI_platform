@@ -17,7 +17,7 @@ import {
   fetchMyRequests, fetchPendingRequests, fetchAdminRecentRequests,
   fetchAllDocuments, fetchDocumentsForTeacher, fetchMyTeacherDocs,
   fetchNewsAll, fetchMyTickets, fetchAllTickets, fetchAnnouncements,
-  fetchGoals, setUserOnline
+  fetchGoals, setUserOnline, fetchEvents
 } from "./data.js";
 import {
   ErrorBoundary, LoadingScreen, SidebarNav, TopbarTitle, TopbarRight,
@@ -31,12 +31,16 @@ import {
 } from "./pages/teacher.jsx";
 import {
   PageAdminApprovals, PageAdminRequests, PageDocuments, PageAdminDocuments,
-  PageAdminTypes, PageAdminUsers, PageAdminTeacher
+  PageAdminTypes, PageAdminUsers, PageAdminTeacher, PageAdminEvents
 } from "./pages/admin.jsx";
+import { PageAdminDirector } from "./pages/director.jsx";
 import {
   PageNews, PageSettings, PageSupport, PageAdminSupport,
   PageAdminAnnouncements, AnnouncementBanner
 } from "./pages/social.jsx";
+import { PageClassroomTools } from "./pages/classroomtools.jsx";
+import { PageCalendar } from "./pages/calendar.jsx";
+import { PageAbout } from "./pages/about.jsx";
 
 /* ---------- React mount/render layer ---------- */
 const __roots = new Map();
@@ -92,6 +96,9 @@ async function render() {
   mount("mount-news", show("news") ? <ErrorBoundary name="news">{booting ? <LoadingScreen /> : <PageNews />}</ErrorBoundary> : null);
   mount("mount-support", show("support") ? <ErrorBoundary name="support">{booting ? <LoadingScreen /> : <PageSupport />}</ErrorBoundary> : null);
   mount("mount-settings", show("settings") ? <ErrorBoundary name="settings">{booting ? <LoadingScreen /> : <PageSettings />}</ErrorBoundary> : null);
+  mount("mount-classroomtools", show("classroomtools") ? <ErrorBoundary name="classroomtools">{booting ? <LoadingScreen /> : <PageClassroomTools />}</ErrorBoundary> : null);
+  mount("mount-calendar", show("calendar") ? <ErrorBoundary name="calendar">{booting ? <LoadingScreen /> : <PageCalendar />}</ErrorBoundary> : null);
+  mount("mount-about", show("about") ? <ErrorBoundary name="about"><PageAbout /></ErrorBoundary> : null);
 
   mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary> : null);
   mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary> : null);
@@ -101,6 +108,8 @@ async function render() {
   mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen /> : <PageAdminTeacher />}</ErrorBoundary> : null);
   mount("mount-admin-support", show("admin/support") ? <ErrorBoundary name="admin/support">{booting ? <LoadingScreen /> : <PageAdminSupport />}</ErrorBoundary> : null);
   mount("mount-admin-announcements", show("admin/announcements") ? <ErrorBoundary name="admin/announcements">{booting ? <LoadingScreen /> : <PageAdminAnnouncements />}</ErrorBoundary> : null);
+  mount("mount-admin-events", show("admin/events") ? <ErrorBoundary name="admin/events">{booting ? <LoadingScreen /> : <PageAdminEvents />}</ErrorBoundary> : null);
+  mount("mount-admin-director", show("admin/director") ? <ErrorBoundary name="admin/director">{booting ? <LoadingScreen /> : <PageAdminDirector />}</ErrorBoundary> : null);
 }
 
 function setupMobileDrawer() {
@@ -134,7 +143,7 @@ async function hydrateForUser(userDoc) {
   if (!userDoc) return;
   try {
     if (userDoc.role === "admin") {
-      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData, ticketsData, announcementsData] = await Promise.all([
+      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData, ticketsData, announcementsData, eventsData] = await Promise.all([
         fetchTypesAll(),
         fetchUsersAll(),
         fetchPendingSubmissions(),
@@ -144,7 +153,8 @@ async function hydrateForUser(userDoc) {
         fetchAllDocuments(),
         fetchNewsAll(),
         fetchAllTickets(),
-        fetchAnnouncements()
+        fetchAnnouncements(),
+        fetchEvents()
       ]);
       setState({
         types, users,
@@ -152,10 +162,11 @@ async function hydrateForUser(userDoc) {
         pendingRequests: pendReq, adminRecentRequests: recentReq,
         allDocuments: allDocs, news: newsData,
         allTickets: ticketsData, announcements: announcementsData,
+        events: eventsData,
         mySubmissions: [], myRequests: [], myDocuments: [], myTickets: [], myGoals: []
       });
     } else {
-      const [types, my, myReq, myDocs, myTDocs, users, recent, newsData, myTix, announcementsData, myGoalsData] = await Promise.all([
+      const [types, my, myReq, myDocs, myTDocs, users, recent, newsData, myTix, announcementsData, myGoalsData, eventsData] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
@@ -166,13 +177,14 @@ async function hydrateForUser(userDoc) {
         fetchNewsAll(),
         fetchMyTickets(userDoc.uid),
         fetchAnnouncements(),
-        fetchGoals(userDoc.uid)
+        fetchGoals(userDoc.uid),
+        fetchEvents()
       ]);
       setState({
         types, mySubmissions: my, myRequests: myReq, myDocuments: myDocs,
         myTeacherDocs: myTDocs, users, adminRecentSubs: recent,
         news: newsData, myTickets: myTix, announcements: announcementsData,
-        myGoals: myGoalsData,
+        myGoals: myGoalsData, events: eventsData,
         pendingSubmissions: [], pendingRequests: [],
         adminRecentRequests: [], allDocuments: [], allTickets: []
       });
@@ -183,8 +195,27 @@ async function hydrateForUser(userDoc) {
   }
 }
 
+window.__kpiHydrate = async () => {
+  const ud = store.state.userDoc;
+  if (!ud) return;
+  await hydrateForUser(ud);
+  render();
+};
+
+function setupAboutFootButton() {
+  const handler = (e) => {
+    const btn = e.target.closest && e.target.closest("#btnAboutFoot");
+    if (!btn) return;
+    e.preventDefault();
+    try { window.__closeDrawer?.(); } catch (err) { }
+    navigate("about");
+  };
+  document.addEventListener("click", handler);
+}
+
 async function bootstrap() {
   setupMobileDrawer();
+  setupAboutFootButton();
   applyTheme(store.state.theme);
   applyFont(store.state.font);
   applyAccessibility(getDefaultAccessibility());
@@ -208,7 +239,7 @@ async function bootstrap() {
           mySubmissions: [], pendingSubmissions: [], adminRecentSubs: [],
           myRequests: [], pendingRequests: [], adminRecentRequests: [],
           myDocuments: [], allDocuments: [], myTeacherDocs: [],
-          news: [], myTickets: [], allTickets: [], announcements: [], myGoals: []
+          news: [], myTickets: [], allTickets: [], announcements: [], myGoals: [], events: []
         });
         setState({ booting: false });
         render();

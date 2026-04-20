@@ -148,10 +148,17 @@
 
       <div id="mount-sidebar" class="mount"></div>
 
-      <div class="sidebar__foot">
-        <div class="tiny muted">© KPI Platform NIS</div>
-        <div class="tiny muted" style="margin-top:2px">by Bibon</div>
-      </div>
+      <button type="button" class="sidebar__foot sidebar__foot--btn" id="btnAboutFoot" aria-label="О сайте">
+        <span class="sidebar__foot-shine" aria-hidden="true"></span>
+        <span class="sidebar__foot-body">
+          <span class="tiny muted">© KPI Platform NIS</span>
+          <span class="tiny muted" style="margin-top:2px">by Bibon</span>
+        </span>
+        <svg class="sidebar__foot-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M7 17L17 7M8 7h9v9" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+      </button>
     </aside>
 
     <div class="main">
@@ -220,6 +227,18 @@
           <div class="route-inner" id="mount-settings"></div>
         </section>
 
+        <section class="route-section" data-route="classroomtools">
+          <div class="route-inner" id="mount-classroomtools"></div>
+        </section>
+
+        <section class="route-section" data-route="calendar">
+          <div class="route-inner" id="mount-calendar"></div>
+        </section>
+
+        <section class="route-section" data-route="about">
+          <div class="route-inner" id="mount-about"></div>
+        </section>
+
         <section class="route-section" data-route="admin/approvals">
           <div class="route-inner" id="mount-admin-approvals"></div>
         </section>
@@ -250,6 +269,14 @@
 
         <section class="route-section" data-route="admin/announcements">
           <div class="route-inner" id="mount-admin-announcements"></div>
+        </section>
+
+        <section class="route-section" data-route="admin/events">
+          <div class="route-inner" id="mount-admin-events"></div>
+        </section>
+
+        <section class="route-section" data-route="admin/director">
+          <div class="route-inner" id="mount-admin-director"></div>
         </section>
       </main>
 

@@ -46,7 +46,8 @@ export const store = {
     showAccessibilityModal: false,
     siteSettings: { showClock: true, showWeather: true },
     myTickets: [],
-    allTickets: []
+    allTickets: [],
+    events: []
   },
   subs: new Set()
 };
@@ -129,8 +130,8 @@ export async function saveSiteSettings(uid, s) {
 
 export const ROUTES = [
   "login", "onboarding", "dashboard", "profile", "rating", "stats", "add",
-  "requests", "documents", "news", "support", "settings",
-  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support", "admin/announcements"
+  "requests", "documents", "news", "support", "settings", "classroomtools", "calendar", "about",
+  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support", "admin/announcements", "admin/events", "admin/director"
 ];
 
 export { parseRoute };
@@ -145,17 +146,18 @@ export function resolvePath(path) { return ROUTES.includes(path) ? path : "login
 
 export function canAccess(path, userDoc) {
   const isAuth = !!userDoc;
+  if (path === "about") return true;
   if (!isAuth) return path === "login";
   const role = userDoc.role || "teacher";
   if (path === "onboarding") return true;
   if (role === "teacher") {
     if (userDoc.onboarded !== true) return false;
     if (path.startsWith("admin/")) return false;
-    return ["dashboard", "profile", "rating", "stats", "add", "requests", "documents", "news", "support", "settings"].includes(path);
+    return ["dashboard", "profile", "rating", "stats", "add", "requests", "documents", "news", "support", "settings", "classroomtools", "about"].includes(path);
   }
   if (role === "admin") {
     if (path === "add") return false;
-    return ["dashboard", "profile", "rating", "stats", "documents", "news", "settings"].includes(path) || path.startsWith("admin/");
+    return ["dashboard", "profile", "rating", "stats", "documents", "news", "settings", "classroomtools", "calendar", "about"].includes(path) || path.startsWith("admin/");
   }
   return false;
 }

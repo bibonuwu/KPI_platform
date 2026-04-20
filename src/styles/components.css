@@ -714,38 +714,117 @@
 .sidenav {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   padding: 4px 0;
 }
 
 .sidenav .navlink {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 13px;
+  gap: 12px;
+  padding: 12px 15px;
   border-radius: var(--radius2);
   border: 1px solid transparent;
   background: transparent;
   cursor: pointer;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   font-family: var(--font);
   color: var(--muted);
-  transition: all .18s ease;
+  overflow: hidden;
+  transition:
+    background .22s cubic-bezier(.4, 0, .2, 1),
+    color .22s ease,
+    border-color .22s ease,
+    box-shadow .28s ease,
+    transform .22s cubic-bezier(.4, 0, .2, 1);
+}
+
+.sidenav .navlink::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--accent), var(--accent2));
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity .25s ease, transform .25s ease;
+  pointer-events: none;
+}
+
+.sidenav .navlink svg,
+.sidenav .navlink > :first-child {
+  transition: transform .25s cubic-bezier(.4, 0, .2, 1), filter .25s ease;
 }
 
 .sidenav .navlink:hover {
-  background: var(--hover-bg);
+  background: linear-gradient(135deg, var(--hover-bg), rgba(125, 211, 252, .04));
   color: var(--text);
-  border-color: var(--border2);
+  border-color: rgba(125, 211, 252, .18);
+  transform: translateX(3px);
+  box-shadow:
+    0 4px 18px var(--glow-accent, rgba(125, 211, 252, .12)),
+    inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+
+.sidenav .navlink:hover::before {
+  opacity: .7;
+  transform: translateX(0);
+}
+
+.sidenav .navlink:hover svg,
+.sidenav .navlink:hover > :first-child {
+  transform: scale(1.12);
+  filter: drop-shadow(0 0 6px var(--glow-accent-strong, rgba(125, 211, 252, .4)));
+}
+
+.sidenav .navlink:active {
+  transform: translateX(2px) scale(.985);
+  transition-duration: .08s;
 }
 
 .sidenav .navlink.active {
-  background: var(--hover-bg);
+  background: linear-gradient(135deg, rgba(125, 211, 252, .14), rgba(56, 189, 248, .06));
   color: var(--accent);
-  border-color: rgba(125, 211, 252, .15);
+  border-color: rgba(125, 211, 252, .28);
   font-weight: 700;
-  box-shadow: 0 0 12px var(--glow-accent, rgba(125, 211, 252, .06));
+  box-shadow:
+    0 6px 22px var(--glow-accent-strong, rgba(125, 211, 252, .28)),
+    inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+.sidenav .navlink.active::before {
+  opacity: 1;
+  transform: translateX(0);
+  box-shadow: 0 0 10px var(--glow-accent-strong, rgba(125, 211, 252, .6));
+}
+
+/* Light mode refinements — crisper glass, softer glow */
+[data-theme="light"] .sidenav .navlink:hover {
+  background: linear-gradient(135deg, rgba(14, 165, 233, .09), rgba(14, 165, 233, .04));
+  border-color: rgba(14, 165, 233, .22);
+  box-shadow:
+    0 4px 16px rgba(14, 165, 233, .15),
+    0 1px 3px rgba(14, 165, 233, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+
+[data-theme="light"] .sidenav .navlink:hover svg,
+[data-theme="light"] .sidenav .navlink:hover > :first-child {
+  filter: drop-shadow(0 0 5px rgba(14, 165, 233, .35));
+}
+
+[data-theme="light"] .sidenav .navlink.active {
+  background: linear-gradient(135deg, rgba(14, 165, 233, .14), rgba(14, 165, 233, .06));
+  border-color: rgba(14, 165, 233, .28);
+  box-shadow:
+    0 6px 20px rgba(14, 165, 233, .22),
+    0 1px 4px rgba(14, 165, 233, .10),
+    inset 0 1px 0 rgba(255, 255, 255, .9);
 }
 
 .sidenav .navsec {
@@ -768,29 +847,71 @@
 .nav-flyout__head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 13px;
+  gap: 12px;
+  padding: 12px 15px;
   border-radius: var(--radius2);
   border: 1px solid transparent;
   cursor: pointer;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--muted);
-  transition: all .22s ease;
+  transition:
+    background .22s cubic-bezier(.4, 0, .2, 1),
+    color .22s ease,
+    border-color .22s ease,
+    box-shadow .28s ease,
+    transform .22s cubic-bezier(.4, 0, .2, 1);
   position: relative;
   user-select: none;
+  overflow: hidden;
+}
+
+.nav-flyout__head svg,
+.nav-flyout__head > :first-child {
+  transition: transform .25s cubic-bezier(.4, 0, .2, 1), filter .25s ease;
 }
 
 .nav-flyout__head:hover {
-  background: var(--hover-bg);
+  background: linear-gradient(135deg, var(--hover-bg), rgba(125, 211, 252, .04));
   color: var(--text);
-  border-color: var(--border2);
+  border-color: rgba(125, 211, 252, .18);
+  transform: translateX(3px);
+  box-shadow:
+    0 4px 18px var(--glow-accent, rgba(125, 211, 252, .12)),
+    inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+
+.nav-flyout__head:hover svg,
+.nav-flyout__head:hover > :first-child {
+  transform: scale(1.12);
+  filter: drop-shadow(0 0 6px var(--glow-accent-strong, rgba(125, 211, 252, .4)));
 }
 
 .nav-flyout--open>.nav-flyout__head {
   color: var(--accent);
-  background: rgba(125, 211, 252,.06);
-  border-color: rgba(125, 211, 252,.12);
+  background: linear-gradient(135deg, rgba(125, 211, 252, .10), rgba(56, 189, 248, .04));
+  border-color: rgba(125, 211, 252, .22);
+  box-shadow: 0 3px 14px var(--glow-accent, rgba(125, 211, 252, .14));
+}
+
+[data-theme="light"] .nav-flyout__head:hover {
+  background: linear-gradient(135deg, rgba(14, 165, 233, .09), rgba(14, 165, 233, .04));
+  border-color: rgba(14, 165, 233, .22);
+  box-shadow:
+    0 4px 16px rgba(14, 165, 233, .15),
+    0 1px 3px rgba(14, 165, 233, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+
+[data-theme="light"] .nav-flyout__head:hover svg,
+[data-theme="light"] .nav-flyout__head:hover > :first-child {
+  filter: drop-shadow(0 0 5px rgba(14, 165, 233, .35));
+}
+
+[data-theme="light"] .nav-flyout--open>.nav-flyout__head {
+  background: linear-gradient(135deg, rgba(14, 165, 233, .12), rgba(14, 165, 233, .05));
+  border-color: rgba(14, 165, 233, .25);
+  box-shadow: 0 3px 14px rgba(14, 165, 233, .18);
 }
 
 .nav-flyout__label {
@@ -955,3 +1076,103 @@
   border-color: rgba(0, 0, 0, .04);
 }
 
+/* ── FileDrop ─────────────────────────────────────────── */
+.filedrop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  min-height: 64px;
+  border-radius: var(--radius3, 10px);
+  border: 1.5px dashed var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
+  outline: none;
+  user-select: none;
+}
+.filedrop:hover:not(.is-disabled) {
+  border-color: var(--accent);
+  background: var(--hover-bg);
+}
+.filedrop:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--glow-accent, rgba(125, 211, 252, .25));
+}
+.filedrop.is-drag {
+  border-color: var(--accent);
+  background: var(--glow-accent, rgba(125, 211, 252, .12));
+  box-shadow: 0 0 0 3px var(--glow-accent, rgba(125, 211, 252, .18));
+  transform: translateY(-1px);
+}
+.filedrop.is-disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.filedrop.has-file {
+  border-style: solid;
+  border-color: var(--border);
+}
+.filedrop__native {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.filedrop__icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--surface2);
+  color: var(--accent);
+  border: 1px solid var(--border2);
+}
+.filedrop__body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.filedrop__title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+.filedrop__name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.filedrop__meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+.filedrop__clear {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--surface2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
+.filedrop__clear:hover {
+  color: var(--red);
+  background: var(--hover-bg);
+  border-color: var(--red);
+}
