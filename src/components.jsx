@@ -2015,7 +2015,7 @@ export function generateDocHTML(request, user, signatureUrl, adminSignatureUrl) 
   <div class="field"><span class="field-label">${t("statusLabel")}:</span> ${statusText}</div>
   <div class="signatures">
     ${sigBlock(signatureUrl, t("employeeSign"), user.displayName || "")}
-    ${sigBlock(adminSignatureUrl, t("directorSign"), "")}
+    ${sigBlock(adminSignatureUrl, t("directorSign"), request.decidedByName || "")}
   </div>
   <div class="date-line">${t("date")}: ${dateStr}</div>
 </body></html>`;
@@ -2122,6 +2122,7 @@ export function DocumentPreview({ request, user, signatureUrl, adminSignatureUrl
         <div className="doc-preview__sig-block">
           {adminSignatureUrl ? <img src={adminSignatureUrl} alt="Admin" className="doc-preview__sig-img" /> : <div className="doc-preview__sig-line" />}
           <div className="doc-preview__sig-label">{t("directorSign")}</div>
+          <div className="doc-preview__sig-name">{request.decidedByName || ""}</div>
         </div>
       </div>
 

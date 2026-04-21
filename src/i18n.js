@@ -531,6 +531,25 @@ export const T = {
   denyEarlyLeave: { kz: "Қабылдамау", ru: "Не отпускать", en: "Don't let go" },
   document: { kz: "Құжат", ru: "Заявление", en: "Document" },
   compRules: { kz: "Демалыс ережесі: «Демалыс күні жұмыс жасау» — күніне +1 демалыс. «Жұмыстан сұрану» — демалыстарды шегереді.", ru: "Правило отгулов: «Работа в выходной день» добавляет +1 отгул. «Отпрашивание с работы» списывает отгулы.", en: "Comp day rules: 'Working on day off' adds +1 comp day. 'Leave request' deducts comp days." },
+  notEnoughCompTitle: { kz: "Демалыс жеткіліксіз", ru: "Недостаточно отгулов", en: "Not enough comp days" },
+  notEnoughCompDesc: {
+    kz: "Мұғалімде жеткілікті демалыс жоқ. Мақұлдағаннан кейін баланс теріс болады.",
+    ru: "У учителя недостаточно отгулов. После одобрения баланс станет отрицательным.",
+    en: "The teacher does not have enough comp days. Approving will push the balance below zero."
+  },
+  compCurrent: { kz: "Қазіргі баланс", ru: "Текущий баланс", en: "Current balance" },
+  compNeeded: { kz: "Қажет", ru: "Нужно", en: "Needed" },
+  compAfter: { kz: "Мақұлдаудан кейін", ru: "После одобрения", en: "After approval" },
+  approveAnyway: { kz: "Бәрібір мақұлдау", ru: "Всё равно одобрить", en: "Approve anyway" },
+  adminSigTitle: { kz: "Қолыңызды қойыңыз", ru: "Поставьте свою подпись", en: "Add your signature" },
+  adminSigDesc: {
+    kz: "Бұл қолтаңба сақталады және сіз мақұлдаған барлық құжаттарда қолданылады.",
+    ru: "Эта подпись будет сохранена и использована на всех документах, которые вы одобрите.",
+    en: "This signature will be saved and used on all documents you approve."
+  },
+  adminSigHint: { kz: "Осы жерде қол қойыңыз", ru: "Распишитесь здесь", en: "Sign here" },
+  saving: { kz: "Сақталуда…", ru: "Сохраняем…", en: "Saving…" },
+  saveAndApprove: { kz: "Сақтау және мақұлдау", ru: "Сохранить и одобрить", en: "Save and approve" },
 
   // ===== ADMIN DOCUMENTS =====
   adminDocTitle: { kz: "Құжат жіберу", ru: "Отправка документов", en: "Send documents" },

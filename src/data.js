@@ -341,8 +341,22 @@ export async function decideTeacherRequest(reqId, adminUid, action, pointsDelta)
     if (!uSnap.exists()) throw new Error("Пользователь не найден");
     const u = uSnap.data() || {};
 
+    const aRef = doc(db, "users", adminUid);
+    const aSnap = await tx.get(aRef);
+    const admin = aSnap.exists() ? (aSnap.data() || {}) : {};
+    const adminSigUrl = safeText(admin.signatureUrl || "");
+    const adminName = safeText(admin.displayName || admin.email || "");
+
     if (action === "reject") {
-      tx.update(rRef, { status: "rejected", decidedAt: serverTimestamp(), decidedBy: adminUid, pointsDelta: 0, compDaysDelta: 0 });
+      tx.update(rRef, {
+        status: "rejected",
+        decidedAt: serverTimestamp(),
+        decidedBy: adminUid,
+        decidedByName: adminName,
+        adminSignatureUrl: adminSigUrl,
+        pointsDelta: 0,
+        compDaysDelta: 0
+      });
       return;
     }
 
@@ -350,15 +364,13 @@ export async function decideTeacherRequest(reqId, adminUid, action, pointsDelta)
     const days = Number(r.days) || dateRangeDays(r.dateFrom, r.dateTo);
     const mode = r.compMode || "none";
     const compDelta = mode === "earn" ? days : mode === "use" ? -days : 0;
-    const curComp = Number(u.compDays) || 0;
-    if (curComp + compDelta < 0) {
-      throw new Error(`Недостаточно отгулов: нужно ${Math.abs(compDelta)}, есть ${curComp}`);
-    }
 
     tx.update(rRef, {
       status: "approved",
       decidedAt: serverTimestamp(),
       decidedBy: adminUid,
+      decidedByName: adminName,
+      adminSignatureUrl: adminSigUrl,
       pointsDelta: deltaPts,
       compDaysDelta: compDelta
     });

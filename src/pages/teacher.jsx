@@ -35,6 +35,100 @@ import {
   FileDrop, ErrorBoundary, Guard
 } from "../components.jsx";
 
+function School3D() {
+  const sceneRef = useRef(null);
+  const target = useRef({ rx: -15, ry: -25 });
+  const current = useRef({ rx: -15, ry: -25 });
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      target.current.ry = ((e.clientX / w) - 0.5) * 45 - 20;
+      target.current.rx = -((e.clientY / h) - 0.5) * 30 - 10;
+    };
+    window.addEventListener("mousemove", onMove, { passive: true });
+
+    let raf;
+    const loop = () => {
+      current.current.rx += (target.current.rx - current.current.rx) * 0.08;
+      current.current.ry += (target.current.ry - current.current.ry) * 0.08;
+      const el = sceneRef.current;
+      if (el) {
+        el.style.setProperty("--rx", `${current.current.rx.toFixed(2)}deg`);
+        el.style.setProperty("--ry", `${current.current.ry.toFixed(2)}deg`);
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <div className="school3d" aria-hidden="true">
+      <div className="school3d__stage">
+        <div className="school3d__scene" ref={sceneRef}>
+          <div className="school3d__shadow" />
+          <div className="school3d__cube school3d__cube--main">
+            <div className="school3d__face school3d__f-back" />
+            <div className="school3d__face school3d__f-bottom" />
+            <div className="school3d__face school3d__f-left" />
+            <div className="school3d__face school3d__f-right" />
+            <div className="school3d__face school3d__f-top" />
+            <div className="school3d__face school3d__f-front">
+              <div className="school3d__window school3d__window--1" />
+              <div className="school3d__window school3d__window--2" />
+              <div className="school3d__window school3d__window--3" />
+              <div className="school3d__window school3d__window--4" />
+              <div className="school3d__door" />
+              <div className="school3d__sign">KPI</div>
+            </div>
+          </div>
+          <div className="school3d__cube school3d__cube--tower">
+            <div className="school3d__face school3d__t-back" />
+            <div className="school3d__face school3d__t-left" />
+            <div className="school3d__face school3d__t-right" />
+            <div className="school3d__face school3d__t-top" />
+            <div className="school3d__face school3d__t-front">
+              <div className="school3d__clock">
+                <div className="school3d__clock-hand school3d__clock-hand--hour" />
+                <div className="school3d__clock-hand school3d__clock-hand--minute" />
+                <div className="school3d__clock-dot" />
+              </div>
+            </div>
+          </div>
+          <div className="school3d__pole" />
+          <div className="school3d__flag" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnimNum({ value, suffix = "" }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    const target = Number(value) || 0;
+    if (target === 0) { setDisplay(0); return; }
+    let frame;
+    const start = performance.now();
+    const dur = 900;
+    const step = (t) => {
+      const p = Math.min((t - start) / dur, 1);
+      const ease = 1 - Math.pow(1 - p, 3);
+      setDisplay(Math.round(ease * target));
+      if (p < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return <>{fmtPoints(display)}{suffix}</>;
+}
+
 export function PageDashboard() {
   const st = useStore();
   const u = st.userDoc;
@@ -123,26 +217,6 @@ export function PageDashboard() {
     return <span className={`pill ${map[status] || ""}`}>{labelMap[status] || status}</span>;
   };
 
-  const AnimNum = ({ value, suffix = "" }) => {
-    const [display, setDisplay] = useState(0);
-    useEffect(() => {
-      const target = Number(value) || 0;
-      if (target === 0) { setDisplay(0); return; }
-      let frame;
-      const start = performance.now();
-      const dur = 900;
-      const step = (t) => {
-        const p = Math.min((t - start) / dur, 1);
-        const ease = 1 - Math.pow(1 - p, 3);
-        setDisplay(Math.round(ease * target));
-        if (p < 1) frame = requestAnimationFrame(step);
-      };
-      frame = requestAnimationFrame(step);
-      return () => cancelAnimationFrame(frame);
-    }, [value]);
-    return <>{fmtPoints(display)}{suffix}</>;
-  };
-
   const lvl = levelFromPoints(u.totalPoints || 0);
   const nextPts = lvl.next ? lvl.next - (Number(u.totalPoints) || 0) : 0;
   const igHandle = (u.instagram || "").replace(/^@/, "").trim();
@@ -158,6 +232,7 @@ export function PageDashboard() {
           <div className="dash-hero-anim__shimmer" />
         </div>
         <div className="rop-hero__content">
+
           <div className="rop-hero__avatar-col dash-hero-anim__avatar" onClick={() => navigate("profile")} style={{ cursor: "pointer" }}>
             <div className="rop-hero__avatar-ring">
               <div className="rop-hero__avatar">
@@ -196,6 +271,7 @@ export function PageDashboard() {
               <Btn onClick={() => navigate("profile")}><Icon name="user" /> {t("navProfile")}</Btn>
             </div>
           </div>
+          <School3D />
           <div className="rop-hero__right dash-hero-anim__right" onClick={() => setShowLevelModal(true)} style={{ cursor: "pointer" }} title={t("lvlModalTitle")}>
             <div className="rop-hero__level-wrap">
               <div className="rop-hero__level-inner">
@@ -383,6 +459,21 @@ export function PageDashboard() {
               </div>
             </div>
           </div>
+
+          {/* Current quarter info */}
+          {(() => {
+            const curQ = getCurrentQuarter();
+            return curQ ? (
+              <div className="glass card dash-card" style={{ "--di": 8 }}>
+                <div className="h2">{t("currentQuarter")}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                  <Pill kind="approved">{t(curQ)}</Pill>
+                  <span className="tiny muted">{t(curQ + "Dates")}</span>
+                  <span className="tiny muted">{t("academicYear")}: {getAcademicYearLabel()}</span>
+                </div>
+              </div>
+            ) : null;
+          })()}
         </div>
 
         {/* Right column */}
@@ -433,20 +524,7 @@ export function PageDashboard() {
           {/* Goals widget (teachers only) */}
           {!isAdmin && <GoalsWidget compact />}
 
-          {/* Current quarter info */}
-          {(() => {
-            const curQ = getCurrentQuarter();
-            return curQ ? (
-              <div className="glass card dash-card" style={{ "--di": 8 }}>
-                <div className="h2">{t("currentQuarter")}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
-                  <Pill kind="approved">{t(curQ)}</Pill>
-                  <span className="tiny muted">{t(curQ + "Dates")}</span>
-                  <span className="tiny muted">{t("academicYear")}: {getAcademicYearLabel()}</span>
-                </div>
-              </div>
-            ) : null;
-          })()}
+
         </div>
       </div>
     </div>
@@ -477,11 +555,11 @@ export function ReadOnlyProfile({ teacher: tc, subs, goals }) {
     if (g.createdAt) {
       const goalCreated = g.createdAt?.seconds ? g.createdAt.seconds * 1000
         : g.createdAt?.toDate ? g.createdAt.toDate().getTime()
-        : new Date(g.createdAt).getTime();
+          : new Date(g.createdAt).getTime();
       rel = rel.filter(s => {
         const subTime = s.createdAt?.seconds ? s.createdAt.seconds * 1000
           : s.createdAt?.toDate ? s.createdAt.toDate().getTime()
-          : new Date(s.createdAt || 0).getTime();
+            : new Date(s.createdAt || 0).getTime();
         return subTime >= goalCreated;
       });
     }
@@ -1756,7 +1834,7 @@ export function PageAdd() {
           </div>
         </div>
       </div>
-      </div>
+    </div>
   );
 }
 
@@ -1876,6 +1954,7 @@ export function PageRequests() {
               request={viewReq}
               user={u}
               signatureUrl={u.signatureUrl}
+              adminSignatureUrl={viewReq.status === "approved" ? viewReq.adminSignatureUrl : ""}
               onPrint={() => window.print()}
               showDownload
             />
@@ -1980,7 +2059,7 @@ export function PageRequests() {
                     <label className="treq-field__label"><Icon name="calendar" /> {t("dateFrom")}</label>
                     <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} required />
                   </div>
-                  <div className="treq-date-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                  <div className="treq-date-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
                   <div className="treq-field">
                     <label className="treq-field__label"><Icon name="calendar" /> {t("dateTo")}</label>
                     <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} required />
@@ -1996,7 +2075,7 @@ export function PageRequests() {
                     <label className="treq-field__label"><Icon name="clock" /> {t("timeFrom")}</label>
                     <Input type="time" value={timeFrom} onChange={(e) => setTimeFrom(e.target.value)} required />
                   </div>
-                  <div className="treq-date-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg></div>
+                  <div className="treq-date-arrow"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
                   <div className="treq-field">
                     <label className="treq-field__label"><Icon name="clock" /> {t("timeTo")}</label>
                     <Input type="time" value={timeTo} onChange={(e) => setTimeTo(e.target.value)} required />

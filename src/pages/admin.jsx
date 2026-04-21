@@ -389,6 +389,79 @@ export function PageAdminRequests() {
   const u = st.userDoc;
   const [tab, setTab] = useState("pending");
   const [viewReq, setViewReq] = useState(null);
+  const [compWarn, setCompWarn] = useState(null);
+  const [sigModal, setSigModal] = useState(null);
+  const [sigSaving, setSigSaving] = useState(false);
+  const sigCanvasRef = useRef(null);
+  const sigDrawingRef = useRef(false);
+  const [sigHasInk, setSigHasInk] = useState(false);
+
+  const fillSigWhite = () => {
+    const c = sigCanvasRef.current;
+    if (!c) return;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, c.width, c.height);
+  };
+  const clearSigPad = () => { fillSigWhite(); setSigHasInk(false); };
+
+  const sigPos = (e) => {
+    const c = sigCanvasRef.current;
+    if (!c) return [0, 0];
+    const rect = c.getBoundingClientRect();
+    const sx = c.width / rect.width;
+    const sy = c.height / rect.height;
+    const p = e.touches ? e.touches[0] : e;
+    return [(p.clientX - rect.left) * sx, (p.clientY - rect.top) * sy];
+  };
+  const sigDown = (e) => {
+    e.preventDefault();
+    sigDrawingRef.current = true;
+    const ctx = sigCanvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const [x, y] = sigPos(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+  const sigMove = (e) => {
+    if (!sigDrawingRef.current) return;
+    e.preventDefault();
+    const ctx = sigCanvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const [x, y] = sigPos(e);
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1a1d2e";
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    if (!sigHasInk) setSigHasInk(true);
+  };
+  const sigUp = () => { sigDrawingRef.current = false; };
+
+  useEffect(() => {
+    if (sigModal) { fillSigWhite(); setSigHasInk(false); }
+  }, [sigModal]);
+
+  async function saveSignatureAndContinue() {
+    if (!sigHasInk || !sigModal) return;
+    try {
+      setSigSaving(true);
+      const c = sigCanvasRef.current;
+      const blob = await new Promise(res => c.toBlob(res, "image/png"));
+      const sigUrl = await uploadFile(`signatures/${u.uid}/${Date.now()}_admin.png`, new File([blob], "sig.png", { type: "image/png" }));
+      await updateProfile(u.uid, { signatureUrl: sigUrl });
+      setState({ userDoc: { ...u, signatureUrl: sigUrl } });
+      const pending = sigModal;
+      setSigModal(null);
+      decide(pending.id, pending.action, pending.skipWarn);
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || t("error"), "error");
+    } finally {
+      setSigSaving(false);
+    }
+  }
 
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
@@ -420,7 +493,25 @@ export function PageAdminRequests() {
     return { ok: t("allowLeave"), no: t("denyLeave") };
   };
 
-  async function decide(id, action) {
+  async function decide(id, action, skipWarn = false) {
+    if (action === "approve" && !store.state.userDoc?.signatureUrl) {
+      setSigModal({ id, action, skipWarn });
+      return;
+    }
+    if (action === "approve" && !skipWarn) {
+      const r = (st.pendingRequests || []).find(x => x.id === id);
+      if (r) {
+        const cd = compPreview(r);
+        if (cd < 0) {
+          const tu = usersMap.get(r.uid);
+          const have = Number(tu?.compDays) || 0;
+          const need = Math.abs(cd);
+          const after = have + cd;
+          setCompWarn({ id, teacherName: tu?.displayName || "—", have, need, after });
+          return;
+        }
+      }
+    }
     try {
       setState({ loading: true });
       await decideTeacherRequest(id, u.uid, action, 0);
@@ -456,6 +547,8 @@ export function PageAdminRequests() {
             <DocumentPreview
               request={viewReq}
               user={viewUser || { displayName: "—", email: "" }}
+              signatureUrl={viewUser?.signatureUrl}
+              adminSignatureUrl={viewReq.status === "approved" ? viewReq.adminSignatureUrl : ""}
               showDownload
             />
             {viewReq.status === "pending" && (() => {
@@ -471,6 +564,90 @@ export function PageAdminRequests() {
                 </div>
               );
             })()}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Not-enough-comp-days warning modal ── */}
+      {compWarn && createPortal(
+        <div className="modalback" onClick={() => setCompWarn(null)}>
+          <div className="modal glass comp-warn" onClick={e => e.stopPropagation()}>
+            <div className="comp-warn__icon" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div className="h2 comp-warn__title">{t("notEnoughCompTitle")}</div>
+            <p className="p comp-warn__desc">
+              {t("notEnoughCompDesc")}
+              {compWarn.teacherName && <><br /><b>{compWarn.teacherName}</b></>}
+            </p>
+            <div className="comp-warn__stats">
+              <div className="comp-warn__stat">
+                <div className="comp-warn__stat-label">{t("compCurrent")}</div>
+                <div className="comp-warn__stat-val">{compWarn.have}</div>
+              </div>
+              <div className="comp-warn__stat comp-warn__stat--need">
+                <div className="comp-warn__stat-label">{t("compNeeded")}</div>
+                <div className="comp-warn__stat-val">{compWarn.need}</div>
+              </div>
+              <div className="comp-warn__stat comp-warn__stat--after">
+                <div className="comp-warn__stat-label">{t("compAfter")}</div>
+                <div className="comp-warn__stat-val">{compWarn.after}</div>
+              </div>
+            </div>
+            <div className="comp-warn__actions">
+              <Btn onClick={() => setCompWarn(null)}>{t("cancel")}</Btn>
+              <Btn
+                kind="primary"
+                style={{ background: "var(--red, #ef4444)" }}
+                onClick={() => {
+                  const id = compWarn.id;
+                  setCompWarn(null);
+                  decide(id, "approve", true);
+                }}
+                disabled={st.loading}
+              >
+                {t("approveAnyway")}
+              </Btn>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── Admin signature capture modal ── */}
+      {sigModal && createPortal(
+        <div className="modalback" onClick={() => !sigSaving && setSigModal(null)}>
+          <div className="modal glass sig-modal" onClick={e => e.stopPropagation()}>
+            <div className="h2 sig-modal__title">{t("adminSigTitle")}</div>
+            <p className="p sig-modal__desc">{t("adminSigDesc")}</p>
+            <div className="sig-modal__pad">
+              <canvas
+                ref={sigCanvasRef}
+                width={600}
+                height={220}
+                onMouseDown={sigDown}
+                onMouseMove={sigMove}
+                onMouseUp={sigUp}
+                onMouseLeave={sigUp}
+                onTouchStart={sigDown}
+                onTouchMove={sigMove}
+                onTouchEnd={sigUp}
+              />
+              {!sigHasInk && (
+                <div className="sig-modal__hint">{t("adminSigHint")}</div>
+              )}
+            </div>
+            <div className="sig-modal__actions">
+              <Btn kind="ghost" onClick={clearSigPad} disabled={sigSaving}>{t("clear")}</Btn>
+              <div style={{ flex: 1 }} />
+              <Btn onClick={() => setSigModal(null)} disabled={sigSaving}>{t("cancel")}</Btn>
+              <Btn kind="primary" onClick={saveSignatureAndContinue} disabled={!sigHasInk || sigSaving}>
+                {sigSaving ? t("saving") : t("saveAndApprove")}
+              </Btn>
+            </div>
           </div>
         </div>,
         document.body

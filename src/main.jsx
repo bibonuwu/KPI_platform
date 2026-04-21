@@ -264,8 +264,11 @@ async function bootstrap() {
         if (auth.currentUser) setUserOnline(auth.currentUser.uid, true);
       }, 60000);
 
+      const curPath = store.state.route?.path;
       if (userDoc.onboarded !== true && userDoc.role !== "admin") {
         navigate("onboarding");
+      } else if (curPath === "login" || !curPath) {
+        navigate("dashboard");
       }
 
       setState({ booting: false });
