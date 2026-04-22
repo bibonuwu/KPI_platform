@@ -57,6 +57,15 @@ function sheetFromRows(headers, rows) {
   return ws;
 }
 
+function sheetName(name) {
+  const s = String(name ?? "Sheet").replace(/[\\\/\*\?\:\[\]]/g, "").trim();
+  return s.slice(0, 31) || "Sheet";
+}
+
+function appendSheet(wb, ws, name) {
+  XLSX.utils.book_append_sheet(wb, ws, sheetName(name));
+}
+
 function subMatchText(s) {
   return `${s.typeName || ""} ${s.title || ""} ${s.description || ""}`.toLowerCase();
 }
@@ -394,7 +403,7 @@ export function PageAdminDirector() {
       r.score, r.readingPts, r.months, r.typeKinds, r.growth
     ]);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(headers, rows), t("navRating"));
+    appendSheet(wb, sheetFromRows(headers, rows), t("navRating"));
     saveSheet(wb, "teachers_rating");
   };
 
@@ -420,7 +429,7 @@ export function PageAdminDirector() {
       ];
     });
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(headers, rows), t("profTabSubs"));
+    appendSheet(wb, sheetFromRows(headers, rows), t("profTabSubs"));
     saveSheet(wb, "submissions");
   };
 
@@ -445,7 +454,7 @@ export function PageAdminDirector() {
       ];
     });
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(headers, rows), t("navRequests"));
+    appendSheet(wb, sheetFromRows(headers, rows), t("navRequests"));
     saveSheet(wb, "requests");
   };
 
@@ -455,7 +464,7 @@ export function PageAdminDirector() {
       r.name, r.email, r.position, r.subject, r.school, r.total, r.level
     ]);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(headers, rows), t("dirInactiveTitle"));
+    appendSheet(wb, sheetFromRows(headers, rows), t("dirInactiveTitle"));
     saveSheet(wb, "inactive_teachers");
   };
 
@@ -473,7 +482,7 @@ export function PageAdminDirector() {
       row(t("awardMostDiverse"), A.mostDiverse, A.mostDiverse ? `${A.mostDiverse.typeKinds} ${t("dirTypeKinds")}` : ""),
     ];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
+    appendSheet(
       wb,
       sheetFromRows([t("dirAward"), t("dirWinner"), "Email", t("dirMetricValue")], rows),
       t("dirAwardsTitle")
@@ -495,7 +504,7 @@ export function PageAdminDirector() {
       ];
     });
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(headers, rows), t("dirCategoryLeadersTitle"));
+    appendSheet(wb, sheetFromRows(headers, rows), t("dirCategoryLeadersTitle"));
     saveSheet(wb, "category_leaders");
   };
 
@@ -518,7 +527,7 @@ export function PageAdminDirector() {
       [t("dirAcademicYear"), getAcademicYearLabel()],
       [t("dirGeneratedAt"), new Date().toLocaleString()],
     ];
-    XLSX.utils.book_append_sheet(wb,
+    appendSheet(wb,
       sheetFromRows([t("dirMetric"), t("dirValue")], overviewRows),
       t("dirOverview"));
 
@@ -534,7 +543,7 @@ export function PageAdminDirector() {
         [t("awardMostConsistent"), A.mostConsistent?.name || "—", A.mostConsistent?.email || "", A.mostConsistent?.months || 0],
         [t("awardMostDiverse"), A.mostDiverse?.name || "—", A.mostDiverse?.email || "", A.mostDiverse?.typeKinds || 0],
       ];
-      XLSX.utils.book_append_sheet(wb,
+      appendSheet(wb,
         sheetFromRows([t("dirAward"), t("dirWinner"), "Email", t("dirMetricValue")], awRows),
         t("dirAwardsTitle"));
     }
@@ -553,7 +562,7 @@ export function PageAdminDirector() {
       r.rate, r.compDays, r.level,
       r.score, r.readingPts, r.months, r.typeKinds, r.growth
     ]);
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(tHeaders, tRows), t("navRating"));
+    appendSheet(wb, sheetFromRows(tHeaders, tRows), t("navRating"));
 
     // Sheet 4: category leaders
     const catHeaders = [t("type"), t("dirWinner"), "Email", t("dirCategoryTotalPts"), t("dirPeriodPts"), t("dirCategoryTeacherCount")];
@@ -561,11 +570,11 @@ export function PageAdminDirector() {
       const w = usersMap.get(c.winnerUid);
       return [c.typeName, w?.displayName || w?.email || "—", w?.email || "", c.totalPts, c.winnerPts, c.teacherCount];
     });
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(catHeaders, catRows), t("dirCategoryLeadersTitle"));
+    appendSheet(wb, sheetFromRows(catHeaders, catRows), t("dirCategoryLeadersTitle"));
 
     // Sheet 5: inactive
     const inactRows = activityBuckets.inactive.map(r => [r.name, r.email, r.position, r.subject, r.school, r.total, r.level]);
-    XLSX.utils.book_append_sheet(wb,
+    appendSheet(wb,
       sheetFromRows([t("teacher"), "Email", t("position"), t("subject"), t("school"), t("totalPoints"), t("level")], inactRows),
       t("dirInactiveTitle"));
 
@@ -588,7 +597,7 @@ export function PageAdminDirector() {
         q ? t(q) : "—"
       ];
     });
-    XLSX.utils.book_append_sheet(wb, sheetFromRows(sHeaders, sRows), t("profTabSubs"));
+    appendSheet(wb, sheetFromRows(sHeaders, sRows), t("profTabSubs"));
 
     // Sheet 7: KPI types
     const typesRows = types.map(tp => [
@@ -596,7 +605,7 @@ export function PageAdminDirector() {
       Number(tp.defaultPoints) || 0,
       tp.isActive !== false ? t("eventActive") : "—"
     ]);
-    XLSX.utils.book_append_sheet(wb,
+    appendSheet(wb,
       sheetFromRows([t("type"), t("dirDefaultPts"), t("status")], typesRows),
       t("navKpiTypes"));
 

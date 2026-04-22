@@ -5,7 +5,17 @@ const FIREBASE_CDN = /^https:\/\/www\.gstatic\.com\/firebasejs\/10\.12\.5\//;
 
 export default defineConfig({
   plugins: [react()],
-  build: { rollupOptions: { external: [FIREBASE_CDN] } },
+  build: {
+    rollupOptions: {
+      external: [FIREBASE_CDN],
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom"],
+          "xlsx": ["xlsx"]
+        }
+      }
+    }
+  },
   optimizeDeps: {
     exclude: [
       "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js",

@@ -1269,41 +1269,4 @@ export function PageAdminAnnouncements() {
   );
 }
 
-/** ---------- announcement banner (shown to all users) ---------- */
-export function AnnouncementBanner() {
-  const st = useStore();
-  const announcements = st.announcements || [];
-  const [dismissed, setDismissed] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("kpi_ann_dismissed") || "[]"); } catch { return []; }
-  });
-
-  const now = new Date().toISOString().slice(0, 10);
-  const active = announcements.filter(a => a.startDate <= now && a.endDate >= now && !dismissed.includes(a.id));
-
-  const dismiss = (id) => {
-    const next = [...dismissed, id];
-    setDismissed(next);
-    try { localStorage.setItem("kpi_ann_dismissed", JSON.stringify(next)); } catch { }
-  };
-
-  if (!active.length || !st.userDoc) return null;
-
-  return (
-    <div className="ann-banners-wrap">
-      {active.map((a, i) => {
-        const parsedLink = (a.link || "").includes("||") ? a.link.split("||") : [a.link, a.link];
-        return (
-          <div key={a.id} className="ann-banner" style={{ animationDelay: `${i * 0.1}s` }}>
-            <div className="ann-banner__shimmer" />
-            <div className="ann-banner__content">
-              <span className="ann-banner__emoji">{a.emoji}</span>
-              <span className="ann-banner__text">{a.text}</span>
-              {a.link && <a className="ann-banner__link" href={parsedLink[1]} target="_blank" rel="noopener noreferrer">{parsedLink[0]}</a>}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 

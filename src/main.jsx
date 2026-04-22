@@ -1,7 +1,7 @@
 console.log("[KPI] main.jsx loaded");
 try { const el = document.getElementById("boot-status"); if (el) { el.textContent = "JS: loaded"; el.dataset.kind = "ok"; } } catch (e) { }
 
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { t } from "./i18n.js";
@@ -21,26 +21,41 @@ import {
 } from "./data.js";
 import {
   ErrorBoundary, LoadingScreen, SidebarNav, TopbarTitle, TopbarRight,
-  BottomNav, Overlays
+  BottomNav, Overlays, AnnouncementBanner
 } from "./components.jsx";
 
-// Page components
-import { PageOnboarding, PageLogin } from "./pages/auth.jsx";
-import {
-  PageDashboard, PageProfile, PageAdd, PageRequests, PageRating, PageStats
-} from "./pages/teacher.jsx";
-import {
-  PageAdminApprovals, PageAdminRequests, PageDocuments, PageAdminDocuments,
-  PageAdminTypes, PageAdminUsers, PageAdminTeacher, PageAdminEvents
-} from "./pages/admin.jsx";
-import { PageAdminDirector } from "./pages/director.jsx";
-import {
-  PageNews, PageSettings, PageSupport, PageAdminSupport,
-  PageAdminAnnouncements, AnnouncementBanner
-} from "./pages/social.jsx";
-import { PageClassroomTools } from "./pages/classroomtools.jsx";
-import { PageCalendar } from "./pages/calendar.jsx";
-import { PageAbout } from "./pages/about.jsx";
+// Page components — lazy-loaded into separate chunks so weak PCs don't parse
+// code for pages the user never opens. Each import() maps to one chunk per file.
+const PageOnboarding = lazy(() => import("./pages/auth.jsx").then(m => ({ default: m.PageOnboarding })));
+const PageLogin      = lazy(() => import("./pages/auth.jsx").then(m => ({ default: m.PageLogin })));
+
+const PageDashboard = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageDashboard })));
+const PageProfile   = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageProfile })));
+const PageAdd       = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageAdd })));
+const PageRequests  = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageRequests })));
+const PageRating    = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageRating })));
+const PageStats     = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageStats })));
+
+const PageAdminApprovals = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminApprovals })));
+const PageAdminRequests  = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminRequests })));
+const PageDocuments      = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageDocuments })));
+const PageAdminDocuments = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminDocuments })));
+const PageAdminTypes     = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminTypes })));
+const PageAdminUsers     = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminUsers })));
+const PageAdminTeacher   = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminTeacher })));
+const PageAdminEvents    = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminEvents })));
+
+const PageAdminDirector = lazy(() => import("./pages/director.jsx").then(m => ({ default: m.PageAdminDirector })));
+
+const PageNews               = lazy(() => import("./pages/social.jsx").then(m => ({ default: m.PageNews })));
+const PageSettings           = lazy(() => import("./pages/social.jsx").then(m => ({ default: m.PageSettings })));
+const PageSupport            = lazy(() => import("./pages/social.jsx").then(m => ({ default: m.PageSupport })));
+const PageAdminSupport       = lazy(() => import("./pages/social.jsx").then(m => ({ default: m.PageAdminSupport })));
+const PageAdminAnnouncements = lazy(() => import("./pages/social.jsx").then(m => ({ default: m.PageAdminAnnouncements })));
+
+const PageClassroomTools = lazy(() => import("./pages/classroomtools.jsx").then(m => ({ default: m.PageClassroomTools })));
+const PageCalendar       = lazy(() => import("./pages/calendar.jsx").then(m => ({ default: m.PageCalendar })));
+const PageAbout          = lazy(() => import("./pages/about.jsx").then(m => ({ default: m.PageAbout })));
 
 /* ---------- React mount/render layer ---------- */
 const __roots = new Map();
@@ -84,32 +99,40 @@ async function render() {
   const show = (p) => p === path;
   const booting = store.state.booting;
 
-  mount("mount-login", show("login") ? <ErrorBoundary name="login"><PageLogin /></ErrorBoundary> : null);
-  mount("mount-onboarding", show("onboarding") ? <ErrorBoundary name="onboarding">{booting ? <LoadingScreen /> : <PageOnboarding />}</ErrorBoundary> : null);
-  mount("mount-dashboard", show("dashboard") ? <ErrorBoundary name="dashboard">{booting ? <LoadingScreen /> : <PageDashboard />}</ErrorBoundary> : null);
-  mount("mount-profile", show("profile") ? <ErrorBoundary name="profile">{booting ? <LoadingScreen /> : <PageProfile />}</ErrorBoundary> : null);
-  mount("mount-rating", show("rating") ? <ErrorBoundary name="rating">{booting ? <LoadingScreen /> : <PageRating />}</ErrorBoundary> : null);
-  mount("mount-stats", show("stats") ? <ErrorBoundary name="stats">{booting ? <LoadingScreen /> : <PageStats />}</ErrorBoundary> : null);
-  mount("mount-add", show("add") ? <ErrorBoundary name="add">{booting ? <LoadingScreen /> : <PageAdd />}</ErrorBoundary> : null);
-  mount("mount-requests", show("requests") ? <ErrorBoundary name="requests">{booting ? <LoadingScreen /> : <PageRequests />}</ErrorBoundary> : null);
-  mount("mount-documents", show("documents") ? <ErrorBoundary name="documents">{booting ? <LoadingScreen /> : <PageDocuments />}</ErrorBoundary> : null);
-  mount("mount-news", show("news") ? <ErrorBoundary name="news">{booting ? <LoadingScreen /> : <PageNews />}</ErrorBoundary> : null);
-  mount("mount-support", show("support") ? <ErrorBoundary name="support">{booting ? <LoadingScreen /> : <PageSupport />}</ErrorBoundary> : null);
-  mount("mount-settings", show("settings") ? <ErrorBoundary name="settings">{booting ? <LoadingScreen /> : <PageSettings />}</ErrorBoundary> : null);
-  mount("mount-classroomtools", show("classroomtools") ? <ErrorBoundary name="classroomtools">{booting ? <LoadingScreen /> : <PageClassroomTools />}</ErrorBoundary> : null);
-  mount("mount-calendar", show("calendar") ? <ErrorBoundary name="calendar">{booting ? <LoadingScreen /> : <PageCalendar />}</ErrorBoundary> : null);
-  mount("mount-about", show("about") ? <ErrorBoundary name="about"><PageAbout /></ErrorBoundary> : null);
+  const pageMount = (slot, routePath, Comp, checkBooting = true) => {
+    if (!show(routePath)) { mount(slot, null); return; }
+    const content = (checkBooting && booting)
+      ? <LoadingScreen />
+      : <Suspense fallback={<LoadingScreen />}><Comp /></Suspense>;
+    mount(slot, <ErrorBoundary name={routePath}>{content}</ErrorBoundary>);
+  };
 
-  mount("mount-admin-approvals", show("admin/approvals") ? <ErrorBoundary name="admin/approvals">{booting ? <LoadingScreen /> : <PageAdminApprovals />}</ErrorBoundary> : null);
-  mount("mount-admin-requests", show("admin/requests") ? <ErrorBoundary name="admin/requests">{booting ? <LoadingScreen /> : <PageAdminRequests />}</ErrorBoundary> : null);
-  mount("mount-admin-documents", show("admin/documents") ? <ErrorBoundary name="admin/documents">{booting ? <LoadingScreen /> : <PageAdminDocuments />}</ErrorBoundary> : null);
-  mount("mount-admin-types", show("admin/types") ? <ErrorBoundary name="admin/types">{booting ? <LoadingScreen /> : <PageAdminTypes />}</ErrorBoundary> : null);
-  mount("mount-admin-users", show("admin/users") ? <ErrorBoundary name="admin/users">{booting ? <LoadingScreen /> : <PageAdminUsers />}</ErrorBoundary> : null);
-  mount("mount-admin-teacher", show("admin/teacher") ? <ErrorBoundary name="admin/teacher">{booting ? <LoadingScreen /> : <PageAdminTeacher />}</ErrorBoundary> : null);
-  mount("mount-admin-support", show("admin/support") ? <ErrorBoundary name="admin/support">{booting ? <LoadingScreen /> : <PageAdminSupport />}</ErrorBoundary> : null);
-  mount("mount-admin-announcements", show("admin/announcements") ? <ErrorBoundary name="admin/announcements">{booting ? <LoadingScreen /> : <PageAdminAnnouncements />}</ErrorBoundary> : null);
-  mount("mount-admin-events", show("admin/events") ? <ErrorBoundary name="admin/events">{booting ? <LoadingScreen /> : <PageAdminEvents />}</ErrorBoundary> : null);
-  mount("mount-admin-director", show("admin/director") ? <ErrorBoundary name="admin/director">{booting ? <LoadingScreen /> : <PageAdminDirector />}</ErrorBoundary> : null);
+  pageMount("mount-login", "login", PageLogin, false);
+  pageMount("mount-onboarding", "onboarding", PageOnboarding);
+  pageMount("mount-dashboard", "dashboard", PageDashboard);
+  pageMount("mount-profile", "profile", PageProfile);
+  pageMount("mount-rating", "rating", PageRating);
+  pageMount("mount-stats", "stats", PageStats);
+  pageMount("mount-add", "add", PageAdd);
+  pageMount("mount-requests", "requests", PageRequests);
+  pageMount("mount-documents", "documents", PageDocuments);
+  pageMount("mount-news", "news", PageNews);
+  pageMount("mount-support", "support", PageSupport);
+  pageMount("mount-settings", "settings", PageSettings);
+  pageMount("mount-classroomtools", "classroomtools", PageClassroomTools);
+  pageMount("mount-calendar", "calendar", PageCalendar);
+  pageMount("mount-about", "about", PageAbout, false);
+
+  pageMount("mount-admin-approvals", "admin/approvals", PageAdminApprovals);
+  pageMount("mount-admin-requests", "admin/requests", PageAdminRequests);
+  pageMount("mount-admin-documents", "admin/documents", PageAdminDocuments);
+  pageMount("mount-admin-types", "admin/types", PageAdminTypes);
+  pageMount("mount-admin-users", "admin/users", PageAdminUsers);
+  pageMount("mount-admin-teacher", "admin/teacher", PageAdminTeacher);
+  pageMount("mount-admin-support", "admin/support", PageAdminSupport);
+  pageMount("mount-admin-announcements", "admin/announcements", PageAdminAnnouncements);
+  pageMount("mount-admin-events", "admin/events", PageAdminEvents);
+  pageMount("mount-admin-director", "admin/director", PageAdminDirector);
 }
 
 function setupMobileDrawer() {
