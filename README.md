@@ -4,7 +4,6 @@
 ```bash
 npm run dev
 ```
-Открой: http://localhost:5173/#/login
 
 <img width="1920" height="1080" alt="Slide 16_9 - 40" src="https://github.com/user-attachments/assets/7dc640c3-9ed8-484f-b12b-317bdf2b8819" />
 <img width="1920" height="1080" alt="Slide 16_9 - 45" src="https://github.com/user-attachments/assets/3bb20df8-418c-4d4e-b036-f22a4d15a3b0" />
