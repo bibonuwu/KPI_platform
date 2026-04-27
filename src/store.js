@@ -131,7 +131,7 @@ export async function saveSiteSettings(uid, s) {
 export const ROUTES = [
   "login", "onboarding", "dashboard", "profile", "rating", "stats", "add",
   "requests", "documents", "news", "support", "settings", "classroomtools", "calendar", "about",
-  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support", "admin/announcements", "admin/events", "admin/director"
+  "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support", "admin/announcements", "admin/events", "admin/director", "admin/skud"
 ];
 
 export { parseRoute };

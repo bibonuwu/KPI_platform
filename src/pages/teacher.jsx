@@ -32,7 +32,7 @@ import {
   GoalsWidget, LoadingScreen, BarChart, LineChart, AreaLineChart,
   DonutChart, RadarChart, GaugeChart, StackedBarChart, HistogramChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
-  FileDrop, ErrorBoundary, Guard
+  FileDrop, ErrorBoundary, Guard, TeammatesPicker
 } from "../components.jsx";
 
 function School3D() {
@@ -767,6 +767,19 @@ export function PageProfile() {
   const [otherSubs, setOtherSubs] = useState([]);
   const [otherGoals, setOtherGoals] = useState([]);
   const [otherLoading, setOtherLoading] = useState(false);
+  const [showLevelModal, setShowLevelModal] = useState(false);
+  const subs0 = st.mySubmissions || [];
+  const strengths = useMemo(() => {
+    const approved = subs0.filter(s => s.status === "approved" && s.typeSection);
+    const map = {};
+    approved.forEach(s => {
+      const sec = s.typeSection;
+      if (!map[sec]) map[sec] = { section: sec, pts: 0, count: 0 };
+      map[sec].pts += Number(s.points) || 0;
+      map[sec].count++;
+    });
+    return Object.values(map).sort((a, b) => b.pts - a.pts);
+  }, [subs0]);
   useEffect(() => {
     if (!u) return;
     setForm({ displayName: u.displayName || "", school: u.school || "", subject: u.subject || "", experienceYears: u.experienceYears || 0, phone: u.phone || "", city: u.city || "", position: u.position || "", instagram: u.instagram || "", youtube: u.youtube || "" });
@@ -901,7 +914,8 @@ export function PageProfile() {
 
   const approvedPts = sum(approved, s => s.points);
   const aprPct = subs.length ? Math.round((approved.length / subs.length) * 100) : 0;
-  const nextPts = lvl.next ? lvl.next - (Number(u.totalPoints) || 0) : 0;
+  const totalPts = Number(u.totalPoints) || 0;
+  const nextPts = lvl.next ? lvl.next - totalPts : 0;
 
   const TabBtn = ({ id, icon, label }) => (
     <button className={`prof-tab${tab === id ? " prof-tab--active" : ""}`} onClick={() => setTab(id)}>
@@ -975,7 +989,7 @@ export function PageProfile() {
               <Btn onClick={() => navigate("rating")}><Icon name="rank" /> {t("navRating")}</Btn>
             </div>
           </div>
-          <div className="rop-hero__right">
+          <div className="rop-hero__right" onClick={() => setShowLevelModal(true)} style={{ cursor: "pointer" }} title={t("lvlModalTitle")}>
             <div className="rop-hero__level-wrap">
               <div className="rop-hero__level-inner">
                 <div className="rop-hero__level-pts">{fmtPoints(u.totalPoints)}</div>
@@ -989,6 +1003,81 @@ export function PageProfile() {
           </div>
         </div>
       </div>
+
+      {/* Level Modal */}
+      {showLevelModal && createPortal(
+        <div className="lvl-modal-overlay" onClick={() => setShowLevelModal(false)}>
+          <div className="lvl-modal" onClick={e => e.stopPropagation()}>
+            <button className="lvl-modal__close" onClick={() => setShowLevelModal(false)}>&times;</button>
+
+            {/* Header — current rank */}
+            <div className="lvl-modal__header">
+              <div className="lvl-modal__rank-icon" style={{ "--rank-color": lvl.color }}>{lvl.icon}</div>
+              <div className="lvl-modal__rank-info">
+                <div className="lvl-modal__rank-name" style={{ color: lvl.color }}>{lvl.name}</div>
+                <div className="lvl-modal__rank-pts">{fmtPoints(totalPts)} {t("lvlModalPtsRange")}</div>
+                <div className="lvl-modal__rank-desc">{t(`lvlDesc${RANK_TABLE[lvl.idx].key.replace("lvl", "")}`)}</div>
+              </div>
+            </div>
+
+            {/* XP bar */}
+            <div className="lvl-modal__xp">
+              <div className="lvl-modal__xp-track">
+                <div className="lvl-modal__xp-fill" style={{ width: `${lvl.pct}%`, background: `linear-gradient(90deg, ${lvl.color}, ${lvl.color}dd)` }} />
+              </div>
+              <div className="lvl-modal__xp-label">
+                {lvl.next ? <>{fmtPoints(totalPts)} / {fmtPoints(lvl.next)} — {nextPts} {t("toNextLevel")}</> : <>{t("lvlModalCurrent")}: MAX</>}
+              </div>
+            </div>
+
+            {/* All ranks */}
+            <div className="lvl-modal__section-title">{t("lvlModalAllRanks")}</div>
+            <div className="lvl-modal__ranks">
+              {RANK_TABLE.map((r, i) => {
+                const isCurrent = i === lvl.idx;
+                const isLocked = i > lvl.idx;
+                return (
+                  <div key={r.key} className={`lvl-modal__rank-card${isCurrent ? " lvl-modal__rank-card--active" : ""}${isLocked ? " lvl-modal__rank-card--locked" : ""}`} style={{ "--rc": r.color, "--di": i }}>
+                    <div className="lvl-modal__rank-card-icon">{r.icon}</div>
+                    <div className="lvl-modal__rank-card-body">
+                      <div className="lvl-modal__rank-card-name">{t(r.key)}</div>
+                      <div className="lvl-modal__rank-card-range">{r.min}–{r.max} {t("lvlModalPtsRange")}</div>
+                    </div>
+                    {isCurrent && <span className="lvl-modal__rank-badge">{t("lvlModalCurrent")}</span>}
+                    {isLocked && <span className="lvl-modal__rank-lock"><Icon name="shield" /></span>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Strengths */}
+            <div className="lvl-modal__section-title">{t("lvlModalStrengths")}</div>
+            {strengths.length === 0 ? (
+              <div className="lvl-modal__empty">{t("lvlModalNoSubs")}</div>
+            ) : (
+              <div className="lvl-modal__strengths">
+                {strengths.slice(0, 5).map((s, i) => {
+                  const maxPts = strengths[0].pts;
+                  const pct = maxPts ? Math.round((s.pts / maxPts) * 100) : 0;
+                  const colors = ["#87bc2e", "#3b82f6", "#f59e0b", "#a855f7", "#ec4899"];
+                  return (
+                    <div key={s.section} className="lvl-modal__str-row" style={{ "--di": i }}>
+                      <div className="lvl-modal__str-label">
+                        <span className="lvl-modal__str-name">{s.section}</span>
+                        <span className="lvl-modal__str-stat">{s.pts} {t("lvlModalPtsRange")} · {s.count}x</span>
+                      </div>
+                      <div className="lvl-modal__str-bar-track">
+                        <div className="lvl-modal__str-bar-fill" style={{ width: `${pct}%`, background: colors[i % colors.length] }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* ══ Stats strip ══ */}
       <div className="prof-stats">
@@ -1461,6 +1550,7 @@ export function PageAdd() {
   const [goalMode, setGoalMode] = useState(false);
   const [goalDateFrom, setGoalDateFrom] = useState("");
   const [goalDateTo, setGoalDateTo] = useState("");
+  const [teammates, setTeammates] = useState([]);
 
   const types = (st.types || []).filter(t => t.active);
   const sections = Array.from(new Set(types.map(t => t.section))).sort();
@@ -1589,13 +1679,13 @@ export function PageAdd() {
       let evidenceFileUrl = "";
       if (file) evidenceFileUrl = await uploadEvidence(u.uid, file);
 
-      await createSubmission({ uid: u.uid, type, title, description, eventDate, evidenceLink, evidenceFileUrl });
+      await createSubmission({ uid: u.uid, type, title, description, eventDate, evidenceLink, evidenceFileUrl, teammates });
       toast("Заявка отправлена на проверку", "ok");
 
       const my = await fetchMySubmissions(u.uid);
       setState({ mySubmissions: my });
 
-      setTitle(""); setDescription(""); setEvidenceLink(""); setFile(null);
+      setTitle(""); setDescription(""); setEvidenceLink(""); setFile(null); setTeammates([]);
       navigate("dashboard");
     } catch (err) {
       console.error(err);
@@ -1614,12 +1704,13 @@ export function PageAdd() {
         deadline: goalDateTo || goalDateFrom || "",
         note: safeText(title) || (type?.name || ""),
         scope: goalDateFrom && goalDateTo ? `${goalDateFrom} — ${goalDateTo}` : "quarter",
-        section: type?.section || ""
+        section: type?.section || "",
+        teammates
       });
       const fresh = await fetchGoals(u.uid);
       setState({ myGoals: fresh });
       toast(t("goalSaved"), "ok");
-      setTitle(""); setDescription(""); setGoalDateFrom(""); setGoalDateTo("");
+      setTitle(""); setDescription(""); setGoalDateFrom(""); setGoalDateTo(""); setTeammates([]);
     } catch (err) {
       console.error(err);
       toast(err?.message || t("error"), "error");
@@ -1792,6 +1883,18 @@ export function PageAdd() {
             value={file}
             onChange={(e) => setFile(e.target.files?.[0] || null)}
           />
+
+          <div style={{ marginTop: 12 }}>
+            <TeammatesPicker
+              value={teammates}
+              onChange={setTeammates}
+              excludeUid={u.uid}
+              label={goalMode ? t("teamGoalMembers") : t("sharedWithTeammates")}
+            />
+            <div className="help">
+              {goalMode ? t("teamGoalHint") : t("teammatesHint")}
+            </div>
+          </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
             <Btn kind="primary" type="submit" disabled={st.loading}>{goalMode ? t("setGoal") : "Отправить"}</Btn>

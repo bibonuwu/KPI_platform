@@ -44,6 +44,7 @@ const PageAdminTypes     = lazy(() => import("./pages/admin.jsx").then(m => ({ d
 const PageAdminUsers     = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminUsers })));
 const PageAdminTeacher   = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminTeacher })));
 const PageAdminEvents    = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminEvents })));
+const PageAdminSkud      = lazy(() => import("./pages/admin.jsx").then(m => ({ default: m.PageAdminSkud })));
 
 const PageAdminDirector = lazy(() => import("./pages/director.jsx").then(m => ({ default: m.PageAdminDirector })));
 
@@ -133,6 +134,7 @@ async function render() {
   pageMount("mount-admin-announcements", "admin/announcements", PageAdminAnnouncements);
   pageMount("mount-admin-events", "admin/events", PageAdminEvents);
   pageMount("mount-admin-director", "admin/director", PageAdminDirector);
+  pageMount("mount-admin-skud", "admin/skud", PageAdminSkud);
 }
 
 function setupMobileDrawer() {

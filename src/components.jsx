@@ -160,6 +160,272 @@ export const FileDrop = React.forwardRef(function FileDrop(
   );
 });
 export const Pill = ({ kind, children, style }) => <span className={`pill ${kind}`} style={style}>{children}</span>;
+
+/** ---------- Teammates picker (shared KPI / team goals) ---------- */
+export function TeammatesPicker({ value = [], onChange, excludeUid, label }) {
+  const st = useStore();
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [focusIdx, setFocusIdx] = useState(0);
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) { setSearch(""); setFocusIdx(0); }
+  }, [open]);
+
+  const selected = new Set(value || []);
+  const pool = useMemo(() => (st.users || [])
+    .filter(x => x && x.uid && x.uid !== excludeUid && x.role !== "admin")
+    .sort((a, b) => (a.displayName || a.email || "").localeCompare(b.displayName || b.email || "", "ru")),
+    [st.users, excludeUid]);
+
+  const q = search.trim().toLowerCase();
+  const visible = useMemo(() => {
+    if (!q) return [];
+    return pool.filter(x =>
+      (x.displayName || "").toLowerCase().includes(q) ||
+      (x.email || "").toLowerCase().includes(q) ||
+      (x.subject || "").toLowerCase().includes(q) ||
+      (x.position || "").toLowerCase().includes(q)
+    ).slice(0, 40);
+  }, [pool, q]);
+
+  const byUid = new Map(pool.map(x => [x.uid, x]));
+  const chosen = (value || []).map(uid => byUid.get(uid)).filter(Boolean);
+
+  const toggle = (uid) => {
+    const next = new Set(selected);
+    next.has(uid) ? next.delete(uid) : next.add(uid);
+    onChange && onChange([...next]);
+  };
+  const removeOne = (uid) => {
+    const next = new Set(selected); next.delete(uid);
+    onChange && onChange([...next]);
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); setOpen(false); return; }
+    if (!visible.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx(i => Math.min(visible.length - 1, i + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx(i => Math.max(0, i - 1)); }
+    else if (e.key === "Enter" && visible[focusIdx]) { e.preventDefault(); toggle(visible[focusIdx].uid); }
+  };
+
+  useEffect(() => {
+    if (!open || !listRef.current) return;
+    const node = listRef.current.querySelector(`[data-idx="${focusIdx}"]`);
+    if (node) node.scrollIntoView({ block: "nearest" });
+  }, [focusIdx, open]);
+
+  return (
+    <div className="teammates-picker">
+      {label && <div className="label">{label}</div>}
+      <div
+        className="input teammates-picker__control"
+        onClick={() => setOpen(true)}
+        style={{ cursor: "pointer", display: "flex", flexWrap: "wrap", gap: 6, minHeight: 42, alignItems: "center", padding: "6px 12px" }}
+      >
+        {chosen.length === 0 ? (
+          <span className="muted tiny">{t("teammatesPlaceholder")}</span>
+        ) : (
+          <>
+            {chosen.slice(0, 4).map(u => (
+              <span
+                key={u.uid}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", fontSize: 12, borderRadius: 999, background: "rgba(135,188,46,.15)", border: "1px solid rgba(135,188,46,.35)" }}
+                onClick={e => e.stopPropagation()}
+              >
+                {u.displayName || u.email}
+                <button
+                  type="button"
+                  onClick={() => removeOne(u.uid)}
+                  style={{ background: "transparent", border: 0, cursor: "pointer", color: "inherit", padding: 0, marginLeft: 2, fontSize: 14, lineHeight: 1, opacity: .6 }}
+                  aria-label={t("remove")}
+                >×</button>
+              </span>
+            ))}
+            {chosen.length > 4 && (
+              <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 999, background: "rgba(255,255,255,.06)", border: "1px solid var(--border)" }}>
+                +{chosen.length - 4}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      {open && createPortal(
+        <div
+          onClick={() => setOpen(false)}
+          onKeyDown={onKeyDown}
+          tabIndex={-1}
+          style={{
+            position: "fixed", inset: 0, zIndex: 10000,
+            background: "rgba(5,8,14,.7)", backdropFilter: "blur(14px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "24px", animation: "fadeIn .18s ease"
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 600,
+              borderRadius: 24,
+              background: "linear-gradient(180deg, rgba(22,28,38,.98), rgba(16,20,28,.98))",
+              border: "1px solid rgba(255,255,255,.08)",
+              boxShadow: "0 30px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.02) inset",
+              display: "flex", flexDirection: "column",
+              overflow: "hidden", animation: "slideUp .25s cubic-bezier(.2,.8,.2,1)",
+              maxHeight: "min(640px, 85vh)"
+            }}
+          >
+            {/* Title + close */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 26px 0" }}>
+              <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-.01em" }}>
+                {label || t("sharedWithTeammates")}
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10, width: 32, height: 32, cursor: "pointer", color: "inherit", fontSize: 18, lineHeight: 1, display: "grid", placeItems: "center", transition: "background .15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,.08)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,.04)"}
+              >×</button>
+            </div>
+
+            {/* Search */}
+            <div style={{ position: "relative", padding: "18px 26px 16px" }}>
+              <input
+                placeholder={t("searchTeacher")}
+                value={search}
+                onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
+                style={{
+                  width: "100%", border: 0, outline: 0,
+                  background: "rgba(255,255,255,.04)",
+                  borderRadius: 14, fontSize: 17, padding: "14px 44px 14px 18px",
+                  color: "inherit", fontFamily: "inherit",
+                  boxShadow: "0 0 0 1px rgba(255,255,255,.06) inset",
+                  transition: "box-shadow .15s"
+                }}
+                onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 1px rgba(135,188,46,.45) inset"}
+                onBlur={e => e.currentTarget.style.boxShadow = "0 0 0 1px rgba(255,255,255,.06) inset"}
+                autoFocus
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  style={{ position: "absolute", right: 36, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,.06)", border: 0, cursor: "pointer", color: "inherit", fontSize: 14, width: 24, height: 24, borderRadius: "50%", display: "grid", placeItems: "center", opacity: .7 }}
+                >×</button>
+              )}
+            </div>
+
+            {/* Selected chips */}
+            {chosen.length > 0 && (
+              <div style={{ padding: "0 26px 14px" }}>
+                <div className="tiny muted" style={{ marginBottom: 8, fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", opacity: .5 }}>
+                  {chosen.length}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 92, overflowY: "auto" }}>
+                  {chosen.map(u => (
+                    <span
+                      key={u.uid}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 6px 5px 12px", fontSize: 13, borderRadius: 999, background: "rgba(135,188,46,.12)", border: "1px solid rgba(135,188,46,.3)", color: "rgba(255,255,255,.95)" }}
+                    >
+                      {u.displayName || u.email}
+                      <button
+                        type="button"
+                        onClick={() => removeOne(u.uid)}
+                        style={{ background: "rgba(0,0,0,.25)", border: 0, cursor: "pointer", color: "inherit", padding: 0, fontSize: 13, lineHeight: 1, width: 18, height: 18, borderRadius: "50%", display: "grid", placeItems: "center" }}
+                      >×</button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Divider */}
+            <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent)", margin: "0 26px" }} />
+
+            {/* Results — only after typing */}
+            {q ? (
+              <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "8px 14px 14px", minHeight: 240 }}>
+                {visible.length === 0 ? (
+                  <div style={{ padding: "56px 16px", textAlign: "center" }}>
+                    <div style={{ fontSize: 40, opacity: .15, marginBottom: 10 }}>🔎</div>
+                    <p className="muted" style={{ margin: 0, fontSize: 13 }}>{t("noData")}</p>
+                  </div>
+                ) : visible.map((u, idx) => {
+                  const on = selected.has(u.uid);
+                  const focused = idx === focusIdx;
+                  const initials = (u.displayName || u.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <div
+                      key={u.uid}
+                      data-idx={idx}
+                      onClick={() => { toggle(u.uid); }}
+                      onMouseEnter={() => setFocusIdx(idx)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 14,
+                        padding: "12px 14px", cursor: "pointer",
+                        borderRadius: 12,
+                        background: on ? "rgba(135,188,46,.1)" : focused ? "rgba(255,255,255,.04)" : "transparent",
+                        transition: "background .12s",
+                        marginBottom: 2
+                      }}
+                    >
+                      {u.avatarUrl ? (
+                        <img src={u.avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                      ) : (
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: on ? "linear-gradient(135deg, #87bc2e, #5a8a1f)" : "rgba(255,255,255,.06)", color: on ? "#fff" : "rgba(255,255,255,.7)", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 700, flexShrink: 0, transition: "background .15s" }}>
+                          {initials}
+                        </div>
+                      )}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 14.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.displayName || u.email}</div>
+                        {(u.position || u.subject) && (
+                          <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2, opacity: .6 }}>
+                            {[u.position, u.subject].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{
+                        width: 22, height: 22, borderRadius: "50%",
+                        border: on ? "0" : "1.5px solid rgba(255,255,255,.2)",
+                        background: on ? "var(--accent, #87bc2e)" : "transparent",
+                        display: "grid", placeItems: "center", flexShrink: 0,
+                        transition: "all .15s"
+                      }}>
+                        {on && <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>✓</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ padding: "64px 24px", textAlign: "center" }}>
+                <div style={{ fontSize: 34, opacity: .15, marginBottom: 12 }}>✎</div>
+                <p className="muted" style={{ margin: 0, fontSize: 14, opacity: .55, letterSpacing: ".01em" }}>{t("startTypingHint")}</p>
+              </div>
+            )}
+          </div>
+          <style>{`
+            @keyframes slideUp { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+          `}</style>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 // Mobile-friendly data display: cards on mobile, table on desktop
 export function DataCards({ columns, rows, emptyText }) {
   if (!emptyText) emptyText = t("noData");
@@ -243,6 +509,7 @@ export function GoalsWidget({ compact = false }) {
   const [note, setNote] = useState("");
   const [scope, setScope] = useState("quarter");
   const [section, setSection] = useState("");
+  const [teammates, setTeammates] = useState([]);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState("goals"); // "goals" | "deadlines"
   const [pendingProgress, setPendingProgress] = useState({});
@@ -295,7 +562,7 @@ export function GoalsWidget({ compact = false }) {
   };
 
   const resetForm = () => {
-    setTarget(""); setDeadline(""); setNote(""); setScope("quarter"); setSection(""); setEditId(null); setShowForm(false);
+    setTarget(""); setDeadline(""); setNote(""); setScope("quarter"); setSection(""); setTeammates([]); setEditId(null); setShowForm(false);
   };
 
   const startEdit = (g) => {
@@ -306,6 +573,7 @@ export function GoalsWidget({ compact = false }) {
     setNote(g.note || "");
     setScope(g.scope || "quarter");
     setSection(g.section || "");
+    setTeammates(Array.isArray(g.teammates) ? g.teammates : []);
     setShowForm(true);
   };
 
@@ -313,10 +581,11 @@ export function GoalsWidget({ compact = false }) {
     if (!target || Number(target) <= 0) { toast(t("goalTarget"), "error"); return; }
     setSaving(true);
     try {
+      const cleanMates = (teammates || []).filter(x => x && x !== u.uid);
       if (editId) {
-        await updateGoal(editId, { targetPoints: Number(target), deadline, note: safeText(note), scope, section: safeText(section) });
+        await updateGoal(editId, { targetPoints: Number(target), deadline, note: safeText(note), scope, section: safeText(section), teammates: cleanMates });
       } else {
-        await createGoal({ uid: u.uid, targetPoints: Number(target), deadline, note, scope, section });
+        await createGoal({ uid: u.uid, targetPoints: Number(target), deadline, note, scope, section, teammates: cleanMates });
       }
       const fresh = await fetchGoals(u.uid);
       setState({ myGoals: fresh });
@@ -352,7 +621,8 @@ export function GoalsWidget({ compact = false }) {
           description: `${t("goalTarget")}: ${g.targetPoints} · ${t("goalDeadline")}: ${g.deadline || "—"}`,
           eventDate: ymd(),
           evidenceLink: "",
-          evidenceFileUrl: ""
+          evidenceFileUrl: "",
+          teammates: Array.isArray(g.teammates) ? g.teammates : []
         });
         await updateGoal(g.id, { completed: true });
         const fresh = await fetchGoals(u.uid);
@@ -612,6 +882,15 @@ export function GoalsWidget({ compact = false }) {
               <Input value={note} onChange={e => setNote(e.target.value)} placeholder={t("goalNote")} />
             </div>
           </div>
+          <div style={{ marginTop: 10 }}>
+            <TeammatesPicker
+              value={teammates}
+              onChange={setTeammates}
+              excludeUid={u.uid}
+              label={t("teamGoalMembers")}
+            />
+            <div className="help">{t("teamGoalHint")}</div>
+          </div>
           <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
             <Btn kind="primary" onClick={handleSave} disabled={saving}>{saving ? "..." : t("save")}</Btn>
             <Btn onClick={resetForm}>{t("cancel")}</Btn>
@@ -822,6 +1101,7 @@ export function SidebarNav() {
     { p: "admin/users", tKey: "navUsers", i: "user" },
     { p: "admin/support", tKey: "navSupport", i: "bug" },
   ];
+  const adminSkudItem = { p: "admin/skud", tKey: "navSkud", i: "shield" };
 
   // Flyout group badges (sum of children)
   const workBadge = badgeFor("documents");
@@ -919,6 +1199,9 @@ export function SidebarNav() {
           >
             {adminPeopleItems.map(it => <NavLink key={it.p} it={it} />)}
           </NavFlyout>
+
+          {/* SKUD — standalone */}
+          <NavLink it={adminSkudItem} />
         </>
       )}
 
@@ -1064,6 +1347,7 @@ const ROUTE_META = {
   "admin/announcements": { icon: "bell",    tKey: "navAnnouncements",  desc: "annPageDesc" },
   "admin/events":      { icon: "calendar",  tKey: "navAdminEvents",    desc: "adminEventsDesc" },
   "admin/director":    { icon: "chart",     tKey: "navDirector",       desc: "dirSubtitle" },
+  "admin/skud":        { icon: "shield",    tKey: "navSkud",           desc: "skudDesc" },
 };
 
 export function TopbarTitle() {

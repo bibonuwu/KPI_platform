@@ -50,6 +50,83 @@ export const T = {
   toolYesNoDesc: { kz: "Кездейсоқ иә немесе жоқ жауабы", ru: "Случайный ответ да или нет", en: "Get a random yes or no answer" },
   toolGroupMakerDesc: { kz: "Оқушыларды топтарға бөлу", ru: "Разделение учеников на группы", en: "Split students into groups" },
   toolWhiteboardDesc: { kz: "Онлайн сурет салу тақтасы", ru: "Онлайн-доска для рисования", en: "Online drawing whiteboard" },
+
+  // ===== Native classroom tool controls =====
+  // Common
+  toolStart:  { kz: "Бастау",   ru: "Старт",   en: "Start" },
+  toolPause:  { kz: "Кідірту",  ru: "Пауза",   en: "Pause" },
+  toolResume: { kz: "Жалғастыру", ru: "Продолжить", en: "Resume" },
+  toolReset:  { kz: "Қалпына келтіру", ru: "Сброс", en: "Reset" },
+  toolRoll:   { kz: "Лақтыру",  ru: "Бросить", en: "Roll" },
+  toolPick:   { kz: "Таңдау",   ru: "Выбрать", en: "Pick" },
+  toolGenerate: { kz: "Генерациялау", ru: "Сгенерировать", en: "Generate" },
+  toolReveal: { kz: "Көрсету",  ru: "Узнать ответ", en: "Reveal" },
+  toolClear:  { kz: "Тазалау",  ru: "Очистить", en: "Clear" },
+  toolCopy:   { kz: "Көшіру",   ru: "Копировать", en: "Copy" },
+  toolUndo:   { kz: "Болдырмау", ru: "Отменить", en: "Undo" },
+  toolRedo:   { kz: "Қайталау", ru: "Повторить", en: "Redo" },
+  toolDownload:{ kz: "Жүктеу",  ru: "Скачать", en: "Download" },
+  toolHistory:{ kz: "Тарих",    ru: "История", en: "History" },
+
+  // Timer
+  timerHours:   { kz: "Сағат",   ru: "Часы",   en: "Hours" },
+  timerMinutes: { kz: "Минут",   ru: "Минуты", en: "Minutes" },
+  timerSeconds: { kz: "Секунд",  ru: "Секунды", en: "Seconds" },
+  timerPresets: { kz: "Жылдам таңдау", ru: "Быстрый выбор", en: "Quick presets" },
+  timerDone:    { kz: "Уақыт бітті!", ru: "Время вышло!", en: "Time's up!" },
+  timerSound:   { kz: "Дыбыс",   ru: "Звук",   en: "Sound" },
+
+  // Stopwatch
+  swLap:    { kz: "Аралық",   ru: "Круг",   en: "Lap" },
+  swLaps:   { kz: "Аралықтар", ru: "Круги", en: "Laps" },
+
+  // Dice
+  diceCount: { kz: "Кубиктер саны", ru: "Количество кубиков", en: "Number of dice" },
+  diceSides: { kz: "Қыр саны",     ru: "Количество граней",  en: "Sides" },
+  diceTotal: { kz: "Қосынды",      ru: "Сумма",              en: "Total" },
+
+  // Random Name
+  rnTabNames:       { kz: "Есімдер бойынша", ru: "По именам",  en: "By names" },
+  rnTabNumbers:     { kz: "Сандар бойынша",  ru: "По числам",  en: "By numbers" },
+  rnAddPlaceholder: { kz: "Есім жазып, Enter басыңыз…", ru: "Введите имя и нажмите Enter…", en: "Type a name and press Enter…" },
+  rnBulkAdd:        { kz: "Жаппай қосу",     ru: "Массовое добавление", en: "Bulk add" },
+  rnImport:         { kz: "Қосу",            ru: "Добавить",  en: "Add" },
+  rnNamesPlaceholder: { kz: "Айбек\nДана\nАрман\n…", ru: "Айбек\nДана\nАрман\n…", en: "Aibek\nDana\nArman\n…" },
+  rnNumberRange:    { kz: "Оқушылар саны",   ru: "Количество учеников", en: "Number of students" },
+  rnNumberHint:     { kz: "1-ден таңдалған санға дейін кездейсоқ сан таңдалады", ru: "Будет выбрано случайное число от 1 до указанного", en: "Picks a random number from 1 to N" },
+  rnRemoveAfterPick:{ kz: "Таңдалғаннан кейін жою", ru: "Удалять после выбора", en: "Remove after pick" },
+  rnSpin:           { kz: "Айналдыру",       ru: "Крутить",   en: "Spin" },
+  rnNoNames:        { kz: "Алдымен есімдер немесе сан қосыңыз", ru: "Сначала добавьте имена или число", en: "Add names or a number first" },
+  rnWinner:         { kz: "Жеңімпаз",        ru: "Победитель", en: "Winner" },
+
+  // Random Number
+  rnumMin: { kz: "Минимум", ru: "Минимум", en: "Min" },
+  rnumMax: { kz: "Максимум", ru: "Максимум", en: "Max" },
+  rnumNoRepeat: { kz: "Қайталанбасын", ru: "Без повторов", en: "No repeats" },
+  rnumExhausted: { kz: "Барлық сандар таңдалды", ru: "Все числа уже выпали", en: "All numbers used" },
+
+  // Yes / No
+  ynYes: { kz: "ИӘ", ru: "ДА", en: "YES" },
+  ynNo:  { kz: "ЖОҚ", ru: "НЕТ", en: "NO" },
+  ynTap: { kz: "Жауап алу үшін басыңыз", ru: "Нажмите, чтобы получить ответ", en: "Tap to get an answer" },
+
+  // Group Maker
+  gmNamesLabel:    { kz: "Қатысушылар (әр жолда бір)", ru: "Участники (по одному на строку)", en: "Participants (one per line)" },
+  gmModeByCount:   { kz: "Топтар саны", ru: "По количеству групп", en: "By number of groups" },
+  gmModeBySize:    { kz: "Топ өлшемі", ru: "По размеру группы", en: "By group size" },
+  gmGroupCount:    { kz: "Топтар саны", ru: "Сколько групп", en: "Groups" },
+  gmGroupSize:     { kz: "Топ өлшемі", ru: "Размер группы", en: "Group size" },
+  gmShuffle:       { kz: "Араластыру", ru: "Перемешать", en: "Shuffle" },
+  gmGroup:         { kz: "Топ", ru: "Группа", en: "Group" },
+  gmStudent:       { kz: "Оқушы", ru: "Ученик", en: "Student" },
+  gmNeedNames:     { kz: "Есімдер қосыңыз", ru: "Добавьте имена", en: "Add some names" },
+
+  // Whiteboard
+  wbColor:    { kz: "Түс",      ru: "Цвет",    en: "Color" },
+  wbSize:     { kz: "Қалыңдық", ru: "Толщина", en: "Size" },
+  wbPen:      { kz: "Қалам",    ru: "Перо",    en: "Pen" },
+  wbEraser:   { kz: "Өшіргіш",  ru: "Ластик",  en: "Eraser" },
+  wbBg:       { kz: "Фон",      ru: "Фон",     en: "Background" },
   teacherPageDesc: { kz: "Мұғалім профилін қарау мен басқару", ru: "Просмотр и управление профилем учителя", en: "View & manage teacher profile" },
   statsDesc: { kz: "Толық аналитика мен графиктер", ru: "Подробная аналитика и графики", en: "Detailed analytics & charts" },
   loading: { kz: "Жүктелуде…", ru: "Загрузка…", en: "Loading…" },
@@ -1019,6 +1096,16 @@ export const T = {
   deadlines: { kz: "Мерзімдер", ru: "Дедлайны", en: "Deadlines" },
   confirmSubmitGoal: { kz: "Нәтижені тексеруге жіберу керек пе?", ru: "Отправить результат на проверку?", en: "Submit result for review?" },
   goalSubmitted: { kz: "Нәтиже тексеруге жіберілді", ru: "Результат отправлен на проверку", en: "Result submitted for review" },
+
+  // ===== TEAMMATES (shared submissions / team goals) =====
+  sharedWithTeammates: { kz: "Командамен бөлісу", ru: "Поделиться с командой", en: "Share with teammates" },
+  teammatesPlaceholder: { kz: "Мұғалімдерді таңдаңыз (міндетті емес)", ru: "Выберите учителей (необязательно)", en: "Select teachers (optional)" },
+  teammatesHint: { kz: "Мақұлданған соң әр қатысушыға осы балл қосылады.", ru: "После одобрения баллы начислятся каждому участнику.", en: "After approval, points are awarded to every teammate." },
+  teamGoalMembers: { kz: "Команда мүшелері", ru: "Участники команды", en: "Team members" },
+  teamGoalHint: { kz: "Команда мақсаты — орындалғанда әр мүшеге балл қосылады.", ru: "Командная цель — при выполнении баллы получит каждый участник.", en: "Team goal — every member earns points on completion." },
+  teammatesApprovalNote: { kz: "командаға балл бөлінеді", ru: "баллы получат все участники", en: "points awarded to all members" },
+  remove: { kz: "Жою", ru: "Удалить", en: "Remove" },
+  startTypingHint: { kz: "Іздеу үшін есімді жазыңыз", ru: "Начните вводить имя", en: "Start typing a name" },
   teacherGoals: { kz: "Мақсаттары", ru: "Цели", en: "Goals" },
   viewProfile: { kz: "Профильді қарау", ru: "Посмотреть профиль", en: "View profile" },
   goToProfile: { kz: "Профильге өту", ru: "Перейти в профиль", en: "Go to profile" },
@@ -1034,6 +1121,14 @@ export const T = {
   calendarNoUpcoming: { kz: "Алдағы іс-шаралар жоқ", ru: "Нет предстоящих событий", en: "No upcoming events" },
   calendarDays: { kz: "күн", ru: "дн.", en: "days" },
   navAdminEvents: { kz: "Іс-шаралар", ru: "События", en: "Events" },
+  navSkud: { kz: "СКУД", ru: "СКУД", en: "Access logs" },
+  skudTitle: { kz: "СКУД — өткізу журналы", ru: "СКУД — журнал проходов", en: "Access control logs" },
+  skudDesc: { kz: "Hikvision терминалдары арқылы кіру/шығу журналы", ru: "Журнал входов/выходов через терминалы Hikvision", en: "Entry/exit logs from Hikvision terminals" },
+  skudOpenInNewTab: { kz: "Жаңа қойындыда ашу", ru: "Открыть в новой вкладке", en: "Open in new tab" },
+  skudReload: { kz: "Жаңарту", ru: "Обновить", en: "Reload" },
+  skudUrlLabel: { kz: "СКУД сервері URL", ru: "URL СКУД-сервера", en: "SKUD server URL" },
+  skudUrlSave: { kz: "Сақтау", ru: "Сохранить", en: "Save" },
+  skudUrlHint: { kz: "Django серверінің мекен-жайы (мысалы: http://10.15.2.10:8000)", ru: "Адрес Django-сервера (например: http://10.15.2.10:8000)", en: "Django server address (e.g. http://10.15.2.10:8000)" },
   adminEventsTitle: { kz: "Іс-шараларды басқару", ru: "Управление событиями", en: "Manage Events" },
   adminEventsDesc: { kz: "Мектеп іс-шараларын қосу, өзгерту және жою", ru: "Добавление, редактирование и удаление событий", en: "Add, edit and delete school events" },
   eventNew: { kz: "Жаңа іс-шара", ru: "Новое событие", en: "New event" },

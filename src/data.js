@@ -155,7 +155,10 @@ export async function fetchAdminRecentSubs() {
   return res.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-export async function createSubmission({ uid, type, title, description, eventDate, evidenceLink, evidenceFileUrl }) {
+export async function createSubmission({ uid, type, title, description, eventDate, evidenceLink, evidenceFileUrl, teammates }) {
+  const cleanTeammates = Array.isArray(teammates)
+    ? [...new Set(teammates.filter(x => x && x !== uid))]
+    : [];
   await addDoc(collection(db, "submissions"), {
     uid,
     typeId: type.id,
@@ -168,6 +171,7 @@ export async function createSubmission({ uid, type, title, description, eventDat
     eventDate: safeText(eventDate),
     evidenceLink: safeText(evidenceLink),
     evidenceFileUrl: safeText(evidenceFileUrl),
+    teammates: cleanTeammates,
     status: "pending",
     createdAt: serverTimestamp()
   });
@@ -179,9 +183,13 @@ export async function approveSubmission(subId, adminUid) {
     if (!sSnap.exists()) throw new Error("Заявка не найдена");
     const s = sSnap.data();
     if (s.status !== "pending") return;
-    const uRef = doc(db, "users", s.uid);
+    const pts = Number(s.points) || 0;
+    const mates = Array.isArray(s.teammates) ? s.teammates.filter(x => x && x !== s.uid) : [];
+    const recipients = [s.uid, ...mates];
     tx.update(sRef, { status: "approved", decidedAt: serverTimestamp(), decidedBy: adminUid });
-    tx.update(uRef, { totalPoints: increment(Number(s.points) || 0) });
+    for (const rUid of recipients) {
+      tx.update(doc(db, "users", rUid), { totalPoints: increment(pts) });
+    }
   });
 }
 export async function rejectSubmission(subId, adminUid) {
@@ -560,7 +568,10 @@ export async function fetchGoals(uid) {
   }
 }
 
-export async function createGoal({ uid, targetPoints, deadline, note, scope, section }) {
+export async function createGoal({ uid, targetPoints, deadline, note, scope, section, teammates }) {
+  const cleanTeammates = Array.isArray(teammates)
+    ? [...new Set(teammates.filter(x => x && x !== uid))]
+    : [];
   await addDoc(collection(db, "goals"), {
     uid,
     targetPoints: Number(targetPoints) || 0,
@@ -568,6 +579,7 @@ export async function createGoal({ uid, targetPoints, deadline, note, scope, sec
     note: safeText(note),
     scope: safeText(scope) || "quarter",
     section: safeText(section),
+    teammates: cleanTeammates,
     completed: false,
     createdAt: serverTimestamp()
   });

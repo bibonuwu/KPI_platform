@@ -164,6 +164,9 @@ export function PageAdminApprovals() {
     const isExpanded = expanded.has(s.id);
     const hasEvidence = s.evidenceLink || s.evidenceFileUrl;
     const initials = (tu?.displayName || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+    const mates = Array.isArray(s.teammates)
+      ? s.teammates.map(uid => usersMap.get(uid)).filter(Boolean)
+      : [];
 
     return (
       <div key={s.id} className={`appr-card glass${isSelected ? " appr-card--selected" : ""}`} style={{ "--di": idx }}>
@@ -203,6 +206,17 @@ export function PageAdminApprovals() {
             )}
             {!hasEvidence && <span className="muted tiny">{t("noEvidence")}</span>}
           </div>
+          {mates.length > 0 && (
+            <div className="appr-card__teammates" style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+              <span className="tiny muted">{t("sharedWithTeammates")}:</span>
+              {mates.map(m => (
+                <span key={m.uid} className="pill approved" style={{ fontSize: 11, padding: "2px 8px" }}>
+                  {m.displayName || m.email}
+                </span>
+              ))}
+              <span className="tiny muted">· {t("teammatesApprovalNote")} (+{fmtPoints(s.points)} × {mates.length + 1})</span>
+            </div>
+          )}
         </div>
 
         {/* expandable description */}
@@ -3482,6 +3496,94 @@ export function PageAdminEvents() {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** ---------- PageAdminSkud ---------- */
+const SKUD_URL_KEY = "kpi_skud_url";
+const SKUD_DEFAULT_URL = "http://localhost:8000/";
+
+export function PageAdminSkud() {
+  const st = useStore();
+  const u = st.userDoc;
+
+  const [url, setUrl] = useState(() => {
+    try { return localStorage.getItem(SKUD_URL_KEY) || SKUD_DEFAULT_URL; }
+    catch (e) { return SKUD_DEFAULT_URL; }
+  });
+  const [draft, setDraft] = useState(url);
+  const [iframeKey, setIframeKey] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
+
+  if (!u || u.role !== "admin") return <Guard />;
+
+  const saveUrl = () => {
+    const trimmed = (draft || "").trim();
+    if (!trimmed) return;
+    try { localStorage.setItem(SKUD_URL_KEY, trimmed); } catch (e) {}
+    setUrl(trimmed);
+    setIframeKey(k => k + 1);
+    setShowSettings(false);
+    toast("OK", "success");
+  };
+
+  const reload = () => setIframeKey(k => k + 1);
+
+  return (
+    <div className="page page-skud">
+      <div className="page-head" style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h1 className="h1">{t("skudTitle")}</h1>
+            <p className="p muted">{t("skudDesc")}</p>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <Btn size="sm" onClick={reload}><Icon name="refresh" /> {t("skudReload")}</Btn>
+            <Btn size="sm" onClick={() => window.open(url, "_blank", "noopener")}>
+              ↗ {t("skudOpenInNewTab")}
+            </Btn>
+            <Btn size="sm" onClick={() => setShowSettings(s => !s)}>
+              <Icon name="settings" /> URL
+            </Btn>
+          </div>
+        </div>
+      </div>
+
+      {showSettings && (
+        <div className="glass card" style={{ marginBottom: 12, padding: 14 }}>
+          <div className="tiny muted" style={{ marginBottom: 6 }}>{t("skudUrlLabel")}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Input
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder={SKUD_DEFAULT_URL}
+              style={{ flex: 1, minWidth: 240 }}
+            />
+            <Btn kind="primary" onClick={saveUrl}>{t("skudUrlSave")}</Btn>
+          </div>
+          <div className="tiny muted" style={{ marginTop: 6 }}>{t("skudUrlHint")}</div>
+        </div>
+      )}
+
+      <div
+        className="glass"
+        style={{
+          padding: 0,
+          overflow: "hidden",
+          borderRadius: 16,
+          height: "calc(100vh - 220px)",
+          minHeight: 480
+        }}
+      >
+        <iframe
+          key={iframeKey}
+          src={url}
+          title="SKUD"
+          style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
+          referrerPolicy="no-referrer"
+        />
       </div>
     </div>
   );
