@@ -3503,7 +3503,7 @@ export function PageAdminEvents() {
 
 /** ---------- PageAdminSkud ---------- */
 const SKUD_URL_KEY = "kpi_skud_url";
-const SKUD_DEFAULT_URL = "http://localhost:8000/";
+const SKUD_DEFAULT_URL = "http://localhost:1101/";
 
 export function PageAdminSkud() {
   const st = useStore();
