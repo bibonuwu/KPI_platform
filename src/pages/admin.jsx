@@ -3573,8 +3573,8 @@ export function PageAdminSkud() {
           padding: 0,
           overflow: "hidden",
           borderRadius: 16,
-          height: "calc(100vh - 220px)",
-          minHeight: 480
+          height: "300vh",
+          minHeight: 2400
         }}
       >
         <iframe
@@ -3583,6 +3583,7 @@ export function PageAdminSkud() {
           title="SKUD"
           style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
           referrerPolicy="no-referrer"
+          scrolling="no"
         />
       </div>
     </div>
