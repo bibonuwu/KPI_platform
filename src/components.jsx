@@ -20,7 +20,7 @@ import { DEFAULT_TYPES, NEWS_CAT_ICONS, NEWS_CATEGORIES } from "./constants.js";
 import {
   fetchGoals, createGoal, updateGoal, deleteGoalDoc, uploadAvatar,
   updateProfile, setUserOnline, fetchNewsAll, renderRichDesc, newsCatLabel,
-  ensureUserDoc
+  ensureUserDoc, createSubmission, fetchMySubmissions, uploadEvidence
 } from "./data.js";
 
 export function Icon({ name }) {
@@ -262,104 +262,56 @@ export function TeammatesPicker({ value = [], onChange, excludeUid, label }) {
 
       {open && createPortal(
         <div
+          className="tm-backdrop"
           onClick={() => setOpen(false)}
           onKeyDown={onKeyDown}
           tabIndex={-1}
-          style={{
-            position: "fixed", inset: 0, zIndex: 10000,
-            background: "rgba(5,8,14,.7)", backdropFilter: "blur(14px)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: "24px", animation: "fadeIn .18s ease"
-          }}
         >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: "100%", maxWidth: 600,
-              borderRadius: 24,
-              background: "linear-gradient(180deg, rgba(22,28,38,.98), rgba(16,20,28,.98))",
-              border: "1px solid rgba(255,255,255,.08)",
-              boxShadow: "0 30px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.02) inset",
-              display: "flex", flexDirection: "column",
-              overflow: "hidden", animation: "slideUp .25s cubic-bezier(.2,.8,.2,1)",
-              maxHeight: "min(640px, 85vh)"
-            }}
-          >
+          <div className="tm-modal" onClick={e => e.stopPropagation()}>
             {/* Title + close */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "22px 26px 0" }}>
-              <div style={{ fontSize: 18, fontWeight: 600, letterSpacing: "-.01em" }}>
-                {label || t("sharedWithTeammates")}
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                style={{ background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10, width: 32, height: 32, cursor: "pointer", color: "inherit", fontSize: 18, lineHeight: 1, display: "grid", placeItems: "center", transition: "background .15s" }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,.08)"}
-                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,.04)"}
-              >×</button>
+            <div className="tm-modal__head">
+              <div className="tm-modal__title">{label || t("sharedWithTeammates")}</div>
+              <button type="button" className="tm-modal__close" onClick={() => setOpen(false)}>×</button>
             </div>
 
             {/* Search */}
-            <div style={{ position: "relative", padding: "18px 26px 16px" }}>
+            <div className="tm-modal__search">
               <input
+                className="tm-modal__search-input"
                 placeholder={t("searchTeacher")}
                 value={search}
                 onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
-                style={{
-                  width: "100%", border: 0, outline: 0,
-                  background: "rgba(255,255,255,.04)",
-                  borderRadius: 14, fontSize: 17, padding: "14px 44px 14px 18px",
-                  color: "inherit", fontFamily: "inherit",
-                  boxShadow: "0 0 0 1px rgba(255,255,255,.06) inset",
-                  transition: "box-shadow .15s"
-                }}
-                onFocus={e => e.currentTarget.style.boxShadow = "0 0 0 1px rgba(135,188,46,.45) inset"}
-                onBlur={e => e.currentTarget.style.boxShadow = "0 0 0 1px rgba(255,255,255,.06) inset"}
                 autoFocus
               />
               {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  style={{ position: "absolute", right: 36, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,.06)", border: 0, cursor: "pointer", color: "inherit", fontSize: 14, width: 24, height: 24, borderRadius: "50%", display: "grid", placeItems: "center", opacity: .7 }}
-                >×</button>
+                <button type="button" className="tm-modal__search-clear" onClick={() => setSearch("")}>×</button>
               )}
             </div>
 
             {/* Selected chips */}
             {chosen.length > 0 && (
-              <div style={{ padding: "0 26px 14px" }}>
-                <div className="tiny muted" style={{ marginBottom: 8, fontSize: 11, textTransform: "uppercase", letterSpacing: ".08em", opacity: .5 }}>
-                  {chosen.length}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 92, overflowY: "auto" }}>
+              <div className="tm-modal__chips-wrap">
+                <div className="tm-modal__chips-count">{chosen.length}</div>
+                <div className="tm-modal__chips">
                   {chosen.map(u => (
-                    <span
-                      key={u.uid}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 6px 5px 12px", fontSize: 13, borderRadius: 999, background: "rgba(135,188,46,.12)", border: "1px solid rgba(135,188,46,.3)", color: "rgba(255,255,255,.95)" }}
-                    >
+                    <span key={u.uid} className="tm-modal__chip">
                       {u.displayName || u.email}
-                      <button
-                        type="button"
-                        onClick={() => removeOne(u.uid)}
-                        style={{ background: "rgba(0,0,0,.25)", border: 0, cursor: "pointer", color: "inherit", padding: 0, fontSize: 13, lineHeight: 1, width: 18, height: 18, borderRadius: "50%", display: "grid", placeItems: "center" }}
-                      >×</button>
+                      <button type="button" className="tm-modal__chip-x" onClick={() => removeOne(u.uid)}>×</button>
                     </span>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Divider */}
-            <div style={{ height: 1, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent)", margin: "0 26px" }} />
+            <div className="tm-modal__divider" />
 
             {/* Results — only after typing */}
             {q ? (
-              <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "8px 14px 14px", minHeight: 240 }}>
+              <div ref={listRef} className="tm-modal__list">
                 {visible.length === 0 ? (
-                  <div style={{ padding: "56px 16px", textAlign: "center" }}>
-                    <div style={{ fontSize: 40, opacity: .15, marginBottom: 10 }}>🔎</div>
-                    <p className="muted" style={{ margin: 0, fontSize: 13 }}>{t("noData")}</p>
+                  <div className="tm-modal__empty">
+                    <div className="tm-modal__empty-glyph">🔎</div>
+                    <p className="muted">{t("noData")}</p>
                   </div>
                 ) : visible.map((u, idx) => {
                   const on = selected.has(u.uid);
@@ -371,54 +323,33 @@ export function TeammatesPicker({ value = [], onChange, excludeUid, label }) {
                       data-idx={idx}
                       onClick={() => { toggle(u.uid); }}
                       onMouseEnter={() => setFocusIdx(idx)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 14,
-                        padding: "12px 14px", cursor: "pointer",
-                        borderRadius: 12,
-                        background: on ? "rgba(135,188,46,.1)" : focused ? "rgba(255,255,255,.04)" : "transparent",
-                        transition: "background .12s",
-                        marginBottom: 2
-                      }}
+                      className={`tm-modal__row${on ? " is-on" : ""}${focused ? " is-focused" : ""}`}
                     >
                       {u.avatarUrl ? (
-                        <img src={u.avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                        <img src={u.avatarUrl} alt="" className="tm-modal__avatar" />
                       ) : (
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: on ? "linear-gradient(135deg, #87bc2e, #5a8a1f)" : "rgba(255,255,255,.06)", color: on ? "#fff" : "rgba(255,255,255,.7)", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 700, flexShrink: 0, transition: "background .15s" }}>
-                          {initials}
-                        </div>
+                        <div className={`tm-modal__avatar tm-modal__avatar--initials${on ? " is-on" : ""}`}>{initials}</div>
                       )}
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 14.5, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.displayName || u.email}</div>
+                      <div className="tm-modal__row-body">
+                        <div className="tm-modal__row-name">{u.displayName || u.email}</div>
                         {(u.position || u.subject) && (
-                          <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2, opacity: .6 }}>
-                            {[u.position, u.subject].filter(Boolean).join(" · ")}
-                          </div>
+                          <div className="tm-modal__row-meta muted">{[u.position, u.subject].filter(Boolean).join(" · ")}</div>
                         )}
                       </div>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: "50%",
-                        border: on ? "0" : "1.5px solid rgba(255,255,255,.2)",
-                        background: on ? "var(--accent, #87bc2e)" : "transparent",
-                        display: "grid", placeItems: "center", flexShrink: 0,
-                        transition: "all .15s"
-                      }}>
-                        {on && <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>✓</span>}
+                      <div className={`tm-modal__radio${on ? " is-on" : ""}`}>
+                        {on && <span>✓</span>}
                       </div>
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <div style={{ padding: "64px 24px", textAlign: "center" }}>
-                <div style={{ fontSize: 34, opacity: .15, marginBottom: 12 }}>✎</div>
-                <p className="muted" style={{ margin: 0, fontSize: 14, opacity: .55, letterSpacing: ".01em" }}>{t("startTypingHint")}</p>
+              <div className="tm-modal__empty">
+                <div className="tm-modal__empty-glyph">✎</div>
+                <p className="muted">{t("startTypingHint")}</p>
               </div>
             )}
           </div>
-          <style>{`
-            @keyframes slideUp { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-            @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-          `}</style>
         </div>,
         document.body
       )}
@@ -512,7 +443,11 @@ export function GoalsWidget({ compact = false }) {
   const [teammates, setTeammates] = useState([]);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState("goals"); // "goals" | "deadlines"
-  const [pendingProgress, setPendingProgress] = useState({});
+  const [submitGoal, setSubmitGoal] = useState(null);
+  const [subFile, setSubFile] = useState(null);
+  const [subLink, setSubLink] = useState("");
+  const [subNote, setSubNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [compactTab, setCompactTab] = useState("goals"); // "goals" | "history"
   const [goalsPage, setGoalsPage] = useState(1);
   const [histPage, setHistPage] = useState(1);
@@ -525,12 +460,6 @@ export function GoalsWidget({ compact = false }) {
   const approvedSubs = subs.filter(s => s.status === "approved");
 
   const computeProgress = (goal) => {
-    // If manual progress is set, use it
-    if (goal.manualProgress != null && goal.manualProgress > 0) {
-      const targetPts = Number(goal.targetPoints) || 1;
-      const earned = Math.round(targetPts * goal.manualProgress / 100);
-      return { earned, pct: Math.min(100, goal.manualProgress) };
-    }
     let relevantSubs = approvedSubs;
     // Only count submissions created after the goal was created
     if (goal.createdAt) {
@@ -607,59 +536,71 @@ export function GoalsWidget({ compact = false }) {
     }
   };
 
-  const handleToggleComplete = async (g) => {
-    if (!g.completed) {
-      // Ask confirmation and submit for review
-      if (!window.confirm(t("confirmSubmitGoal"))) return;
-      try {
-        // Create a submission from this goal for admin review
-        const goalType = (st.types || []).find(tp => tp.section === g.section) || { id: "goal", name: g.note || t("goals"), section: g.section || "", subsection: "", defaultPoints: g.targetPoints };
-        await createSubmission({
-          uid: u.uid,
-          type: { ...goalType, defaultPoints: g.targetPoints },
-          title: g.note || t("goals"),
-          description: `${t("goalTarget")}: ${g.targetPoints} · ${t("goalDeadline")}: ${g.deadline || "—"}`,
-          eventDate: ymd(),
-          evidenceLink: "",
-          evidenceFileUrl: "",
-          teammates: Array.isArray(g.teammates) ? g.teammates : []
-        });
-        await updateGoal(g.id, { completed: true });
-        const fresh = await fetchGoals(u.uid);
-        const mySubs = await fetchMySubmissions(u.uid);
-        setState({ myGoals: fresh, mySubmissions: mySubs });
-        toast(t("goalSubmitted"), "ok");
-      } catch (e) {
-        toast(e?.message || t("error"), "error");
+  const openSubmit = (g) => {
+    if (g.completed) return;
+    setSubmitGoal(g);
+    setSubFile(null);
+    setSubLink("");
+    setSubNote("");
+  };
+
+  const closeSubmit = () => {
+    if (submitting) return;
+    setSubmitGoal(null);
+    setSubFile(null);
+    setSubLink("");
+    setSubNote("");
+  };
+
+  const handleSubmitGoal = async () => {
+    const g = submitGoal;
+    if (!g) return;
+    if (!subFile && !subLink.trim()) {
+      toast(t("evidenceRequired"), "error");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      let evidenceFileUrl = "";
+      if (subFile) {
+        evidenceFileUrl = await uploadEvidence(u.uid, subFile);
       }
-    } else {
-      try {
-        await updateGoal(g.id, { completed: false });
-        const fresh = await fetchGoals(u.uid);
-        setState({ myGoals: fresh });
-      } catch (e) {
-        toast(e?.message || t("error"), "error");
-      }
+      const goalType = (st.types || []).find(tp => tp.section === g.section) || {
+        id: "goal", name: g.note || t("goals"), section: g.section || "", subsection: "", defaultPoints: g.targetPoints
+      };
+      const baseDesc = `${t("goalTarget")}: ${g.targetPoints} · ${t("goalDeadline")}: ${g.deadline || "—"}`;
+      const description = subNote.trim() ? `${baseDesc}\n${subNote.trim()}` : baseDesc;
+      await createSubmission({
+        uid: u.uid,
+        type: { ...goalType, defaultPoints: g.targetPoints },
+        title: g.note || t("goals"),
+        description,
+        eventDate: ymd(),
+        evidenceLink: subLink.trim(),
+        evidenceFileUrl,
+        teammates: Array.isArray(g.teammates) ? g.teammates : []
+      });
+      await updateGoal(g.id, { completed: true });
+      const fresh = await fetchGoals(u.uid);
+      const mySubs = await fetchMySubmissions(u.uid);
+      setState({ myGoals: fresh, mySubmissions: mySubs });
+      toast(t("goalSubmitted"), "ok");
+      setSubmitGoal(null);
+      setSubFile(null);
+      setSubLink("");
+      setSubNote("");
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleBarInteraction = (g, e) => {
-    const bar = e.currentTarget;
-    const rect = bar.getBoundingClientRect();
-    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const raw = Math.round((x / rect.width) * 100);
-    const pct = Math.min(100, Math.max(0, Math.round(raw / 5) * 5));
-    setPendingProgress(prev => ({ ...prev, [g.id]: pct }));
-  };
-
-  const saveProgress = async (g) => {
-    const pct = pendingProgress[g.id];
-    if (pct == null) return;
+  const handleReopen = async (g) => {
     try {
-      await updateGoal(g.id, { manualProgress: pct });
+      await updateGoal(g.id, { completed: false });
       const fresh = await fetchGoals(u.uid);
       setState({ myGoals: fresh });
-      setPendingProgress(prev => { const n = { ...prev }; delete n[g.id]; return n; });
     } catch (e) {
       toast(e?.message || t("error"), "error");
     }
@@ -672,6 +613,65 @@ export function GoalsWidget({ compact = false }) {
     return diff;
   };
 
+  const submitModalNode = submitGoal ? createPortal(
+    <div className="modalback" onClick={closeSubmit}>
+      <div className="modal glass goal-submit-modal" style={{ maxWidth: 520, width: "92vw" }} onClick={e => e.stopPropagation()}>
+        <div className="modal__head">
+          <div>
+            <div className="h2" style={{ marginBottom: 2 }}>{t("submitGoalTitle")}</div>
+            <div className="tiny muted">{t("submitGoalHint")}</div>
+          </div>
+          <Btn onClick={closeSubmit} disabled={submitting}>✕</Btn>
+        </div>
+        <div className="goal-submit-modal__body">
+          <div className="goal-submit-modal__summary">
+            <div className="goal-submit-modal__summary-title">{submitGoal.note || t("goals")}</div>
+            <div className="goal-submit-modal__summary-meta">
+              <span>{fmtPoints(submitGoal.targetPoints)} {t("pts")}</span>
+              {submitGoal.section && <span>• {submitGoal.section}</span>}
+              {submitGoal.deadline && <span>• {t("goalDeadline")}: {submitGoal.deadline}</span>}
+            </div>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label className="label">{t("evidenceFile")}</label>
+            <FileDrop
+              value={subFile}
+              onChange={(e) => setSubFile(e.target.files?.[0] || null)}
+              disabled={submitting}
+            />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className="label">{t("evidenceLinkLabel")}</label>
+            <Input
+              type="url"
+              placeholder="https://"
+              value={subLink}
+              onChange={e => setSubLink(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label className="label">{t("evidenceComment")}</label>
+            <Textarea
+              rows={3}
+              value={subNote}
+              onChange={e => setSubNote(e.target.value)}
+              disabled={submitting}
+            />
+          </div>
+          <div className="help" style={{ marginTop: 8 }}>{t("evidenceRequired")}</div>
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+          <Btn onClick={closeSubmit} disabled={submitting}>{t("cancel")}</Btn>
+          <Btn kind="primary" onClick={handleSubmitGoal} disabled={submitting || (!subFile && !subLink.trim())}>
+            {submitting ? t("uploadingFile") : t("submitForReview")}
+          </Btn>
+        </div>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
   if (compact) {
     const historySubs = [...subs].sort((a, b) => {
       const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
@@ -680,6 +680,7 @@ export function GoalsWidget({ compact = false }) {
     });
 
     return (
+      <>
       <div className="glass card dash-card goals-compact-v2" style={{ "--di": 7 }}>
         {/* Tab switcher */}
         <div className="gc-tabs">
@@ -716,7 +717,7 @@ export function GoalsWidget({ compact = false }) {
                       <div key={g.id} className={`gc-item${g.completed ? " gc-item--done" : ""}${overdue ? " gc-item--overdue" : ""}`}>
                         <div className="gc-item__head">
                           <div className="gc-item__left">
-                            <button className={`gc-item__check${g.completed ? " gc-item__check--done" : ""}`} onClick={!g.completed ? () => handleToggleComplete(g) : undefined} disabled={g.completed}>
+                            <button className={`gc-item__check${g.completed ? " gc-item__check--done" : ""}`} onClick={!g.completed ? () => openSubmit(g) : undefined} disabled={g.completed} title={g.completed ? t("goalCompleted") : t("submitForReview")}>
                               {g.completed ? "✓" : ""}
                             </button>
                             <div>
@@ -750,17 +751,10 @@ export function GoalsWidget({ compact = false }) {
                           </div>
                         ) : null}
                         <div className="gc-item__bar-wrap">
-                          <div
-                            className={`gc-item__bar${!g.completed ? " gc-item__bar--interactive" : ""}`}
-                            onClick={!g.completed ? (e) => handleBarInteraction(g, e) : undefined}
-                            onTouchMove={!g.completed ? (e) => { e.preventDefault(); handleBarInteraction(g, e); } : undefined}
-                          >
-                            <div className="gc-item__fill" style={{ width: `${pendingProgress[g.id] != null ? pendingProgress[g.id] : prog.pct}%`, background: barColor }} />
+                          <div className="gc-item__bar">
+                            <div className="gc-item__fill" style={{ width: `${prog.pct}%`, background: barColor }} />
                           </div>
-                          <span className="gc-item__pct">{pendingProgress[g.id] != null ? pendingProgress[g.id] : prog.pct}%</span>
-                          {pendingProgress[g.id] != null && (
-                            <Btn kind="primary" onClick={() => saveProgress(g)} style={{ height: 26, fontSize: 11, padding: "0 10px", marginLeft: 4 }}>{t("save")}</Btn>
-                          )}
+                          <span className="gc-item__pct">{prog.pct}%</span>
                         </div>
                       </div>
                     );
@@ -832,10 +826,13 @@ export function GoalsWidget({ compact = false }) {
           </div>
         </div>
       </div>
+      {submitModalNode}
+      </>
     );
   }
 
   return (
+    <>
     <div className="glass card goals-widget">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
         <div className="h2">{t("goalsAndDeadlines")}</div>
@@ -915,7 +912,7 @@ export function GoalsWidget({ compact = false }) {
           return (
             <div key={g.id} className={`goal-card${g.completed ? " goal-card--done" : ""}${overdue ? " goal-card--overdue" : ""}`}>
               <div className="goal-card__top">
-                <button className={`goal-card__check${g.completed ? " goal-card__check--done" : ""}`} onClick={() => handleToggleComplete(g)} title={g.completed ? t("goalActive") : t("goalCompleted")}>
+                <button className={`goal-card__check${g.completed ? " goal-card__check--done" : ""}`} onClick={() => g.completed ? handleReopen(g) : openSubmit(g)} title={g.completed ? t("goalActive") : t("submitForReview")}>
                   {g.completed ? "✓" : ""}
                 </button>
                 <div className="goal-card__info">
@@ -952,6 +949,8 @@ export function GoalsWidget({ compact = false }) {
       </>;
       })()}
     </div>
+    {submitModalNode}
+    </>
   );
 }
 
@@ -1075,7 +1074,7 @@ export function SidebarNav() {
   // Accordion: only one flyout open at a time; sync with current route
   const groupFor = (p) => {
     if (["rating", "stats"].includes(p)) return "analytics";
-    if (["requests", "documents", "add"].includes(p)) return "work";
+    if (["requests", "documents", "add", "books"].includes(p)) return "work";
     if (["support", "onboarding"].includes(p)) return "info";
     if (["admin/approvals", "admin/requests"].includes(p)) return "adminModeration";
     if (["admin/documents", "admin/types", "admin/announcements", "admin/events"].includes(p)) return "adminContent";
@@ -1111,7 +1110,6 @@ export function SidebarNav() {
   if (!u) {
     return (
       <div className="sidenav">
-        <div className="navsec">{t("navTitle")}</div>
         <NavLink it={{ p: "login", tKey: "navLogin", i: "user" }} />
       </div>
     );
@@ -1121,7 +1119,6 @@ export function SidebarNav() {
 
   return (
     <div className="sidenav">
-      <div className="navsec">{t("navTitle")}</div>
 
       {/* Dashboard — home page */}
       <NavLink it={{ p: "dashboard", tKey: "navDashboard", i: "home" }} />
@@ -1331,6 +1328,7 @@ const ROUTE_META = {
   rating:              { icon: "rank",      tKey: "navRating",         desc: "ratingDesc" },
   stats:               { icon: "chart",     tKey: "navStats",          desc: "statsDesc" },
   add:                 { icon: "plus",      tKey: "navAddKpi",         desc: "addDesc" },
+  books:               { icon: "file",      tKey: "navBooks",          desc: "booksDesc" },
   requests:            { icon: "file",      tKey: "navRequests",       desc: "requestsDesc" },
   documents:           { icon: "shield",    tKey: "navDocuments",      desc: "documentsDesc" },
   news:                { icon: "news",      tKey: "navNews",           desc: "newsDesc" },

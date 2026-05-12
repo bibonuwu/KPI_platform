@@ -38,6 +38,66 @@ import {
   FileDrop, ErrorBoundary, Guard
 } from "../components.jsx";
 
+function useWowTilt(maxTilt = 6) {
+  const ref = useRef(null);
+  const onMouseMove = (e) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    el.style.setProperty("--mx", `${x}px`);
+    el.style.setProperty("--my", `${y}px`);
+    el.style.setProperty("--rx", `${(0.5 - y / r.height) * maxTilt}deg`);
+    el.style.setProperty("--ry", `${(x / r.width - 0.5) * maxTilt * 1.2}deg`);
+  };
+  const onMouseLeave = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.setProperty("--rx", "0deg");
+    el.style.setProperty("--ry", "0deg");
+  };
+  return { ref, onMouseMove, onMouseLeave };
+}
+
+function TDocStat({ kind, icon, num, label, di }) {
+  const tilt = useWowTilt(4);
+  return (
+    <div ref={tilt.ref} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave} className={`treq-stat treq-stat--${kind}`} style={{ "--di": di }}>
+      <span className="treq-stat__spot" aria-hidden="true" />
+      <div className="treq-stat__icon"><Icon name={icon} /></div>
+      <div className="treq-stat__body">
+        <div className="treq-stat__num">{num}</div>
+        <div className="treq-stat__label">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function TDocCard({ statusKey, color, color2, icon, title, subtitle, meta, actions, di }) {
+  const tilt = useWowTilt(5);
+  return (
+    <div
+      ref={tilt.ref}
+      onMouseMove={tilt.onMouseMove}
+      onMouseLeave={tilt.onMouseLeave}
+      className={`tdoc-card tdoc-card--${statusKey}`}
+      style={{ "--di": di, "--tdc": color, "--tdc2": color2 }}
+    >
+      <span className="tdoc-card__spot" aria-hidden="true" />
+      <span className="tdoc-card__border" aria-hidden="true" />
+      <span className="tdoc-card__bg" aria-hidden="true"><Icon name={icon} /></span>
+      <div className="tdoc-card__icon"><Icon name={icon} /></div>
+      <div className="tdoc-card__body">
+        <div className="tdoc-card__title">{title}</div>
+        {subtitle && <div className="tdoc-card__subtitle">{subtitle}</div>}
+        {meta && <div className="tdoc-card__meta">{meta}</div>}
+      </div>
+      {actions && <div className="tdoc-card__actions">{actions}</div>}
+    </div>
+  );
+}
+
 export function PageAdminApprovals() {
   const st = useStore();
   const u = st.userDoc;
@@ -869,6 +929,7 @@ export function PageDocuments() {
   const docs = st.myDocuments || [];
   const myTDocs = st.myTeacherDocs || [];
   const unsignedCount = docs.filter(d => d.status !== "signed").length;
+  const signedCount = docs.filter(d => d.status === "signed").length;
 
   const getPos = (e) => {
     const c = canvasRef.current;
@@ -1083,62 +1144,98 @@ export function PageDocuments() {
         document.body
       )}
 
-      <div className="page-wrap">
+      <div className="tdoc">
+        {/* Stat cards */}
+        <div className="treq-stats">
+          <TDocStat kind="pending"  icon="clock"      num={unsignedCount}  label={t("tabToSign")}    di={0} />
+          <TDocStat kind="balance"  icon="file"       num={docs.length}    label={t("navDocuments")} di={1} />
+          <TDocStat kind="approved" icon="check"      num={signedCount}    label={t("statusSigned")} di={2} />
+          <TDocStat kind="total"    icon="plus"       num={myTDocs.length} label={t("tabMyDocs")}    di={3} />
+        </div>
+
         {/* Tabs */}
-        <div className="prof-tabs" style={{ marginBottom: 16 }}>
-          <button className={`prof-tab${activeTab === "sign" ? " prof-tab--active" : ""}`} onClick={() => setActiveTab("sign")}>
-            <Icon name="file" /> {t("tabToSign")} {unsignedCount > 0 && <span className="at-tab-count">{unsignedCount}</span>}
+        <div className="treq-tabs">
+          <button className={`treq-tab${activeTab === "sign" ? " treq-tab--active" : ""}`} onClick={() => setActiveTab("sign")}>
+            <Icon name="file" /> {t("tabToSign")}
+            {unsignedCount > 0 && <span className="treq-tab__badge">{unsignedCount}</span>}
           </button>
-          <button className={`prof-tab${activeTab === "my" ? " prof-tab--active" : ""}`} onClick={() => setActiveTab("my")}>
-            <Icon name="plus" /> {t("tabMyDocs")} {myTDocs.length > 0 && <span className="at-tab-count">{myTDocs.length}</span>}
+          <button className={`treq-tab${activeTab === "my" ? " treq-tab--active" : ""}`} onClick={() => setActiveTab("my")}>
+            <Icon name="plus" /> {t("tabMyDocs")}
+            {myTDocs.length > 0 && <span className="treq-tab__badge">{myTDocs.length}</span>}
           </button>
+          <div className="treq-tabs__actions">
+            <Btn kind="ghost" onClick={refreshMyDocs} disabled={st.loading}><Icon name="refresh" /></Btn>
+          </div>
         </div>
 
         {/* Tab: Documents to sign (from admin) */}
         {activeTab === "sign" && (
-          <>
+          <div className="tdoc-list" style={{ "--di": 0 }}>
             {docs.length === 0 ? (
-              <div className="glass card" style={{ textAlign: "center", color: "var(--muted)", padding: 40 }}>
-                {t("noDocuments")}
+              <div className="treq-empty glass card">
+                <div className="treq-empty__icon"><Icon name="file" /></div>
+                <p>{t("noDocuments")}</p>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {docs.map(d => {
-                  const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
-                  return (
-                    <div key={d.id} className="glass card" style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, marginBottom: 4 }}>{d.title}</div>
-                        <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{d.body}</div>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                          <Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill>
-                          {d.requireSignature && d.status !== "signed" && <Pill kind="pending">{t("needsSignature")}</Pill>}
-                          <span className="tiny muted">{dateStr}</span>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                        <Btn onClick={() => openDoc(d)}>{t("view")}</Btn>
-                        {d.requireSignature && d.status !== "signed" && (
-                          <Btn kind="primary" onClick={() => { setSigningDoc(d); setSigned(false); clearSig(); }}>{t("signDoc")}</Btn>
+              docs.map((d, idx) => {
+                const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
+                const isSigned  = d.status === "signed";
+                const isViewed  = d.status === "viewed";
+                const statusKey = isSigned ? "signed" : isViewed ? "viewed" : "new";
+                const palette = isSigned
+                  ? { c: "#34d399", c2: "#10b981" }
+                  : isViewed
+                    ? { c: "#38bdf8", c2: "#0ea5e9" }
+                    : { c: "#fbbf24", c2: "#f59e0b" };
+                const needsSign = d.requireSignature && !isSigned;
+                return (
+                  <TDocCard
+                    key={d.id}
+                    di={idx}
+                    statusKey={statusKey}
+                    color={palette.c}
+                    color2={palette.c2}
+                    icon={isSigned ? "check" : needsSign ? "clock" : "file"}
+                    title={d.title}
+                    subtitle={d.body}
+                    meta={
+                      <>
+                        <Pill kind={statusColor(d.status)}>{statusLabel(d.status)}</Pill>
+                        {needsSign && <Pill kind="pending">{t("needsSignature")}</Pill>}
+                        <span className="tdoc-card__date"><Icon name="calendar" /> {dateStr}</span>
+                      </>
+                    }
+                    actions={
+                      <>
+                        <Btn onClick={() => openDoc(d)}><Icon name="eye" /> {t("view")}</Btn>
+                        {needsSign && (
+                          <Btn kind="primary" onClick={() => { setSigningDoc(d); setSigned(false); clearSig(); }}>
+                            <Icon name="check" /> {t("signDoc")}
+                          </Btn>
                         )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      </>
+                    }
+                  />
+                );
+              })
             )}
-          </>
+          </div>
         )}
 
         {/* Tab: My documents (teacher uploads) */}
         {activeTab === "my" && (
-          <div className="grid2">
-            <div className="glass card">
-              <div className="h2">{t("myDocsTitle")}</div>
-              <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>{t("myDocsDesc")}</div>
+          <div className="tdoc-my" style={{ "--di": 0 }}>
+            <div className="tdoc-upload glass card">
+              <div className="tdoc-upload__head">
+                <div className="tdoc-upload__icon"><Icon name="plus" /></div>
+                <div>
+                  <div className="h2" style={{ margin: 0 }}>{t("myDocsTitle")}</div>
+                  <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{t("myDocsDesc")}</div>
+                </div>
+              </div>
               <div className="sep"></div>
 
-              <form onSubmit={submitMyDoc}>
+              <form onSubmit={submitMyDoc} className="tdoc-upload__form">
                 <div className="label">{t("docNameLabel")}</div>
                 <Input value={docTitle} onChange={(e) => setDocTitle(e.target.value)} placeholder={t("docNamePlaceholder")} required />
 
@@ -1153,34 +1250,49 @@ export function PageDocuments() {
                   required
                 />
 
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-                  <Btn kind="primary" type="submit" disabled={st.loading}>{t("uploadBtn")}</Btn>
-                  <Btn type="button" onClick={refreshMyDocs} disabled={st.loading}>{t("refresh")}</Btn>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+                  <Btn kind="primary" type="submit" disabled={st.loading}><Icon name="plus" /> {t("uploadBtn")}</Btn>
+                  <Btn type="button" onClick={refreshMyDocs} disabled={st.loading}><Icon name="refresh" /> {t("refresh")}</Btn>
                 </div>
               </form>
             </div>
 
-            <div className="glass card">
-              <div className="h2">{t("uploadedDocs")}</div>
-              <div className="sep"></div>
-
-              {myTDocs.length === 0 && <p className="muted">{t("noMyDocs")}</p>}
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {myTDocs.map(d => {
+            <div className="tdoc-list">
+              {myTDocs.length === 0 ? (
+                <div className="treq-empty glass card">
+                  <div className="treq-empty__icon"><Icon name="file" /></div>
+                  <p>{t("noMyDocs")}</p>
+                </div>
+              ) : (
+                myTDocs.map((d, idx) => {
                   const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
                   return (
-                    <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700 }}>{d.title}</div>
-                        {d.description && <div className="muted tiny">{d.description}</div>}
-                        <div className="muted tiny">{d.fileName || "файл"} · {dateStr}</div>
-                      </div>
-                      {d.fileUrl && <a className="btn" href={d.fileUrl} target="_blank" rel="noreferrer">{t("openDoc")}</a>}
-                    </div>
+                    <TDocCard
+                      key={d.id}
+                      di={idx}
+                      statusKey="mine"
+                      color="#a78bfa"
+                      color2="#8b5cf6"
+                      icon="file"
+                      title={d.title}
+                      subtitle={d.description}
+                      meta={
+                        <>
+                          <span className="tdoc-card__date"><Icon name="file" /> {d.fileName || "файл"}</span>
+                          <span className="tdoc-card__date"><Icon name="calendar" /> {dateStr}</span>
+                        </>
+                      }
+                      actions={
+                        d.fileUrl && (
+                          <a className="btn" href={d.fileUrl} target="_blank" rel="noreferrer">
+                            <Icon name="eye" /> {t("openDoc")}
+                          </a>
+                        )
+                      }
+                    />
                   );
-                })}
-              </div>
+                })
+              )}
             </div>
           </div>
         )}

@@ -129,7 +129,7 @@ export async function saveSiteSettings(uid, s) {
 }
 
 export const ROUTES = [
-  "login", "onboarding", "dashboard", "profile", "rating", "stats", "add",
+  "login", "onboarding", "dashboard", "profile", "rating", "stats", "add", "books",
   "requests", "documents", "news", "support", "settings", "classroomtools", "calendar", "about",
   "admin/approvals", "admin/requests", "admin/types", "admin/users", "admin/teacher", "admin/documents", "admin/support", "admin/announcements", "admin/events", "admin/director", "admin/skud"
 ];
@@ -153,10 +153,11 @@ export function canAccess(path, userDoc) {
   if (role === "teacher") {
     if (userDoc.onboarded !== true) return false;
     if (path.startsWith("admin/")) return false;
-    return ["dashboard", "profile", "rating", "stats", "add", "requests", "documents", "news", "support", "settings", "classroomtools", "about"].includes(path);
+    return ["dashboard", "profile", "rating", "stats", "add", "books", "requests", "documents", "news", "support", "settings", "classroomtools", "about"].includes(path);
   }
   if (role === "admin") {
     if (path === "add") return false;
+    if (path === "books") return false;
     return ["dashboard", "profile", "rating", "stats", "documents", "news", "settings", "classroomtools", "calendar", "about"].includes(path) || path.startsWith("admin/");
   }
   return false;

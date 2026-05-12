@@ -35,497 +35,174 @@ import {
   FileDrop, ErrorBoundary, Guard, TeammatesPicker
 } from "../components.jsx";
 
-function School3D() {
-  const sceneRef = useRef(null);
-  const target = useRef({ rx: -15, ry: -25 });
-  const current = useRef({ rx: -15, ry: -25 });
+function useWowTilt(maxTilt = 8) {
+  const ref = useRef(null);
+  const onMouseMove = (e) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    el.style.setProperty("--mx", `${x}px`);
+    el.style.setProperty("--my", `${y}px`);
+    el.style.setProperty("--rx", `${(0.5 - y / r.height) * maxTilt}deg`);
+    el.style.setProperty("--ry", `${(x / r.width - 0.5) * maxTilt * 1.2}deg`);
+  };
+  const onMouseLeave = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.setProperty("--rx", "0deg");
+    el.style.setProperty("--ry", "0deg");
+  };
+  return { ref, onMouseMove, onMouseLeave };
+}
 
-  useEffect(() => {
-    const onMove = (e) => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      target.current.ry = ((e.clientX / w) - 0.5) * 45 - 20;
-      target.current.rx = -((e.clientY / h) - 0.5) * 30 - 10;
-    };
-    window.addEventListener("mousemove", onMove, { passive: true });
-
-    let raf;
-    const loop = () => {
-      current.current.rx += (target.current.rx - current.current.rx) * 0.08;
-      current.current.ry += (target.current.ry - current.current.ry) * 0.08;
-      const el = sceneRef.current;
-      if (el) {
-        el.style.setProperty("--rx", `${current.current.rx.toFixed(2)}deg`);
-        el.style.setProperty("--ry", `${current.current.ry.toFixed(2)}deg`);
-      }
-      raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-
+function TreqStat({ kind, icon, num, label, di }) {
+  const tilt = useWowTilt(4);
   return (
-    <div className="school3d" aria-hidden="true">
-      <div className="school3d__stage">
-        <div className="school3d__scene" ref={sceneRef}>
-          <div className="school3d__shadow" />
-          <div className="school3d__cube school3d__cube--main">
-            <div className="school3d__face school3d__f-back" />
-            <div className="school3d__face school3d__f-bottom" />
-            <div className="school3d__face school3d__f-left" />
-            <div className="school3d__face school3d__f-right" />
-            <div className="school3d__face school3d__f-top" />
-            <div className="school3d__face school3d__f-front">
-              <div className="school3d__window school3d__window--1" />
-              <div className="school3d__window school3d__window--2" />
-              <div className="school3d__window school3d__window--3" />
-              <div className="school3d__window school3d__window--4" />
-              <div className="school3d__door" />
-              <div className="school3d__sign">KPI</div>
-            </div>
-          </div>
-          <div className="school3d__cube school3d__cube--tower">
-            <div className="school3d__face school3d__t-back" />
-            <div className="school3d__face school3d__t-left" />
-            <div className="school3d__face school3d__t-right" />
-            <div className="school3d__face school3d__t-top" />
-            <div className="school3d__face school3d__t-front">
-              <div className="school3d__clock">
-                <div className="school3d__clock-hand school3d__clock-hand--hour" />
-                <div className="school3d__clock-hand school3d__clock-hand--minute" />
-                <div className="school3d__clock-dot" />
-              </div>
-            </div>
-          </div>
-          <div className="school3d__pole" />
-          <div className="school3d__flag" />
-        </div>
+    <div ref={tilt.ref} onMouseMove={tilt.onMouseMove} onMouseLeave={tilt.onMouseLeave} className={`treq-stat treq-stat--${kind}`} style={{ "--di": di }}>
+      <span className="treq-stat__spot" aria-hidden="true" />
+      <div className="treq-stat__icon"><Icon name={icon} /></div>
+      <div className="treq-stat__body">
+        <div className="treq-stat__num">{num}</div>
+        <div className="treq-stat__label">{label}</div>
       </div>
     </div>
   );
 }
 
-function AnimNum({ value, suffix = "" }) {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    const target = Number(value) || 0;
-    if (target === 0) { setDisplay(0); return; }
-    let frame;
-    const start = performance.now();
-    const dur = 900;
-    const step = (t) => {
-      const p = Math.min((t - start) / dur, 1);
-      const ease = 1 - Math.pow(1 - p, 3);
-      setDisplay(Math.round(ease * target));
-      if (p < 1) frame = requestAnimationFrame(step);
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [value]);
-  return <>{fmtPoints(display)}{suffix}</>;
+function TreqKindBtn({ kindKey, active, icon, label, onClick, children }) {
+  const tilt = useWowTilt(8);
+  return (
+    <button
+      ref={tilt.ref}
+      onMouseMove={tilt.onMouseMove}
+      onMouseLeave={tilt.onMouseLeave}
+      type="button"
+      className={`treq-kind-btn treq-kind-btn--${kindKey}${active ? " treq-kind-btn--active" : ""}`}
+      onClick={onClick}
+    >
+      <span className="treq-kind-btn__spot" aria-hidden="true" />
+      <span className="treq-kind-btn__border" aria-hidden="true" />
+      <span className="treq-kind-btn__bg" aria-hidden="true"><Icon name={icon} /></span>
+      <span className="treq-kind-btn__icon"><Icon name={icon} /></span>
+      <span className="treq-kind-btn__text">{label}</span>
+      {children}
+    </button>
+  );
+}
+
+function DashTile({ tile, index }) {
+  const ref = useRef(null);
+
+  const onMove = (e) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    const px = x / r.width;
+    const py = y / r.height;
+    el.style.setProperty("--mx", `${x}px`);
+    el.style.setProperty("--my", `${y}px`);
+    el.style.setProperty("--rx", `${(0.5 - py) * 10}deg`);
+    el.style.setProperty("--ry", `${(px - 0.5) * 12}deg`);
+  };
+
+  const onLeave = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.setProperty("--rx", "0deg");
+    el.style.setProperty("--ry", "0deg");
+  };
+
+  return (
+    <button
+      ref={ref}
+      className="dash-wow__tile"
+      onClick={() => navigate(tile.to)}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      style={{
+        "--di": index + 1,
+        "--tile-color": tile.color,
+        "--tile-color-2": tile.color2,
+      }}
+    >
+      <span className="dash-wow__tile-bg" aria-hidden="true">
+        <Icon name={tile.icon} />
+      </span>
+      <span className="dash-wow__tile-spot" aria-hidden="true" />
+      <span className="dash-wow__tile-border" aria-hidden="true" />
+      <span className="dash-wow__tile-inner">
+        <span className="dash-wow__tile-icon">
+          <Icon name={tile.icon} />
+        </span>
+        <span className="dash-wow__tile-label">{tile.label}</span>
+        <span className="dash-wow__tile-go">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </span>
+    </button>
+  );
 }
 
 export function PageDashboard() {
   const st = useStore();
   const u = st.userDoc;
-  const [showLevelModal, setShowLevelModal] = useState(false);
-  const subs0 = st.mySubmissions || [];
-  const strengths = useMemo(() => {
-    const approved = subs0.filter(s => s.status === "approved" && s.typeSection);
-    const map = {};
-    approved.forEach(s => {
-      const sec = s.typeSection;
-      if (!map[sec]) map[sec] = { section: sec, pts: 0, count: 0 };
-      map[sec].pts += Number(s.points) || 0;
-      map[sec].count++;
-    });
-    return Object.values(map).sort((a, b) => b.pts - a.pts);
-  }, [subs0]);
   if (!u) return <Guard />;
   if (!canAccess("dashboard", u)) return <Guard />;
 
-  const users = st.users || [];
-  const subs = st.mySubmissions || [];
-  const allSubs = st.adminRecentSubs || [];
-  const news = st.news || [];
-  const types = st.types || [];
   const isAdmin = u.role === "admin";
-
-  // Greeting based on time
   const hour = new Date().getHours();
   const greet = hour < 12 ? t("dashGreetMorning") : hour < 18 ? t("dashGreetDay") : t("dashGreetEvening");
   const displayName = (u.displayName || u.email || "").split(" ")[0];
 
-  // Stats
-  const totalPts = Number(u.totalPoints) || 0;
-  const teachers = users.filter(x => x.role !== "admin");
-  const sorted = [...teachers].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
-  const myRank = sorted.findIndex(x => x.uid === u.uid) + 1;
+  const teacherTiles = [
+    { to: "add", icon: "plus", label: t("dashAddKpi"), color: "#87bc2e", color2: "#4ade80" },
+    { to: "requests", icon: "clipboard", label: t("requests"), color: "#f59e0b", color2: "#fbbf24" },
+    { to: "documents", icon: "folder", label: t("navDocuments"), color: "#3b82f6", color2: "#60a5fa" },
+    { to: "rating", icon: "rank", label: t("navRating"), color: "#a855f7", color2: "#c084fc" },
+    { to: "news", icon: "news", label: t("navNews"), color: "#ec4899", color2: "#f472b6" },
+    { to: "profile", icon: "user", label: t("navProfile"), color: "#0ea5e9", color2: "#38bdf8" },
+    { to: "classroomtools", icon: "tools", label: t("navClassroomTools"), color: "#14b8a6", color2: "#2dd4bf" },
+    { to: "support", icon: "bug", label: t("navSupport"), color: "#ef4444", color2: "#f87171" },
+  ];
 
-  const pending = isAdmin
-    ? (st.pendingSubmissions || []).length
-    : subs.filter(s => s.status === "pending").length;
-  const approved = isAdmin
-    ? allSubs.filter(s => s.status === "approved").length
-    : subs.filter(s => s.status === "approved").length;
-  const totalSubs = isAdmin ? allSubs.length : subs.length;
-  const docsCount = isAdmin ? (st.allDocuments || []).length : (st.myDocuments || []).length;
+  const adminTiles = [
+    { to: "admin/approvals", icon: "check", label: t("navApprovals"), color: "#87bc2e", color2: "#4ade80" },
+    { to: "admin/requests", icon: "clipboard", label: t("navRequests"), color: "#f59e0b", color2: "#fbbf24" },
+    { to: "admin/users", icon: "user", label: t("navUsers"), color: "#3b82f6", color2: "#60a5fa" },
+    { to: "admin/documents", icon: "folder", label: t("navDocuments"), color: "#a855f7", color2: "#c084fc" },
+    { to: "admin/announcements", icon: "news", label: t("navAnnouncements"), color: "#ec4899", color2: "#f472b6" },
+    { to: "admin/events", icon: "calendar", label: t("navCalendar"), color: "#0ea5e9", color2: "#38bdf8" },
+    { to: "admin/skud", icon: "shield", label: t("navSkud"), color: "#14b8a6", color2: "#2dd4bf" },
+    { to: "rating", icon: "rank", label: t("navRating"), color: "#ef4444", color2: "#f87171" },
+  ];
 
-  // Average points
-  const avgPts = teachers.length ? Math.round(teachers.reduce((s, x) => s + (x.totalPoints || 0), 0) / teachers.length) : 0;
-
-  // Active users (online in last 5 min is hard to track, so count users with points > 0)
-  const activeUsers = teachers.filter(x => (x.totalPoints || 0) > 0).length;
-
-  // Top 5 teachers
-  const top5 = sorted.slice(0, 5);
-
-  // Recent submissions (last 5)
-  const recent = [...(isAdmin ? allSubs : subs)]
-    .sort((a, b) => {
-      const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
-      const db = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
-      return db - da;
-    })
-    .slice(0, 5);
-
-  // Mini sparkline data: points per day for last 7 days
-  const now = Date.now();
-  const spark = [];
-  for (let i = 6; i >= 0; i--) {
-    const dayStart = new Date(now - i * 86400000);
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart.getTime() + 86400000);
-    const pts = (isAdmin ? allSubs : subs)
-      .filter(s => {
-        const d = s.createdAt?.toDate ? s.createdAt.toDate() : new Date(s.createdAt || 0);
-        return d >= dayStart && d < dayEnd && s.status === "approved";
-      })
-      .reduce((sum, s) => sum + (Number(s.points) || 0), 0);
-    spark.push(pts);
-  }
-  const sparkMax = Math.max(...spark, 1);
-
-  // Status pills helper
-  const statusPill = (status) => {
-    const map = { pending: "warn", approved: "ok", rejected: "error" };
-    const labelMap = { pending: t("dashPending"), approved: t("dashApproved"), rejected: "—" };
-    return <span className={`pill ${map[status] || ""}`}>{labelMap[status] || status}</span>;
-  };
-
-  const lvl = levelFromPoints(u.totalPoints || 0);
-  const nextPts = lvl.next ? lvl.next - (Number(u.totalPoints) || 0) : 0;
-  const igHandle = (u.instagram || "").replace(/^@/, "").trim();
+  const tiles = isAdmin ? adminTiles : teacherTiles;
 
   return (
-    <div className="dash">
-      {/* Welcome hero — profile style + animations */}
-      <div className="glass card rop-hero dash-hero-anim" style={{ "--di": 0 }}>
-        <div className="dash-hero-anim__bg">
-          <div className="dash-hero-anim__orb dash-hero-anim__orb--1" />
-          <div className="dash-hero-anim__orb dash-hero-anim__orb--2" />
-          <div className="dash-hero-anim__orb dash-hero-anim__orb--3" />
-          <div className="dash-hero-anim__shimmer" />
-        </div>
-        <div className="rop-hero__content">
+    <div className="dash-wow">
+      <div className="dash-wow__aurora" aria-hidden="true">
+        <span className="dash-wow__aurora-blob dash-wow__aurora-blob--1" />
+        <span className="dash-wow__aurora-blob dash-wow__aurora-blob--2" />
+        <span className="dash-wow__aurora-blob dash-wow__aurora-blob--3" />
+      </div>
 
-          <div className="rop-hero__avatar-col dash-hero-anim__avatar" onClick={() => navigate("profile")} style={{ cursor: "pointer" }}>
-            <div className="rop-hero__avatar-ring">
-              <div className="rop-hero__avatar">
-                {u.avatarUrl ? <img src={u.avatarUrl} alt="" /> : <span>{(u.displayName || u.email || "?").split(/\s+/).filter(Boolean).map(w => w[0]).join("").toUpperCase().slice(0, 2)}</span>}
-              </div>
-            </div>
-          </div>
-          <div className="rop-hero__info dash-hero-anim__info">
-            <div className="rop-hero__name">{greet}, <strong>{displayName}</strong>!</div>
-            <div className="rop-hero__tags">
-              <span className="prof-tag prof-tag--role">{u.role === "admin" ? "Admin" : "Teacher"}</span>
-              <span className="prof-tag prof-tag--level">{lvl.name}</span>
-              {u.position && <span className="prof-tag">{u.position}</span>}
-            </div>
-            <div className="rop-hero__meta">
-              <span className="rop-hero__meta-item"><Icon name="shield" /> {u.email}</span>
-              {u.school && <span className="rop-hero__meta-item"><Icon name="home" /> {u.school}</span>}
-              {u.subject && <span className="rop-hero__meta-item"><Icon name="file" /> {u.subject}</span>}
-            </div>
-            <div className="rop-hero__social">
-              {igHandle && (
-                <a href={`https://instagram.com/${igHandle}`} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--ig">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" stroke="currentColor" strokeWidth="2" /><circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" /><circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" /></svg>
-                  @{igHandle}
-                </a>
-              )}
-              {u.youtube && (
-                <a href={u.youtube} target="_blank" rel="noopener noreferrer" className="prof-social-btn prof-social-btn--yt">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 00-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 00-1.94 2A29 29 0 001 11.75a29 29 0 00.46 5.33A2.78 2.78 0 003.4 19.1c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 001.94-2 29 29 0 00.46-5.25 29 29 0 00-.46-5.43z" stroke="currentColor" strokeWidth="2" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" stroke="currentColor" strokeWidth="2" /></svg>
-                  YouTube
-                </a>
-              )}
-              {!isAdmin && (
-                <Btn kind="primary" onClick={() => navigate("add")}><Icon name="plus" /> {t("addKpi")}</Btn>
-              )}
-              <Btn onClick={() => navigate("profile")}><Icon name="user" /> {t("navProfile")}</Btn>
-            </div>
-          </div>
-          <School3D />
-          <div className="rop-hero__right dash-hero-anim__right" onClick={() => setShowLevelModal(true)} style={{ cursor: "pointer" }} title={t("lvlModalTitle")}>
-            <div className="rop-hero__level-wrap">
-              <div className="rop-hero__level-inner">
-                <div className="rop-hero__level-pts"><AnimNum value={totalPts} /></div>
-                <div className="rop-hero__level-label">{t("points")}</div>
-              </div>
-              <div className="rop-hero__progress-track">
-                <div className="rop-hero__progress-fill" style={{ width: `${lvl.pct}%` }} />
-              </div>
-            </div>
-            {lvl.next && <div className="rop-hero__level-hint">{nextPts} {t("profileNextLevel").toLowerCase()}</div>}
-          </div>
+      <div className="dash-wow__greet">
+        <div className="dash-wow__hello">{greet},</div>
+        <div className="dash-wow__name">
+          <span className="dash-wow__name-text" data-text={displayName}>{displayName}</span>
         </div>
       </div>
 
-      {/* Level Modal */}
-      {showLevelModal && createPortal(
-        <div className="lvl-modal-overlay" onClick={() => setShowLevelModal(false)}>
-          <div className="lvl-modal" onClick={e => e.stopPropagation()}>
-            <button className="lvl-modal__close" onClick={() => setShowLevelModal(false)}>&times;</button>
-
-            {/* Header — current rank */}
-            <div className="lvl-modal__header">
-              <div className="lvl-modal__rank-icon" style={{ "--rank-color": lvl.color }}>{lvl.icon}</div>
-              <div className="lvl-modal__rank-info">
-                <div className="lvl-modal__rank-name" style={{ color: lvl.color }}>{lvl.name}</div>
-                <div className="lvl-modal__rank-pts">{fmtPoints(totalPts)} {t("lvlModalPtsRange")}</div>
-                <div className="lvl-modal__rank-desc">{t(`lvlDesc${RANK_TABLE[lvl.idx].key.replace("lvl", "")}`)}</div>
-              </div>
-            </div>
-
-            {/* XP bar */}
-            <div className="lvl-modal__xp">
-              <div className="lvl-modal__xp-track">
-                <div className="lvl-modal__xp-fill" style={{ width: `${lvl.pct}%`, background: `linear-gradient(90deg, ${lvl.color}, ${lvl.color}dd)` }} />
-              </div>
-              <div className="lvl-modal__xp-label">
-                {lvl.next ? <>{fmtPoints(totalPts)} / {fmtPoints(lvl.next)} — {nextPts} {t("toNextLevel")}</> : <>{t("lvlModalCurrent")}: MAX</>}
-              </div>
-            </div>
-
-            {/* All ranks */}
-            <div className="lvl-modal__section-title">{t("lvlModalAllRanks")}</div>
-            <div className="lvl-modal__ranks">
-              {RANK_TABLE.map((r, i) => {
-                const isCurrent = i === lvl.idx;
-                const isLocked = i > lvl.idx;
-                return (
-                  <div key={r.key} className={`lvl-modal__rank-card${isCurrent ? " lvl-modal__rank-card--active" : ""}${isLocked ? " lvl-modal__rank-card--locked" : ""}`} style={{ "--rc": r.color, "--di": i }}>
-                    <div className="lvl-modal__rank-card-icon">{r.icon}</div>
-                    <div className="lvl-modal__rank-card-body">
-                      <div className="lvl-modal__rank-card-name">{t(r.key)}</div>
-                      <div className="lvl-modal__rank-card-range">{r.min}–{r.max} {t("lvlModalPtsRange")}</div>
-                    </div>
-                    {isCurrent && <span className="lvl-modal__rank-badge">{t("lvlModalCurrent")}</span>}
-                    {isLocked && <span className="lvl-modal__rank-lock"><Icon name="shield" /></span>}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Strengths */}
-            <div className="lvl-modal__section-title">{t("lvlModalStrengths")}</div>
-            {strengths.length === 0 ? (
-              <div className="lvl-modal__empty">{t("lvlModalNoSubs")}</div>
-            ) : (
-              <div className="lvl-modal__strengths">
-                {strengths.slice(0, 5).map((s, i) => {
-                  const maxPts = strengths[0].pts;
-                  const pct = maxPts ? Math.round((s.pts / maxPts) * 100) : 0;
-                  const colors = ["#87bc2e", "#3b82f6", "#f59e0b", "#a855f7", "#ec4899"];
-                  return (
-                    <div key={s.section} className="lvl-modal__str-row" style={{ "--di": i }}>
-                      <div className="lvl-modal__str-label">
-                        <span className="lvl-modal__str-name">{s.section}</span>
-                        <span className="lvl-modal__str-stat">{s.pts} {t("lvlModalPtsRange")} · {s.count}x</span>
-                      </div>
-                      <div className="lvl-modal__str-bar-track">
-                        <div className="lvl-modal__str-bar-fill" style={{ width: `${pct}%`, background: colors[i % colors.length] }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Stat cards row */}
-      <div className="dash-stats">
-        {!isAdmin && (
-          <div className="dash-stat glass card" style={{ "--di": 1 }}>
-            <div className="dash-stat__icon" style={{ background: "rgba(135,188,46,.12)", color: "var(--accent)" }}><Icon name="rank" /></div>
-            <div className="dash-stat__num"><AnimNum value={myRank} /></div>
-            <div className="dash-stat__label">{t("dashMyRank")} {t("dashOf")} {teachers.length}</div>
-          </div>
-        )}
-        <div className="dash-stat glass card" style={{ "--di": 2 }}>
-          <div className="dash-stat__icon" style={{ background: "rgba(59,130,246,.12)", color: "#3b82f6" }}><Icon name="user" /></div>
-          <div className="dash-stat__num"><AnimNum value={teachers.length} /></div>
-          <div className="dash-stat__label">{t("dashTeachers")}</div>
-        </div>
-        <div className="dash-stat glass card" style={{ "--di": 3 }}>
-          <div className="dash-stat__icon" style={{ background: "rgba(245,158,11,.12)", color: "#f59e0b" }}><Icon name="file" /></div>
-          <div className="dash-stat__num"><AnimNum value={totalSubs} /></div>
-          <div className="dash-stat__label">{t("dashSubmissions")}</div>
-        </div>
-        <div className="dash-stat glass card" style={{ "--di": 4 }}>
-          <div className="dash-stat__icon" style={{ background: "rgba(168,85,247,.12)", color: "#a855f7" }}><Icon name="shield" /></div>
-          <div className="dash-stat__num"><AnimNum value={docsCount} /></div>
-          <div className="dash-stat__label">{t("dashDocuments")}</div>
-        </div>
-        <div className="dash-stat glass card" style={{ "--di": 5 }}>
-          <div className="dash-stat__icon" style={{ background: "rgba(236,72,153,.12)", color: "#ec4899" }}><Icon name="news" /></div>
-          <div className="dash-stat__num"><AnimNum value={news.length} /></div>
-          <div className="dash-stat__label">{t("dashNews")}</div>
-        </div>
-      </div>
-
-      {/* Main grid: left + right */}
-      <div className="dash-grid">
-        {/* Left column */}
-        <div className="dash-col">
-          {/* Sparkline / points trend */}
-          <div className="glass card dash-card" style={{ "--di": 6 }}>
-            <div className="dash-card__head">
-              <div className="h2">{t("dashPointsTrend")}</div>
-              <div className="dash-spark-stats">
-                <span className="pill ok">{t("dashApproved")}: {approved}</span>
-                <span className="pill warn">{t("dashPending")}: {pending}</span>
-              </div>
-            </div>
-            <div className="dash-spark">
-              {spark.map((v, i) => (
-                <div key={i} className="dash-spark__bar-wrap">
-                  <div className="dash-spark__bar" style={{ "--h": `${(v / sparkMax) * 100}%`, "--delay": `${i * 0.07}s` }} />
-                  <div className="dash-spark__day">{["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][(new Date(now - (6 - i) * 86400000)).getDay() === 0 ? 6 : (new Date(now - (6 - i) * 86400000)).getDay() - 1]}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick actions */}
-          <div className="glass card dash-card" style={{ "--di": 7 }}>
-            <div className="h2">{t("dashQuickActions")}</div>
-            <div className="dash-actions">
-              {!isAdmin && (
-                <button className="dash-action" onClick={() => navigate("add")}>
-                  <span className="dash-action__icon" style={{ background: "rgba(135,188,46,.15)" }}><Icon name="plus" /></span>
-                  {t("dashAddKpi")}
-                </button>
-              )}
-              <button className="dash-action" onClick={() => navigate("rating")}>
-                <span className="dash-action__icon" style={{ background: "rgba(59,130,246,.15)" }}><Icon name="rank" /></span>
-                {t("dashViewRating")}
-              </button>
-              <button className="dash-action" onClick={() => navigate("stats")}>
-                <span className="dash-action__icon" style={{ background: "rgba(168,85,247,.15)" }}><Icon name="chart" /></span>
-                {t("dashViewStats")}
-              </button>
-              <button className="dash-action" onClick={() => navigate("news")}>
-                <span className="dash-action__icon" style={{ background: "rgba(236,72,153,.15)" }}><Icon name="news" /></span>
-                {t("dashViewNews")}
-              </button>
-            </div>
-          </div>
-
-          {/* Platform overview (for everyone) */}
-          <div className="glass card dash-card" style={{ "--di": 8 }}>
-            <div className="h2">{t("dashPlatformStats")}</div>
-            <div className="dash-platform-row">
-              <div className="dash-platform-item">
-                <div className="dash-platform-item__num"><AnimNum value={avgPts} /></div>
-                <div className="dash-platform-item__label">{t("dashAvgPoints")}</div>
-              </div>
-              <div className="dash-platform-item">
-                <div className="dash-platform-item__num"><AnimNum value={activeUsers} /></div>
-                <div className="dash-platform-item__label">{t("dashActiveUsers")}</div>
-              </div>
-              <div className="dash-platform-item">
-                <div className="dash-platform-item__num"><AnimNum value={types.length} /></div>
-                <div className="dash-platform-item__label">{t("navKpiTypes")}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Current quarter info */}
-          {(() => {
-            const curQ = getCurrentQuarter();
-            return curQ ? (
-              <div className="glass card dash-card" style={{ "--di": 8 }}>
-                <div className="h2">{t("currentQuarter")}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
-                  <Pill kind="approved">{t(curQ)}</Pill>
-                  <span className="tiny muted">{t(curQ + "Dates")}</span>
-                  <span className="tiny muted">{t("academicYear")}: {getAcademicYearLabel()}</span>
-                </div>
-              </div>
-            ) : null;
-          })()}
-        </div>
-
-        {/* Right column */}
-        <div className="dash-col">
-          {/* Top teachers */}
-          <div className="glass card dash-card" style={{ "--di": 6 }}>
-            <div className="h2">{t("dashTopTeachers")}</div>
-            <div className="dash-top">
-              {top5.map((tc, idx) => (
-                <div key={tc.uid} className="dash-top__row" style={{ "--delay": `${idx * 0.08}s` }} onClick={() => setState({ modal: { kind: "teacherProfile", teacher: tc } })}>
-                  <div className={`dash-top__rank${idx < 3 ? " dash-top__rank--medal" : ""}`} data-rank={idx + 1}>{idx + 1}</div>
-                  <div className="dash-top__info">
-                    <div className="dash-top__name">{tc.displayName || tc.email}</div>
-                  </div>
-                  <div className="dash-top__pts">{fmtPoints(tc.totalPoints || 0)}</div>
-                </div>
-              ))}
-              {top5.length === 0 && <p className="p muted">{t("dashNoActivity")}</p>}
-            </div>
-          </div>
-
-          {/* Recent activity */}
-          <div className="glass card dash-card" style={{ "--di": 7 }}>
-            <div className="h2">{t("dashRecentActivity")}</div>
-            <div className="dash-recent">
-              {recent.map((s, idx) => {
-                const tp = types.find(x => x.id === s.typeId);
-                const d = s.createdAt?.toDate ? s.createdAt.toDate() : new Date(s.createdAt || 0);
-                return (
-                  <div key={s.id || idx} className="dash-recent__row" style={{ "--delay": `${idx * 0.08}s` }}>
-                    <div className="dash-recent__dot" />
-                    <div className="dash-recent__body">
-                      <div className="dash-recent__title">{tp?.name || s.typeId || "—"}</div>
-                      <div className="dash-recent__meta">
-                        {isAdmin && <span>{s.userName || s.uid?.slice(0, 6)}</span>}
-                        <span>{d.toLocaleDateString("ru-RU")}</span>
-                        {statusPill(s.status)}
-                      </div>
-                    </div>
-                    <div className="dash-recent__pts">+{s.points || 0}</div>
-                  </div>
-                );
-              })}
-              {recent.length === 0 && <p className="p muted">{t("dashNoActivity")}</p>}
-            </div>
-          </div>
-
-          {/* Goals widget (teachers only) */}
-          {!isAdmin && <GoalsWidget compact />}
-
-
-        </div>
+      <div className="dash-wow__grid">
+        {tiles.map((tile, i) => (
+          <DashTile key={tile.to} tile={tile} index={i} />
+        ))}
       </div>
     </div>
   );
@@ -1007,73 +684,77 @@ export function PageProfile() {
       {/* Level Modal */}
       {showLevelModal && createPortal(
         <div className="lvl-modal-overlay" onClick={() => setShowLevelModal(false)}>
-          <div className="lvl-modal" onClick={e => e.stopPropagation()}>
+          <div className="lvl-modal" style={{ "--rank-color": lvl.color }} onClick={e => e.stopPropagation()}>
             <button className="lvl-modal__close" onClick={() => setShowLevelModal(false)}>&times;</button>
 
-            {/* Header — current rank */}
-            <div className="lvl-modal__header">
-              <div className="lvl-modal__rank-icon" style={{ "--rank-color": lvl.color }}>{lvl.icon}</div>
-              <div className="lvl-modal__rank-info">
-                <div className="lvl-modal__rank-name" style={{ color: lvl.color }}>{lvl.name}</div>
-                <div className="lvl-modal__rank-pts">{fmtPoints(totalPts)} {t("lvlModalPtsRange")}</div>
-                <div className="lvl-modal__rank-desc">{t(`lvlDesc${RANK_TABLE[lvl.idx].key.replace("lvl", "")}`)}</div>
+            {/* LEFT pane — current rank focus */}
+            <div className="lvl-modal__left">
+              <div className="lvl-modal__header">
+                <div className="lvl-modal__rank-icon" style={{ "--rank-color": lvl.color }}>{lvl.icon}</div>
+                <div className="lvl-modal__rank-info">
+                  <div className="lvl-modal__rank-name" style={{ color: lvl.color }}>{lvl.name}</div>
+                  <div className="lvl-modal__rank-pts">{fmtPoints(totalPts)} {t("lvlModalPtsRange")}</div>
+                  <div className="lvl-modal__rank-desc">{t(`lvlDesc${RANK_TABLE[lvl.idx].key.replace("lvl", "")}`)}</div>
+                </div>
               </div>
-            </div>
 
-            {/* XP bar */}
-            <div className="lvl-modal__xp">
-              <div className="lvl-modal__xp-track">
-                <div className="lvl-modal__xp-fill" style={{ width: `${lvl.pct}%`, background: `linear-gradient(90deg, ${lvl.color}, ${lvl.color}dd)` }} />
+              <div className="lvl-modal__xp">
+                <div className="lvl-modal__xp-track">
+                  <div className="lvl-modal__xp-fill" style={{ width: `${lvl.pct}%`, background: `linear-gradient(90deg, ${lvl.color}, ${lvl.color}dd)` }} />
+                </div>
+                <div className="lvl-modal__xp-label">
+                  {lvl.next ? <>{fmtPoints(totalPts)} / {fmtPoints(lvl.next)} — {nextPts} {t("toNextLevel")}</> : <>{t("lvlModalCurrent")}: MAX</>}
+                </div>
               </div>
-              <div className="lvl-modal__xp-label">
-                {lvl.next ? <>{fmtPoints(totalPts)} / {fmtPoints(lvl.next)} — {nextPts} {t("toNextLevel")}</> : <>{t("lvlModalCurrent")}: MAX</>}
-              </div>
-            </div>
 
-            {/* All ranks */}
-            <div className="lvl-modal__section-title">{t("lvlModalAllRanks")}</div>
-            <div className="lvl-modal__ranks">
-              {RANK_TABLE.map((r, i) => {
-                const isCurrent = i === lvl.idx;
-                const isLocked = i > lvl.idx;
-                return (
-                  <div key={r.key} className={`lvl-modal__rank-card${isCurrent ? " lvl-modal__rank-card--active" : ""}${isLocked ? " lvl-modal__rank-card--locked" : ""}`} style={{ "--rc": r.color, "--di": i }}>
-                    <div className="lvl-modal__rank-card-icon">{r.icon}</div>
-                    <div className="lvl-modal__rank-card-body">
-                      <div className="lvl-modal__rank-card-name">{t(r.key)}</div>
-                      <div className="lvl-modal__rank-card-range">{r.min}–{r.max} {t("lvlModalPtsRange")}</div>
-                    </div>
-                    {isCurrent && <span className="lvl-modal__rank-badge">{t("lvlModalCurrent")}</span>}
-                    {isLocked && <span className="lvl-modal__rank-lock"><Icon name="shield" /></span>}
+              <div className="lvl-modal__str-block">
+                <div className="lvl-modal__section-title">{t("lvlModalStrengths")}</div>
+                {strengths.length === 0 ? (
+                  <div className="lvl-modal__empty">{t("lvlModalNoSubs")}</div>
+                ) : (
+                  <div className="lvl-modal__strengths">
+                    {strengths.slice(0, 5).map((s, i) => {
+                      const maxPts = strengths[0].pts;
+                      const pct = maxPts ? Math.round((s.pts / maxPts) * 100) : 0;
+                      const colors = ["#87bc2e", "#3b82f6", "#f59e0b", "#a855f7", "#ec4899"];
+                      return (
+                        <div key={s.section} className="lvl-modal__str-row" style={{ "--di": i }}>
+                          <div className="lvl-modal__str-label">
+                            <span className="lvl-modal__str-name">{s.section}</span>
+                            <span className="lvl-modal__str-stat">{s.pts} {t("lvlModalPtsRange")} · {s.count}x</span>
+                          </div>
+                          <div className="lvl-modal__str-bar-track">
+                            <div className="lvl-modal__str-bar-fill" style={{ width: `${pct}%`, background: colors[i % colors.length] }} />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
 
-            {/* Strengths */}
-            <div className="lvl-modal__section-title">{t("lvlModalStrengths")}</div>
-            {strengths.length === 0 ? (
-              <div className="lvl-modal__empty">{t("lvlModalNoSubs")}</div>
-            ) : (
-              <div className="lvl-modal__strengths">
-                {strengths.slice(0, 5).map((s, i) => {
-                  const maxPts = strengths[0].pts;
-                  const pct = maxPts ? Math.round((s.pts / maxPts) * 100) : 0;
-                  const colors = ["#87bc2e", "#3b82f6", "#f59e0b", "#a855f7", "#ec4899"];
+            {/* RIGHT pane — all ranks ladder */}
+            <div className="lvl-modal__right">
+              <div className="lvl-modal__section-title">{t("lvlModalAllRanks")}</div>
+              <div className="lvl-modal__ranks">
+                {RANK_TABLE.map((r, i) => {
+                  const isCurrent = i === lvl.idx;
+                  const isLocked = i > lvl.idx;
                   return (
-                    <div key={s.section} className="lvl-modal__str-row" style={{ "--di": i }}>
-                      <div className="lvl-modal__str-label">
-                        <span className="lvl-modal__str-name">{s.section}</span>
-                        <span className="lvl-modal__str-stat">{s.pts} {t("lvlModalPtsRange")} · {s.count}x</span>
+                    <div key={r.key} className={`lvl-modal__rank-card${isCurrent ? " lvl-modal__rank-card--active" : ""}${isLocked ? " lvl-modal__rank-card--locked" : ""}`} style={{ "--rc": r.color, "--di": i }}>
+                      <div className="lvl-modal__rank-card-icon">{r.icon}</div>
+                      <div className="lvl-modal__rank-card-body">
+                        <div className="lvl-modal__rank-card-name">{t(r.key)}</div>
+                        <div className="lvl-modal__rank-card-range">{r.min}–{r.max} {t("lvlModalPtsRange")}</div>
                       </div>
-                      <div className="lvl-modal__str-bar-track">
-                        <div className="lvl-modal__str-bar-fill" style={{ width: `${pct}%`, background: colors[i % colors.length] }} />
-                      </div>
+                      {isCurrent && <span className="lvl-modal__rank-badge">{t("lvlModalCurrent")}</span>}
+                      {isLocked && <span className="lvl-modal__rank-lock"><Icon name="shield" /></span>}
                     </div>
                   );
                 })}
               </div>
-            )}
+            </div>
           </div>
         </div>,
         document.body
@@ -1225,7 +906,7 @@ export function PageProfile() {
 }
 
 
-const BOOK_QUIZ_LIBRARY = [
+export const BOOK_QUIZ_LIBRARY = [
   {
     id: "auyl-shetindegi-ui",
     month: "Ақпан",
@@ -1235,6 +916,7 @@ const BOOK_QUIZ_LIBRARY = [
     points: 20,
     thresholdPercent: 70,
     note: "NIS-пен бірге оқиық жобасы · ақпан айы",
+    readUrl: "https://www.google.com/search?q=%C3%84kim+Tarazi+%C2%AB%C3%81uyl+shetind%C3%A9gi+%C3%BAi%C2%BB+oqu",
     answerKeyNeedsReview: true,
     questions: [
       {
@@ -1358,6 +1040,7 @@ const BOOK_QUIZ_LIBRARY = [
     points: 20,
     thresholdPercent: 70,
     note: "Викторина · 10 сұрақ",
+    readUrl: "https://www.google.com/search?q=T%C3%A4ken+%C3%84l%C3%ADmqulov+%C2%ABAqboz+at%C2%BB+oqu",
     answerKeyNeedsReview: false,
     questions: [
       {
@@ -1471,6 +1154,7 @@ const BOOK_QUIZ_LIBRARY = [
     points: 20,
     thresholdPercent: 70,
     note: "Тест сұрақтары кейін қосылады",
+    readUrl: "https://www.google.com/search?q=Altai+Asqar+%C2%ABKentavr%C2%BB+oqu",
     questions: []
   },
   {
@@ -1482,6 +1166,7 @@ const BOOK_QUIZ_LIBRARY = [
     points: 20,
     thresholdPercent: 70,
     note: "Тест сұрақтары кейін қосылады",
+    readUrl: "https://www.google.com/search?q=Saiyn+M%C3%BAratbekov+%C2%ABKomentogai%C2%BB+oqu",
     questions: []
   }
 ];
@@ -1527,11 +1212,39 @@ export function fmtDateTimeSafe(v) {
   return d.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+/* ---------- Smart hint engine for Section/Subsection ---------- */
+const SECTION_HINT_RULES = [
+  { kw: ["диплом", "грамот", "сертификат", "марапат", "сыйлық", "наград"], section: "Кәсіби даму", subsection: "Байқаулар" },
+  { kw: ["олимпиад", "олимп"], section: "Кәсіби даму", subsection: "Байқаулар" },
+  { kw: ["конкурс", "байқау"], section: "Кәсіби даму", subsection: "Байқаулар" },
+  { kw: ["ученик", "оқушы", "балл", "победитель", "жеңімпаз", "призер"], section: "Кәсіби даму", subsection: "Байқаулар" },
+  { kw: ["семинар"], section: "Кәсіби даму", subsection: "Семинарлар" },
+  { kw: ["курс", "повышен", "біліктілік"], section: "Кәсіби даму", subsection: "Курстар" },
+  { kw: ["открыт", "ашық", "урок", "сабақ", "lesson"], section: "Кәсіби даму", subsection: "Сабақ" },
+  { kw: ["конференц"], section: "Кәсіби даму", subsection: "Конференциялар" },
+  { kw: ["метод", "әдістем"], section: "Кәсіби даму", subsection: "Әдістемелік жұмыс" },
+  { kw: ["мент", "наставн", "тәлімгер"], section: "Кәсіби даму", subsection: "Менторлық" },
+  { kw: ["исследован", "research", "study", "зерттеу"], section: "Кәсіби даму", subsection: "Зерттеу" },
+  { kw: ["кніга", "книг", "кітап", "book"], section: "Жеке даму", subsection: "Кітап оқу" },
+  { kw: ["вебинар", "webinar", "mooc"], section: "Жеке даму", subsection: "Онлайн оқу" },
+  { kw: ["цифр", "digital", "edtech", "google", "office"], section: "Жеке даму", subsection: "Цифрлық дағды" }
+];
+
+function detectSectionHint(text) {
+  if (!text) return null;
+  const low = text.toLowerCase();
+  for (const r of SECTION_HINT_RULES) {
+    if (r.kw.some(k => low.includes(k))) return r;
+  }
+  return null;
+}
+
 export function PageAdd() {
   const st = useStore();
-  const u = st.userDoc; // read early, guard comes AFTER all hooks
+  const u = st.userDoc;
 
   // ALL hooks before any early return
+  const [step, setStep] = useState(0); // 0: category, 1: type+date, 2: details
   const [section, setSection] = useState("");
   const [subsection, setSubsection] = useState("");
   const [typeId, setTypeId] = useState("");
@@ -1540,6 +1253,391 @@ export function PageAdd() {
   const [description, setDescription] = useState("");
   const [evidenceLink, setEvidenceLink] = useState("");
   const [file, setFile] = useState(null);
+  const [goalMode, setGoalMode] = useState(false);
+  const [goalDateFrom, setGoalDateFrom] = useState("");
+  const [goalDateTo, setGoalDateTo] = useState("");
+  const [teammates, setTeammates] = useState([]);
+  const [hint, setHint] = useState(null);
+  const [hintDismissed, setHintDismissed] = useState(false);
+
+  const types = (st.types || []).filter(x => x.active);
+  const sections = useMemo(() => Array.from(new Set(types.map(x => x.section))).sort(), [types]);
+  const subs = useMemo(() => Array.from(new Set(types.filter(x => x.section === section).map(x => x.subsection))).sort(), [types, section]);
+  const opts = useMemo(() => types.filter(x => x.section === section && x.subsection === subsection), [types, section, subsection]);
+
+  useEffect(() => { if (!section && sections[0]) setSection(sections[0]); }, [sections.join("|")]);
+  useEffect(() => { if (!subs.includes(subsection)) setSubsection(subs[0] || ""); }, [subs.join("|")]);
+  useEffect(() => { if (!opts.find(x => x.id === typeId)) setTypeId(opts[0]?.id || ""); }, [opts.map(x => x.id).join("|")]);
+
+  // Smart hint: scan title (and description) for keywords
+  useEffect(() => {
+    const found = detectSectionHint(`${title} ${description}`);
+    if (!found) { setHint(null); return; }
+    if (found.section === section && found.subsection === subsection) { setHint(null); return; }
+    setHint(found);
+    setHintDismissed(false);
+  }, [title, description, section, subsection]);
+
+  if (!u) return <Guard />;
+  if (!canAccess("add", u)) return <Guard />;
+
+  const type = opts.find(x => x.id === typeId) || null;
+  const stepLabels = [t("addStepCategory") || "Категория", t("addStepType") || "Тип и дата", t("addStepDetails") || "Описание"];
+
+  function applyHint() {
+    if (!hint) return;
+    if (sections.includes(hint.section)) setSection(hint.section);
+    setTimeout(() => {
+      const avail = Array.from(new Set(types.filter(x => x.section === hint.section).map(x => x.subsection)));
+      if (avail.includes(hint.subsection)) setSubsection(hint.subsection);
+    }, 0);
+    setHint(null);
+  }
+
+  function dismissHint() { setHint(null); setHintDismissed(true); }
+
+  function canGoNext() {
+    if (step === 0) return !!section;
+    if (step === 1) return !!subsection && !!type && (goalMode || !!eventDate);
+    return true;
+  }
+
+  async function submit(e) {
+    e?.preventDefault?.();
+    if (goalMode) return submitGoal();
+    try {
+      if (!type) { toast("Выберите тип KPI", "error"); return; }
+      if (!safeText(title)) { toast("Введите название", "error"); return; }
+      if (!safeText(evidenceLink) && !file) { toast("Добавьте ссылку и/или файл", "error"); return; }
+
+      setState({ loading: true });
+      let evidenceFileUrl = "";
+      if (file) evidenceFileUrl = await uploadEvidence(u.uid, file);
+
+      await createSubmission({ uid: u.uid, type, title, description, eventDate, evidenceLink, evidenceFileUrl, teammates });
+      toast("Заявка отправлена на проверку", "ok");
+
+      const my = await fetchMySubmissions(u.uid);
+      setState({ mySubmissions: my });
+
+      setTitle(""); setDescription(""); setEvidenceLink(""); setFile(null); setTeammates([]);
+      navigate("dashboard");
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || "Ошибка отправки", "error");
+    } finally { setState({ loading: false }); }
+  }
+
+  async function submitGoal() {
+    try {
+      const pts = type?.defaultPoints || 0;
+      if (!pts) { toast("Выберите тип KPI", "error"); return; }
+      setState({ loading: true });
+      await createGoal({
+        uid: u.uid,
+        targetPoints: pts,
+        deadline: goalDateTo || goalDateFrom || "",
+        note: safeText(title) || (type?.name || ""),
+        scope: goalDateFrom && goalDateTo ? `${goalDateFrom} — ${goalDateTo}` : "quarter",
+        section: type?.section || "",
+        teammates
+      });
+      const fresh = await fetchGoals(u.uid);
+      setState({ myGoals: fresh });
+      toast(t("goalSaved"), "ok");
+      setTitle(""); setDescription(""); setGoalDateFrom(""); setGoalDateTo(""); setTeammates([]);
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || t("error"), "error");
+    } finally { setState({ loading: false }); }
+  }
+
+  return (
+    <div className="add-wizard">
+      <div className="add-wizard__aurora" aria-hidden="true">
+        <span className="add-wizard__blob add-wizard__blob--1" />
+        <span className="add-wizard__blob add-wizard__blob--2" />
+      </div>
+
+      {/* Slide track */}
+      <div className="add-wizard__track" data-step={step}>
+        <div className="add-wizard__shell glass">
+          <span className="add-wizard__shell-glow" aria-hidden="true" />
+
+          {/* Step indicator */}
+          <div className="add-wizard__steps" role="tablist">
+            {stepLabels.map((lbl, i) => (
+              <React.Fragment key={lbl}>
+                <button
+                  type="button"
+                  className={`add-wizard__step${i === step ? " is-active" : ""}${i < step ? " is-done" : ""}`}
+                  onClick={() => { if (i < step) setStep(i); }}
+                >
+                  <span className="add-wizard__step-num">{i < step ? "✓" : i + 1}</span>
+                  <span className="add-wizard__step-label">{lbl}</span>
+                </button>
+                {i < stepLabels.length - 1 && <span className={`add-wizard__step-line${i < step ? " is-done" : ""}`} />}
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* Compact summary strip (top of shell) */}
+          <div className="add-wizard__summary-strip">
+            <div className="add-wizard__summary-strip-row">
+              <div className="add-wizard__summary-strip-item">
+                <span className="add-wizard__summary-strip-lbl">{t("sectionLabel")}</span>
+                <span className="add-wizard__summary-strip-val">{section || "—"}</span>
+              </div>
+              <div className="add-wizard__summary-strip-item">
+                <span className="add-wizard__summary-strip-lbl">{t("subsectionLabel")}</span>
+                <span className="add-wizard__summary-strip-val">{subsection || "—"}</span>
+              </div>
+              <div className="add-wizard__summary-strip-item add-wizard__summary-strip-item--wide">
+                <span className="add-wizard__summary-strip-lbl">{t("kpiType")}</span>
+                <span className="add-wizard__summary-strip-val" title={type?.name || ""}>{type?.name || "—"}</span>
+              </div>
+              {!goalMode && (
+                <div className="add-wizard__summary-strip-item">
+                  <span className="add-wizard__summary-strip-lbl">{t("dateLabel") || "Дата"}</span>
+                  <span className="add-wizard__summary-strip-val">{eventDate || "—"}</span>
+                </div>
+              )}
+              <div className="add-wizard__summary-strip-pts">
+                <span className="add-wizard__summary-strip-pts-val">{type?.defaultPoints ?? 0}</span>
+                <span className="add-wizard__summary-strip-pts-lbl">{t("ptsShort") || "балл"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="add-wizard__slides">
+
+          {/* STEP 0: Section only */}
+          <section className="add-wizard__slide" hidden={step !== 0}>
+            <div className="add-wizard__card glass" key={`s0-${step}`}>
+              <h3 className="add-wizard__h">{t("addPickCategory") || "Выберите категорию"}</h3>
+              <p className="add-wizard__sub">{t("addPickCategoryHint") || "Раздел задаёт направление KPI. На следующем шаге выберете подраздел и конкретный тип."}</p>
+
+              <div className="add-wizard__section-grid">
+                {sections.map((s, i) => {
+                  const count = types.filter(x => x.section === s).length;
+                  return (
+                    <button
+                      type="button"
+                      key={s}
+                      className={`add-wizard__section-card${s === section ? " is-active" : ""}`}
+                      onClick={() => setSection(s)}
+                      style={{ "--di": i }}
+                    >
+                      <span className="add-wizard__section-glyph">{s.includes("Жеке") ? "🌱" : s.includes("Кәсіби") ? "🎓" : "📌"}</span>
+                      <span className="add-wizard__section-name">{s}</span>
+                      <span className="add-wizard__section-meta">{count} {t("typesShort") || "түрі"}</span>
+                    </button>
+                  );
+                })}
+                {!sections.length && <div className="muted tiny" style={{ padding: 10 }}>—</div>}
+              </div>
+            </div>
+          </section>
+
+          {/* STEP 1: Subsection + Type + Date */}
+          <section className="add-wizard__slide" hidden={step !== 1}>
+            <div className="add-wizard__card glass" key={`s1-${step}`}>
+              <h3 className="add-wizard__h">{t("addPickType") || "Подраздел и тип"}</h3>
+              <p className="add-wizard__sub">{section ? <>«{section}» → {t("ptsAutoHelp")}</> : t("ptsAutoHelp")}</p>
+
+              <div className="add-wizard__group-title">{t("subsectionLabel")}</div>
+              <div className="add-wizard__pills">
+                {subs.map((s, i) => (
+                  <button
+                    type="button"
+                    key={s}
+                    className={`add-wizard__pill${s === subsection ? " is-active" : ""}`}
+                    onClick={() => setSubsection(s)}
+                    style={{ "--di": i }}
+                  >
+                    {s}
+                  </button>
+                ))}
+                {!subs.length && <span className="muted tiny">—</span>}
+              </div>
+
+              <div className="add-wizard__group-title" style={{ marginTop: 18 }}>{t("kpiType")}</div>
+              <div className="add-wizard__types">
+                {opts.map((tp, i) => (
+                  <button
+                    type="button"
+                    key={tp.id}
+                    className={`add-wizard__type${tp.id === typeId ? " is-active" : ""}`}
+                    onClick={() => setTypeId(tp.id)}
+                    style={{ "--di": i }}
+                  >
+                    <span className="add-wizard__type-name">{tp.name}</span>
+                    <span className="add-wizard__type-pts">{tp.defaultPoints} <span className="add-wizard__type-pts-lbl">{t("ptsShort") || "балл"}</span></span>
+                  </button>
+                ))}
+                {!opts.length && (
+                  <div className="add-wizard__empty">
+                    <span className="add-wizard__empty-glyph">🔍</span>
+                    <span>{subsection ? (t("noTypesForSub") || "Для этого подраздела ещё нет типов") : (t("pickSubFirst") || "Сначала выберите подраздел выше")}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="add-wizard__row">
+                <label className="add-wizard__inline-toggle">
+                  <input type="checkbox" checked={goalMode} onChange={e => setGoalMode(e.target.checked)} />
+                  <span>{t("goalsAndDeadlines")}</span>
+                </label>
+              </div>
+
+              {!goalMode ? (
+                <div className="add-wizard__row">
+                  <div className="add-wizard__field" style={{ flex: 1 }}>
+                    <div className="add-label">{t("dateLabel") || "Дата"}</div>
+                    <Input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+                  </div>
+                </div>
+              ) : (
+                <div className="add-wizard__row add-wizard__row--two">
+                  <div className="add-wizard__field">
+                    <div className="add-label">{t("dateFrom")}</div>
+                    <Input type="date" value={goalDateFrom} onChange={e => setGoalDateFrom(e.target.value)} />
+                  </div>
+                  <div className="add-wizard__field">
+                    <div className="add-label">{t("dateTo")}</div>
+                    <Input type="date" value={goalDateTo} onChange={e => setGoalDateTo(e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* STEP 2: Details */}
+          <section className="add-wizard__slide" hidden={step !== 2}>
+            <div className="add-wizard__card glass" key={`s2-${step}`}>
+              <h3 className="add-wizard__h">{t("addDetails") || "Детали"}</h3>
+              <p className="add-wizard__sub">{t("addDetailsHint") || "Опишите что сделано и приложите доказательство."}</p>
+
+              <div className="add-wizard__field">
+                <div className="add-label">{t("titleLabel") || "Название"}</div>
+                <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={t("titlePlaceholder") || "Что произошло, кто, где..."} required />
+              </div>
+
+              {hint && !hintDismissed && (
+                <div className="add-wizard__hint" role="alert">
+                  <span className="add-wizard__hint-icon">💡</span>
+                  <div className="add-wizard__hint-body">
+                    <strong>{t("smartHint") || "Подсказка"}:</strong> {t("smartHintSuggest") || "похоже на"} <em>«{hint.section} → {hint.subsection}»</em>.
+                  </div>
+                  <button type="button" className="add-wizard__hint-btn" onClick={applyHint}>{t("applyHint") || "Применить"}</button>
+                  <button type="button" className="add-wizard__hint-x" onClick={dismissHint} aria-label="×">×</button>
+                </div>
+              )}
+
+              <div className="add-wizard__field">
+                <div className="add-label">{t("descLabel") || "Описание"}</div>
+                <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={t("descPlaceholder")} />
+              </div>
+
+              <div className="add-wizard__row add-wizard__row--two">
+                <div className="add-wizard__field">
+                  <div className="add-label">{t("linkOptional")}</div>
+                  <Input value={evidenceLink} onChange={e => setEvidenceLink(e.target.value)} placeholder="https://..." />
+                </div>
+                <div className="add-wizard__field">
+                  <div className="add-label">{t("fileOptional")}</div>
+                  <FileDrop accept=".pdf,image/png,image/jpeg" value={file} onChange={e => setFile(e.target.files?.[0] || null)} />
+                </div>
+              </div>
+
+              <div className="add-wizard__field">
+                <TeammatesPicker
+                  value={teammates}
+                  onChange={setTeammates}
+                  excludeUid={u.uid}
+                  label={goalMode ? t("teamGoalMembers") : t("sharedWithTeammates")}
+                />
+                <div className="help">{goalMode ? t("teamGoalHint") : t("teammatesHint")}</div>
+              </div>
+            </div>
+          </section>
+          </div>
+
+          {/* Navigation (inside shell) */}
+          <div className="add-wizard__nav">
+            <Btn type="button" onClick={() => { if (step > 0) setStep(step - 1); else navigate("dashboard"); }}>
+              {step > 0 ? (t("back") || "Назад") : (t("cancel") || "Отмена")}
+            </Btn>
+            {step < 2 ? (
+              <Btn kind="primary" type="button" onClick={() => setStep(step + 1)} disabled={!canGoNext()}>
+                {t("next") || "Далее"} →
+              </Btn>
+            ) : (
+              <Btn kind="primary" type="button" onClick={submit} disabled={st.loading}>
+                {goalMode ? t("setGoal") : (t("submit") || "Отправить")}
+              </Btn>
+            )}
+          </div>
+        </div>
+
+        {/* Right column: Goals/History + Books shortcut */}
+        <aside className="add-wizard__aside">
+          <div className="add-wizard__aside-card glass">
+            <GoalsWidget compact />
+          </div>
+          <button type="button" className="add-wizard__books-card glass" onClick={() => navigate("books")}>
+            <span className="add-wizard__books-card-glow" aria-hidden="true" />
+            <div className="add-wizard__books-card-head">
+              <span className="add-wizard__books-card-icon">📚</span>
+              <div className="add-wizard__books-card-titles">
+                <div className="add-wizard__books-card-title">{t("navBooks")}</div>
+                <div className="add-wizard__books-card-sub">
+                  +{BOOK_QUIZ_LIBRARY.reduce((s, b) => s + (b.points || 0), 0)} {t("ptsShort") || "балл"} · {BOOK_QUIZ_LIBRARY.length} {t("monthShort") || "ай"}
+                </div>
+              </div>
+              <span className="add-wizard__books-card-arrow">→</span>
+            </div>
+
+            <div className="add-wizard__books-card-tiles">
+              {BOOK_QUIZ_LIBRARY.slice(0, 3).map((book, i) => (
+                <span key={book.id} className="add-wizard__books-tile" style={{ "--di": i }}>
+                  <span className="add-wizard__books-tile-spine" aria-hidden="true" />
+                  <span className="add-wizard__books-tile-month">{book.month}</span>
+                  <span className="add-wizard__books-tile-pts">+{book.points}</span>
+                </span>
+              ))}
+              {BOOK_QUIZ_LIBRARY.length > 3 && (
+                <span className="add-wizard__books-tile add-wizard__books-tile--more">
+                  +{BOOK_QUIZ_LIBRARY.length - 3}
+                </span>
+              )}
+            </div>
+
+            {BOOK_QUIZ_LIBRARY[0] && (
+              <div className="add-wizard__books-card-featured">
+                <span className="add-wizard__books-card-featured-lbl">
+                  ★ {BOOK_QUIZ_LIBRARY[0].month}
+                </span>
+                <span className="add-wizard__books-card-featured-title" title={BOOK_QUIZ_LIBRARY[0].shortTitle}>
+                  {BOOK_QUIZ_LIBRARY[0].shortTitle}
+                </span>
+                <span className="add-wizard__books-card-featured-author">{BOOK_QUIZ_LIBRARY[0].author}</span>
+              </div>
+            )}
+          </button>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════ */
+/* ═══ PAGE: BOOKS OF THE MONTH (dedicated) ═════════════════════ */
+/* ════════════════════════════════════════════════════════════════ */
+export function PageBooks() {
+  const st = useStore();
+  const u = st.userDoc;
+
   const [quizAttempts, setQuizAttempts] = useState([]);
   const [quizLoading, setQuizLoading] = useState(false);
   const [selectedBookId, setSelectedBookId] = useState(BOOK_QUIZ_LIBRARY[0]?.id || "");
@@ -1547,24 +1645,13 @@ export function PageAdd() {
   const [quizAnswers, setQuizAnswers] = useState({});
   const [quizResult, setQuizResult] = useState(null);
   const [quizSubmitting, setQuizSubmitting] = useState(false);
-  const [goalMode, setGoalMode] = useState(false);
-  const [goalDateFrom, setGoalDateFrom] = useState("");
-  const [goalDateTo, setGoalDateTo] = useState("");
-  const [teammates, setTeammates] = useState([]);
 
-  const types = (st.types || []).filter(t => t.active);
-  const sections = Array.from(new Set(types.map(t => t.section))).sort();
-  const subs = useMemo(() => Array.from(new Set(types.filter(t => t.section === section).map(t => t.subsection))).sort(), [types, section]);
-  const opts = useMemo(() => types.filter(t => t.section === section && t.subsection === subsection), [types, section, subsection]);
   const selectedBook = BOOK_QUIZ_LIBRARY.find(b => b.id === selectedBookId) || BOOK_QUIZ_LIBRARY[0] || null;
   const selectedStatus = useMemo(
     () => selectedBook ? getBookQuizStatus(selectedBook, quizAttempts, st.mySubmissions || []) : null,
     [selectedBookId, quizAttempts, (st.mySubmissions || []).length]
   );
 
-  useEffect(() => setSection(sections[0] || ""), [sections.join("|")]);
-  useEffect(() => setSubsection(subs[0] || ""), [subs.join("|")]);
-  useEffect(() => setTypeId(opts[0]?.id || ""), [opts.map(x => x.id).join("|")]);
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -1584,9 +1671,7 @@ export function PageAdd() {
   }, [u?.uid]);
 
   if (!u) return <Guard />;
-  if (!canAccess("add", u)) return <Guard />;
-
-  const type = opts.find(x => x.id === typeId) || null;
+  if (!canAccess("books", u)) return <Guard />;
 
   async function refreshQuizAttempts() {
     if (!u?.uid) return;
@@ -1605,6 +1690,11 @@ export function PageAdd() {
     setQuizOpen(false);
     setQuizAnswers({});
     setQuizResult(null);
+  }
+
+  function readOnline(book) {
+    if (!book?.readUrl) { toast(t("comingSoonShort") || "Скоро", "info"); return; }
+    try { window.open(book.readUrl, "_blank", "noopener,noreferrer"); } catch { /* noop */ }
   }
 
   async function submitBookQuiz(e) {
@@ -1667,275 +1757,150 @@ export function PageAdd() {
     }
   }
 
-  async function submit(e) {
-    e.preventDefault();
-    if (goalMode) return submitGoal();
-    try {
-      if (!type) { toast("Выберите тип KPI", "error"); return; }
-      if (!safeText(title)) { toast("Введите название", "error"); return; }
-      if (!safeText(evidenceLink) && !file) { toast("Добавьте ссылку и/или файл", "error"); return; }
-
-      setState({ loading: true });
-      let evidenceFileUrl = "";
-      if (file) evidenceFileUrl = await uploadEvidence(u.uid, file);
-
-      await createSubmission({ uid: u.uid, type, title, description, eventDate, evidenceLink, evidenceFileUrl, teammates });
-      toast("Заявка отправлена на проверку", "ok");
-
-      const my = await fetchMySubmissions(u.uid);
-      setState({ mySubmissions: my });
-
-      setTitle(""); setDescription(""); setEvidenceLink(""); setFile(null); setTeammates([]);
-      navigate("dashboard");
-    } catch (err) {
-      console.error(err);
-      toast(err?.message || "Ошибка отправки", "error");
-    } finally { setState({ loading: false }); }
-  }
-
-  async function submitGoal() {
-    try {
-      const pts = type?.defaultPoints || 0;
-      if (!pts) { toast("Выберите тип KPI", "error"); return; }
-      setState({ loading: true });
-      await createGoal({
-        uid: u.uid,
-        targetPoints: pts,
-        deadline: goalDateTo || goalDateFrom || "",
-        note: safeText(title) || (type?.name || ""),
-        scope: goalDateFrom && goalDateTo ? `${goalDateFrom} — ${goalDateTo}` : "quarter",
-        section: type?.section || "",
-        teammates
-      });
-      const fresh = await fetchGoals(u.uid);
-      setState({ myGoals: fresh });
-      toast(t("goalSaved"), "ok");
-      setTitle(""); setDescription(""); setGoalDateFrom(""); setGoalDateTo(""); setTeammates([]);
-    } catch (err) {
-      console.error(err);
-      toast(err?.message || t("error"), "error");
-    } finally { setState({ loading: false }); }
-  }
-
-  return (selectedBook && quizOpen) ? (
-    <div className="quiz-fullpage route-section">
-      <div className="quiz-fullpage__header">
-        <button className="quiz-back-btn" type="button" onClick={closeQuiz}>
-          ← Кітаптар · Назад
-        </button>
-        <div className="quiz-fullpage__book-info">
-          <span className="quiz-fullpage__month">{selectedBook.month}</span>
-          <span className="quiz-fullpage__title">{selectedBook.author} · «{selectedBook.shortTitle}»</span>
-          <span className="tiny muted">Порог: {selectedBook.thresholdPercent || 70}% · +{selectedBook.points || 20} балл</span>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {selectedStatus?.state === "sent" ? <Pill kind="pending">Баллы отправлены</Pill> : null}
-          {selectedStatus?.state === "cooldown" ? <Pill kind="rejected">Повтор позже</Pill> : null}
-        </div>
-      </div>
-
-      {selectedBook.questions?.length ? (
-        quizResult ? (
-          <div className="quiz-result-screen">
-            <div className="quiz-result-screen__icon">{quizResult.passed ? "🎉" : "😔"}</div>
-            <div className="quiz-result-screen__score">
-              {quizResult.correct}<span className="quiz-result-screen__score-total">/{quizResult.total}</span>
-            </div>
-            <div className="quiz-result-screen__percent">{quizResult.percent}%</div>
-            {quizResult.passed ? (
-              <>
-                <div className="quiz-result-screen__title ok">Құттықтаймыз! · Поздравляем!</div>
-                <div className="quiz-result-screen__desc">
-                  Тест сәтті өтілді · Тест успешно пройден<br />
-                  +{selectedBook.points || 20} балл тексеруге жіберілді · баллов отправлены на проверку
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="quiz-result-screen__title fail">Өкінішке орай · К сожалению</div>
-                <div className="quiz-result-screen__desc">
-                  Өту шегі {selectedBook.thresholdPercent || 70}% · Порог прохождения {selectedBook.thresholdPercent || 70}%<br />
-                  24 сағаттан кейін қайталауға болады · Повтор доступен через 24 часа
-                </div>
-              </>
-            )}
-            <Btn type="button" onClick={closeQuiz} kind="primary" style={{ marginTop: 28 }}>← Кітаптарға оралу · Вернуться к книгам</Btn>
+  if (selectedBook && quizOpen) {
+    return (
+      <div className="quiz-fullpage route-section">
+        <div className="quiz-fullpage__header">
+          <button className="quiz-back-btn" type="button" onClick={closeQuiz}>
+            ← {t("backToBooks")}
+          </button>
+          <div className="quiz-fullpage__book-info">
+            <span className="quiz-fullpage__month">{selectedBook.month}</span>
+            <span className="quiz-fullpage__title">{selectedBook.author} · «{selectedBook.shortTitle}»</span>
+            <span className="tiny muted">{t("passThreshold")}: {selectedBook.thresholdPercent || 70}% · +{selectedBook.points || 20} {t("ptsShort") || "балл"}</span>
           </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {selectedStatus?.state === "sent" ? <Pill kind="pending">{t("ptsSubmitted")}</Pill> : null}
+            {selectedStatus?.state === "cooldown" ? <Pill kind="rejected">{t("retryLater")}</Pill> : null}
+          </div>
+        </div>
+
+        {selectedBook.questions?.length ? (
+          quizResult ? (
+            <div className="quiz-result-screen">
+              <div className="quiz-result-screen__icon">{quizResult.passed ? "🎉" : "😔"}</div>
+              <div className="quiz-result-screen__score">
+                {quizResult.correct}<span className="quiz-result-screen__score-total">/{quizResult.total}</span>
+              </div>
+              <div className="quiz-result-screen__percent">{quizResult.percent}%</div>
+              {quizResult.passed ? (
+                <>
+                  <div className="quiz-result-screen__title ok">{t("congrats")}</div>
+                  <div className="quiz-result-screen__desc">
+                    {t("testPassed")}<br />
+                    +{selectedBook.points || 20} {t("ptsShort") || "балл"}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="quiz-result-screen__title fail">{t("unfortunately")}</div>
+                  <div className="quiz-result-screen__desc">
+                    {t("passThreshold")} {selectedBook.thresholdPercent || 70}%<br />
+                    {t("retryIn24h")}
+                  </div>
+                </>
+              )}
+              <Btn type="button" onClick={closeQuiz} kind="primary" style={{ marginTop: 28 }}>← {t("returnToBooks")}</Btn>
+            </div>
+          ) : (
+            <form onSubmit={submitBookQuiz} className="quiz-fullpage__form">
+              <div className="quiz-questions">
+                {selectedBook.questions.map((q, idx) => {
+                  const picked = quizAnswers[q.id] || "";
+                  return (
+                    <div key={q.id} className="quiz-question-card">
+                      <div className="quiz-question-card__title">{idx + 1}. {q.text}</div>
+                      <div className="quiz-options">
+                        {q.options.map(opt => {
+                          const checked = picked === opt.key;
+                          return (
+                            <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""}`}>
+                              <input
+                                type="radio"
+                                name={`quiz_${selectedBook.id}_${q.id}`}
+                                value={opt.key}
+                                checked={checked}
+                                onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
+                                disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
+                              />
+                              <span className="quiz-option__key">{opt.key}</span>
+                              <span>{opt.text}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="quiz-fullpage__actions">
+                <Btn kind="primary" type="submit" disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}>
+                  {quizSubmitting ? "..." : t("submit") || "Завершить"}
+                </Btn>
+                <Btn type="button" onClick={() => setQuizAnswers({})} disabled={quizSubmitting}>{t("resetAnswers")}</Btn>
+                <Btn type="button" onClick={closeQuiz}>← {t("back") || "Назад"}</Btn>
+              </div>
+            </form>
+          )
         ) : (
-          <form onSubmit={submitBookQuiz} className="quiz-fullpage__form">
-            <div className="quiz-questions">
-              {selectedBook.questions.map((q, idx) => {
-                const picked = quizAnswers[q.id] || "";
-                return (
-                  <div key={q.id} className="quiz-question-card">
-                    <div className="quiz-question-card__title">{idx + 1}. {q.text}</div>
-                    <div className="quiz-options">
-                      {q.options.map(opt => {
-                        const checked = picked === opt.key;
-                        return (
-                          <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""}`}>
-                            <input
-                              type="radio"
-                              name={`quiz_${selectedBook.id}_${q.id}`}
-                              value={opt.key}
-                              checked={checked}
-                              onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
-                              disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
-                            />
-                            <span className="quiz-option__key">{opt.key}</span>
-                            <span>{opt.text}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="quiz-fullpage__actions">
-              <Btn kind="primary" type="submit" disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}>
-                {quizSubmitting ? "Сохраняем..." : "Тестті аяқтау · Завершить тест"}
-              </Btn>
-              <Btn type="button" onClick={() => setQuizAnswers({})} disabled={quizSubmitting}>Сбросить ответы</Btn>
-              <Btn type="button" onClick={closeQuiz}>← Назад</Btn>
-            </div>
-          </form>
-        )
-      ) : (
-        <div className="glass card" style={{ maxWidth: 560, margin: "0 auto" }}>
-          <p className="p">Для этой книги тест ещё не добавлен. Можете прислать вопросы — я встрою их по аналогии.</p>
-          <Btn type="button" onClick={closeQuiz} style={{ marginTop: 12 }}>← Назад</Btn>
+          <div className="glass card" style={{ maxWidth: 560, margin: "0 auto" }}>
+            <p className="p">{t("testNotAdded")}</p>
+            <Btn type="button" onClick={closeQuiz} style={{ marginTop: 12 }}>← {t("back") || "Назад"}</Btn>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="books-page">
+      <div className="books-page__head glass">
+        <div>
+          <div className="books-page__title">{t("navBooks")}</div>
+          <div className="books-page__sub muted">{t("booksDesc")}</div>
         </div>
-      )}
-    </div>
-  ) : (
-    <div className="grid2">
-      <div className="glass card add-form-card">
-        <form onSubmit={submit}>
-          <div className="grid2">
-            <div>
-              <div className="label">Section</div>
-              <Select value={section} onChange={(e) => setSection(e.target.value)}>
-                {sections.map(s => <option key={s} value={s}>{s}</option>)}
-              </Select>
-            </div>
-            <div>
-              <div className="label">Subsection</div>
-              <Select value={subsection} onChange={(e) => setSubsection(e.target.value)}>
-                {subs.map(s => <option key={s} value={s}>{s}</option>)}
-              </Select>
-            </div>
-            <div style={{ gridColumn: "1/-1" }}>
-              <div className="label">Тип KPI</div>
-              <Select value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-                {opts.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-              <div className="help">Баллы подтянутся из типа автоматически.</div>
-            </div>
-          </div>
-
-          <div className="grid2">
-            {!goalMode && (
-              <div>
-                <div className="label">Дата</div>
-                <Input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required />
-              </div>
-            )}
-            <div>
-              <div className="label">Баллы</div>
-              <Input value={type?.defaultPoints ?? ""} readOnly />
-            </div>
-          </div>
-
-          {/* Goals & Deadlines toggle */}
-          <div className="add-goal-toggle" style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 6px" }}>
-            <label className="type-toggle" style={{ flexShrink: 0 }}>
-              <input type="checkbox" checked={goalMode} onChange={e => setGoalMode(e.target.checked)} />
-              <span className="type-toggle-slider"></span>
-            </label>
-            <span className="label" style={{ margin: 0, cursor: "pointer" }} onClick={() => setGoalMode(!goalMode)}>{t("goalsAndDeadlines")}</span>
-          </div>
-          {goalMode && (
-            <div className="grid2" style={{ marginBottom: 4 }}>
-              <div>
-                <div className="label">{t("dateFrom")}</div>
-                <Input type="date" value={goalDateFrom} onChange={e => setGoalDateFrom(e.target.value)} />
-              </div>
-              <div>
-                <div className="label">{t("dateTo")}</div>
-                <Input type="date" value={goalDateTo} onChange={e => setGoalDateTo(e.target.value)} />
-              </div>
-            </div>
-          )}
-
-          <div className="label">Название</div>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
-
-          <div className="label">Описание</div>
-          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Коротко: что сделано, где, результат..." />
-
-          <div className="label">Ссылка (optional)</div>
-          <Input value={evidenceLink} onChange={(e) => setEvidenceLink(e.target.value)} placeholder="https://..." />
-
-          <div className="label">Файл (optional)</div>
-          <FileDrop
-            accept=".pdf,image/png,image/jpeg"
-            value={file}
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
-
-          <div style={{ marginTop: 12 }}>
-            <TeammatesPicker
-              value={teammates}
-              onChange={setTeammates}
-              excludeUid={u.uid}
-              label={goalMode ? t("teamGoalMembers") : t("sharedWithTeammates")}
-            />
-            <div className="help">
-              {goalMode ? t("teamGoalHint") : t("teammatesHint")}
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-            <Btn kind="primary" type="submit" disabled={st.loading}>{goalMode ? t("setGoal") : "Отправить"}</Btn>
-            <Btn type="button" onClick={() => navigate("profile")}>Назад</Btn>
-          </div>
-        </form>
+        <div className="books-page__counter">
+          <span className="books-page__counter-num">{BOOK_QUIZ_LIBRARY.length}</span>
+          <span className="books-page__counter-lbl">{t("monthShort") || "ай"}</span>
+        </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* Goals widget */}
-        <GoalsWidget compact />
-
-        {/* Books compact */}
-        <div className="glass card" style={{ padding: "14px 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div className="h2" style={{ fontSize: 15, margin: 0 }}>Книги месяца</div>
-            {quizLoading ? <Pill kind="pending">...</Pill> : <Pill kind="approved">Тесты</Pill>}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {BOOK_QUIZ_LIBRARY.map(book => {
-              const qs = book.questions || [];
-              const status = getBookQuizStatus(book, quizAttempts, st.mySubmissions || []);
-              const stateLabel = status.state === "sent" ? "На проверке" : status.state === "cooldown" ? "Пауза" : status.state === "soon" ? "Скоро" : "Доступен";
-              const stateKind = status.state === "sent" ? "pending" : status.state === "cooldown" ? "rejected" : status.state === "soon" ? "" : "approved";
-              return (
-                <div key={book.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card-bg)" }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontWeight: 600, fontSize: 13 }}>{book.month}</span>
-                      <Pill kind={stateKind} style={{ fontSize: 10, padding: "1px 6px" }}>{stateLabel}</Pill>
-                    </div>
-                    <div className="tiny muted" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{book.author} · «{book.shortTitle}»</div>
-                  </div>
-                  <Btn kind="ghost" type="button" style={{ fontSize: 12, padding: "4px 10px", flexShrink: 0 }} onClick={() => { if (qs.length) openQuiz(book); }} disabled={!qs.length}>
-                    {qs.length ? "Тест" : "Скоро"}
-                  </Btn>
+      <div className="books-list">
+        {BOOK_QUIZ_LIBRARY.map((book, idx) => {
+          const qs = book.questions || [];
+          const status = getBookQuizStatus(book, quizAttempts, st.mySubmissions || []);
+          const stateLabel = status.state === "sent" ? t("onReview") : status.state === "cooldown" ? t("cooldownShort") : status.state === "soon" ? t("comingSoonShort") : t("available");
+          const stateKind = status.state === "sent" ? "pending" : status.state === "cooldown" ? "rejected" : status.state === "soon" ? "" : "approved";
+          const disabledTest = !qs.length || status.state === "sent" || status.state === "cooldown";
+          return (
+            <article key={book.id} className="books-row" style={{ "--di": idx }}>
+              <div className="books-row__index">{String(idx + 1).padStart(2, "0")}</div>
+              <div className="books-row__cover" aria-hidden="true">
+                <span className="books-row__cover-month">{book.month}</span>
+                <span className="books-row__cover-glyph">📖</span>
+              </div>
+              <div className="books-row__main">
+                <div className="books-row__top">
+                  <div className="books-row__month">{book.month}</div>
+                  <Pill kind={stateKind} style={{ fontSize: 11 }}>{stateLabel}</Pill>
+                  <span className="tiny muted">+{book.points || 20} {t("ptsShort") || "балл"} · {book.thresholdPercent || 70}%</span>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <div className="books-row__title">«{book.shortTitle}»</div>
+                <div className="books-row__author">{book.author}</div>
+                {book.note && <div className="tiny muted books-row__note">{book.note}</div>}
+              </div>
+              <div className="books-row__actions">
+                <Btn type="button" onClick={() => readOnline(book)} disabled={!book.readUrl}>
+                  📚 {t("readOnline")}
+                </Btn>
+                <Btn kind="primary" type="button" onClick={() => { if (qs.length) openQuiz(book); else toast(t("testNotAdded"), "info"); }} disabled={disabledTest}>
+                  {qs.length ? t("startTest") : t("comingSoonShort")}
+                </Btn>
+              </div>
+            </article>
+          );
+        })}
+        {quizLoading && <div className="muted tiny" style={{ textAlign: "center", padding: 12 }}>...</div>}
       </div>
     </div>
   );
@@ -2066,40 +2031,7 @@ export function PageRequests() {
         document.body
       )}
 
-      {/* ── Stat cards row ── */}
-      <div className="treq-stats">
-        <div className="treq-stat treq-stat--balance" style={{ "--di": 0 }}>
-          <div className="treq-stat__icon"><Icon name="calendar" /></div>
-          <div className="treq-stat__body">
-            <div className="treq-stat__num">{fmtPoints(u.compDays || 0)}</div>
-            <div className="treq-stat__label">{t("compBalance")}</div>
-          </div>
-          <div className="treq-stat__glow"></div>
-        </div>
-        <div className="treq-stat treq-stat--total" style={{ "--di": 1 }}>
-          <div className="treq-stat__icon"><Icon name="clipboard" /></div>
-          <div className="treq-stat__body">
-            <div className="treq-stat__num">{reqs.length}</div>
-            <div className="treq-stat__label">{t("totalRequests")}</div>
-          </div>
-        </div>
-        <div className="treq-stat treq-stat--pending" style={{ "--di": 2 }}>
-          <div className="treq-stat__icon"><Icon name="clock" /></div>
-          <div className="treq-stat__body">
-            <div className="treq-stat__num">{pending.length}</div>
-            <div className="treq-stat__label">{t("reqPending")}</div>
-          </div>
-        </div>
-        <div className="treq-stat treq-stat--approved" style={{ "--di": 3 }}>
-          <div className="treq-stat__icon"><Icon name="check" /></div>
-          <div className="treq-stat__body">
-            <div className="treq-stat__num">{approved.length}</div>
-            <div className="treq-stat__label">{t("reqApproved")}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Tabs ── */}
+      {/* ── Tabs + comp.days balance ── */}
       <div className="treq-tabs">
         <button className={`treq-tab${tab === "form" ? " treq-tab--active" : ""}`} onClick={() => setTab("form")}>
           <Icon name="plus" /> {t("newRequest")}
@@ -2109,6 +2041,11 @@ export function PageRequests() {
           {reqs.length > 0 && <span className="treq-tab__badge">{reqs.length}</span>}
         </button>
         <div className="treq-tabs__actions">
+          <div className="treq-balance-pill" title={t("compBalance")}>
+            <span className="treq-balance-pill__icon"><Icon name="calendar" /></span>
+            <span className="treq-balance-pill__num">{fmtPoints(u.compDays || 0)}</span>
+            <span className="treq-balance-pill__label">{t("compBalance")}</span>
+          </div>
           <Btn kind="ghost" onClick={refresh} disabled={st.loading}><Icon name="refresh" /></Btn>
         </div>
       </div>
@@ -2119,15 +2056,13 @@ export function PageRequests() {
           <div className="treq-form glass card">
             {/* Kind selector as visual cards */}
             <div className="treq-kind-grid treq-kind-grid--2">
-              {/* Combined leave card with switch */}
-              <button
-                type="button"
-                className={`treq-kind-btn treq-kind-btn--leave${kind === "leave" || kind === "early_leave" ? " treq-kind-btn--active" : ""}`}
+              <TreqKindBtn
+                kindKey="leave"
+                active={kind === "leave" || kind === "early_leave"}
+                icon={isEarlyLeave ? "clock" : "briefcase"}
+                label={t("rkLeave")}
                 onClick={() => setKind(isEarlyLeave ? "leave" : kind === "leave" ? "leave" : "leave")}
               >
-                <span className="treq-kind-btn__icon"><Icon name={isEarlyLeave ? "clock" : "briefcase"} /></span>
-                <span className="treq-kind-btn__text">{t("rkLeave")}</span>
-                {/* Hours toggle */}
                 <label className="treq-switch" onClick={e => e.stopPropagation()}>
                   <input
                     type="checkbox"
@@ -2139,18 +2074,17 @@ export function PageRequests() {
                   </span>
                   <span className="treq-switch__label">{t("hours")}</span>
                 </label>
-              </button>
+              </TreqKindBtn>
 
               {REQUEST_KINDS.filter(rk => rk.key !== "leave" && rk.key !== "early_leave").map((rk) => (
-                <button
+                <TreqKindBtn
                   key={rk.key}
-                  type="button"
-                  className={`treq-kind-btn${kind === rk.key ? " treq-kind-btn--active" : ""} treq-kind-btn--${rk.key}`}
+                  kindKey={rk.key}
+                  active={kind === rk.key}
+                  icon={kindIcon(rk.key)}
+                  label={t(rk.tKey)}
                   onClick={() => setKind(rk.key)}
-                >
-                  <span className="treq-kind-btn__icon"><Icon name={kindIcon(rk.key)} /></span>
-                  <span className="treq-kind-btn__text">{t(rk.tKey)}</span>
-                </button>
+                />
               ))}
             </div>
 
@@ -2222,14 +2156,21 @@ export function PageRequests() {
               </div>
             </form>
 
-            {showPreview && (
-              <div className="treq-preview-wrap">
-                <div className="sep" />
-                <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} showDownload />
-              </div>
-            )}
           </div>
         </div>
+      )}
+
+      {/* Preview modal */}
+      {showPreview && createPortal(
+        <div className="tp-overlay" onClick={() => setShowPreview(false)}>
+          <div className="tp-card" onClick={e => e.stopPropagation()} style={{ width: "700px", maxWidth: "95vw", maxHeight: "95vh", overflowY: "auto" }}>
+            <button className="tp-close" onClick={() => setShowPreview(false)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+            <DocumentPreview request={previewReq} user={u} signatureUrl={u.signatureUrl} showDownload />
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ══ HISTORY TAB ══ */}

@@ -32,6 +32,7 @@ const PageLogin      = lazy(() => import("./pages/auth.jsx").then(m => ({ defaul
 const PageDashboard = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageDashboard })));
 const PageProfile   = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageProfile })));
 const PageAdd       = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageAdd })));
+const PageBooks     = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageBooks })));
 const PageRequests  = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageRequests })));
 const PageRating    = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageRating })));
 const PageStats     = lazy(() => import("./pages/teacher.jsx").then(m => ({ default: m.PageStats })));
@@ -115,6 +116,7 @@ async function render() {
   pageMount("mount-rating", "rating", PageRating);
   pageMount("mount-stats", "stats", PageStats);
   pageMount("mount-add", "add", PageAdd);
+  pageMount("mount-books", "books", PageBooks);
   pageMount("mount-requests", "requests", PageRequests);
   pageMount("mount-documents", "documents", PageDocuments);
   pageMount("mount-news", "news", PageNews);

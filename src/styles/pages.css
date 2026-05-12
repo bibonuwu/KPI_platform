@@ -669,12 +669,6 @@
     inset 0 0 0 1px rgba(255, 255, 255, .08);
   display: inline-block;
   position: relative;
-  animation: ropAvatarConic 10s linear infinite;
-}
-
-@keyframes ropAvatarConic {
-  from { filter: hue-rotate(0deg); }
-  to { filter: hue-rotate(360deg); }
 }
 
 .rop-hero__avatar {
@@ -2450,7 +2444,6 @@
   .school3d__shadow,
   .school3d::before,
   .rop-hero::before,
-  .rop-hero__avatar-ring,
   .rop-hero__name strong {
     animation: none !important;
     transition-duration: .01ms !important;
@@ -3443,20 +3436,101 @@
   background: rgba(0, 0, 0, .18);
 }
 
-/* ── Light — rop-hero (rating profile) ── */
+/* ══════════════════════════════════════════════════ */
+/* ── Light — rop-hero (rating profile) — minimal glass ── */
+/* ══════════════════════════════════════════════════ */
+
+/* Hero background — softer, cleaner light wash */
+[data-theme="light"] .rop-hero {
+  background:
+    radial-gradient(ellipse 70% 100% at 15% 50%, color-mix(in srgb, var(--accent) 7%, transparent) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 100% at 95% 30%, color-mix(in srgb, var(--accent2) 6%, transparent) 0%, transparent 60%),
+    #ffffff;
+}
+
+[data-theme="light"] .rop-hero::before {
+  background: linear-gradient(105deg, transparent 40%, rgba(15, 23, 42, .025) 50%, transparent 60%);
+}
+
+/* Avatar — clean light gradient, subtle border (not heavy dark) */
 [data-theme="light"] .rop-hero__avatar {
-  background: linear-gradient(135deg, #dbeafe, #c7d2fe);
+  background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
   color: var(--accent2);
-  border-color: rgba(0, 0, 0, .08);
+  border: 4px solid #ffffff;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, .06),
+    0 8px 24px rgba(15, 23, 42, .08);
 }
 
+/* Avatar ring — softer glow, no harsh dark shadow */
+[data-theme="light"] .rop-hero__avatar-ring {
+  box-shadow:
+    0 0 24px color-mix(in srgb, var(--accent) 20%, transparent),
+    0 0 60px color-mix(in srgb, var(--accent) 10%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, .9);
+}
+
+/* Right card (level/points) — bold accent glass on light */
 [data-theme="light"] .rop-hero__right {
-  background: rgba(14, 165, 233, .06);
-  border-color: rgba(0, 0, 0, .08);
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent) 14%, #ffffff) 0%,
+      color-mix(in srgb, var(--accent2) 10%, #ffffff) 100%);
+  border: 1.5px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .9) inset,
+    0 0 0 4px color-mix(in srgb, var(--accent) 8%, transparent),
+    0 12px 32px -8px color-mix(in srgb, var(--accent) 40%, rgba(15, 23, 42, .15)),
+    0 4px 12px -4px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
+[data-theme="light"] .rop-hero__right::before {
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  background: linear-gradient(90deg,
+    transparent,
+    var(--accent) 40%,
+    var(--accent2) 60%,
+    transparent);
+  opacity: 1;
+  filter: blur(.3px);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+[data-theme="light"] .rop-hero__right::after {
+  background:
+    radial-gradient(ellipse 70% 100% at 50% 100%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 60% at 50% 0%, color-mix(in srgb, var(--accent2) 15%, transparent) 0%, transparent 60%);
+}
+
+[data-theme="light"] .rop-hero__right:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 0 0 4px color-mix(in srgb, var(--accent) 14%, transparent),
+    0 18px 44px -8px color-mix(in srgb, var(--accent) 55%, rgba(15, 23, 42, .2)),
+    0 6px 16px -4px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Big number — keep gradient but anchor better against light bg */
+[data-theme="light"] .rop-hero__level-pts {
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, .08));
+}
+
+/* Progress track — clearly visible on white */
 [data-theme="light"] .rop-hero__progress-track {
-  background: rgba(0, 0, 0, .08);
+  background: rgba(15, 23, 42, .06);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+/* Dashboard variant of the right card — match light glass treatment */
+[data-theme="light"] .rop-hero__right.dash-hero-anim__right:hover {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 1) inset,
+    0 14px 36px -10px color-mix(in srgb, var(--accent) 30%, rgba(15, 23, 42, .15));
 }
 
 /* Smooth transitions on all interactive elements */
@@ -7239,28 +7313,41 @@
 }
 
 /* ══════════════════════════════════════════════ */
-/* ═══ LIVE CLOCK ══════════════════════════════ */
+/* ═══ LIVE CLOCK — minimal glass ══════════════ */
 /* ══════════════════════════════════════════════ */
 .live-clock {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 13px;
+  gap: 10px;
+  padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface2);
+  border: 1px solid rgba(255, 255, 255, .55);
+  background: rgba(255, 255, 255, .45);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .7) inset,
+    0 4px 14px rgba(15, 23, 42, .06);
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   user-select: none;
-  gap: 6px;
+  transition: box-shadow .25s ease, transform .25s ease, background .25s ease;
+}
+
+.live-clock:hover {
+  background: rgba(255, 255, 255, .6);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .8) inset,
+    0 6px 18px rgba(15, 23, 42, .09);
 }
 
 .live-clock__date {
   color: var(--muted);
   font-weight: 500;
   font-size: 12px;
+  letter-spacing: .1px;
 }
 
 .live-clock__day {
@@ -7269,50 +7356,117 @@
 }
 
 .live-clock__time {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 14px;
-  letter-spacing: .5px;
+  letter-spacing: .4px;
+  color: var(--text);
+  position: relative;
+  padding-left: 10px;
+}
+
+.live-clock__time::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 12px;
+  background: linear-gradient(to bottom, transparent, rgba(15, 23, 42, .18), transparent);
 }
 
 /* ══════════════════════════════════════════════ */
-/* ═══ WEATHER WIDGET ═════════════════════════  */
+/* ═══ WEATHER WIDGET — minimal glass ═════════  */
 /* ══════════════════════════════════════════════ */
 .weather-widget {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 13px;
+  gap: 8px;
+  padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--surface2);
+  border: 1px solid rgba(255, 255, 255, .55);
+  background: rgba(255, 255, 255, .45);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .7) inset,
+    0 4px 14px rgba(15, 23, 42, .06);
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
   user-select: none;
   cursor: default;
-  transition: box-shadow .2s;
+  transition: box-shadow .25s ease, transform .25s ease, background .25s ease;
 }
 
 .weather-widget:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .1);
+  background: rgba(255, 255, 255, .6);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .8) inset,
+    0 6px 18px rgba(15, 23, 42, .09);
 }
 
 .weather-widget__icon {
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, .08));
 }
 
 .weather-widget__temp {
-  font-weight: 800;
+  font-weight: 700;
   font-size: 14px;
   letter-spacing: .3px;
+  color: var(--text);
 }
 
 .weather-widget__city {
   color: var(--muted);
   font-weight: 500;
   font-size: 11px;
+  letter-spacing: .2px;
+  position: relative;
+  padding-left: 8px;
+}
+
+.weather-widget__city::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 10px;
+  background: linear-gradient(to bottom, transparent, rgba(15, 23, 42, .18), transparent);
+}
+
+/* Dark theme — keep glass effect with darker tint */
+[data-theme="dark"] .live-clock,
+[data-theme="dark"] .weather-widget,
+.dark .live-clock,
+.dark .weather-widget {
+  border-color: rgba(255, 255, 255, .08);
+  background: rgba(255, 255, 255, .05);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .06) inset,
+    0 4px 14px rgba(0, 0, 0, .25);
+}
+
+[data-theme="dark"] .live-clock:hover,
+[data-theme="dark"] .weather-widget:hover,
+.dark .live-clock:hover,
+.dark .weather-widget:hover {
+  background: rgba(255, 255, 255, .08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .1) inset,
+    0 6px 18px rgba(0, 0, 0, .3);
+}
+
+[data-theme="dark"] .live-clock__time::before,
+[data-theme="dark"] .weather-widget__city::before,
+.dark .live-clock__time::before,
+.dark .weather-widget__city::before {
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, .18), transparent);
 }
 
 /* ══════════════════════════════════════════════ */
@@ -7407,6 +7561,7 @@
   z-index: 10000;
   display: grid;
   place-items: center;
+  padding: 24px;
   background: rgba(0, 0, 0, .55);
   backdrop-filter: blur(12px);
   animation: lvlFadeIn .3s ease;
@@ -7419,21 +7574,22 @@
 
 .lvl-modal {
   position: relative;
-  width: 520px;
-  max-width: 94vw;
-  max-height: 90vh;
-  overflow-y: auto;
+  width: min(94vw, 1040px);
+  aspect-ratio: 16 / 9;
+  max-height: 92vh;
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 32px 28px 28px;
+  border-radius: 24px;
+  overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, .35), var(--glass-inner-shadow);
   animation: lvlSlideUp .4s cubic-bezier(.34, 1.56, .64, 1);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
 }
 
 [data-theme="light"] .lvl-modal {
-  background: rgba(255, 255, 255, .94);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, .12), inset 0 1px 0 rgba(255, 255, 255, .9);
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .15), inset 0 1px 0 rgba(255, 255, 255, .9);
 }
 
 [data-theme="light"] .lvl-modal-overlay {
@@ -7445,91 +7601,129 @@
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ── Left pane (current rank focus) ── */
+.lvl-modal__left {
+  position: relative;
+  padding: 36px 30px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background:
+    radial-gradient(circle at 25% 18%, color-mix(in srgb, var(--rank-color) 22%, transparent), transparent 55%),
+    radial-gradient(circle at 80% 92%, color-mix(in srgb, var(--rank-color) 14%, transparent), transparent 50%),
+    linear-gradient(135deg, color-mix(in srgb, var(--rank-color) 6%, var(--card-bg)) 0%, var(--card-bg) 100%);
+}
+
+.lvl-modal__left::-webkit-scrollbar { width: 6px; }
+.lvl-modal__left::-webkit-scrollbar-track { background: transparent; }
+.lvl-modal__left::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--border) 60%, transparent); border-radius: 3px; }
+.lvl-modal__left::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── Right pane (all ranks ladder) ── */
+.lvl-modal__right {
+  padding: 28px 26px 24px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+}
+
 .lvl-modal__close {
   position: absolute;
   top: 14px;
   right: 16px;
-  background: none;
-  border: none;
-  font-size: 26px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  font-size: 20px;
   color: var(--muted);
   cursor: pointer;
   line-height: 1;
-  transition: color .2s, transform .2s;
-  z-index: 2;
+  transition: color .2s, transform .25s, background .2s;
+  z-index: 5;
 }
 .lvl-modal__close:hover {
   color: var(--text);
-  transform: scale(1.15);
+  transform: scale(1.1) rotate(90deg);
+  background: var(--card);
 }
 
 /* ── Header ── */
 .lvl-modal__header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 18px;
-  margin-bottom: 20px;
+  text-align: center;
+  gap: 14px;
 }
 
 .lvl-modal__rank-icon {
-  width: 72px;
-  height: 72px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 36px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--rank-color) 15%, transparent), transparent 70%);
-  border: 2.5px solid var(--rank-color, var(--accent));
-  box-shadow: 0 0 24px color-mix(in srgb, var(--rank-color) 30%, transparent);
+  font-size: 48px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--rank-color) 22%, transparent), transparent 70%);
+  border: 3px solid var(--rank-color, var(--accent));
+  box-shadow: 0 0 32px color-mix(in srgb, var(--rank-color) 35%, transparent);
   animation: lvlIconPulse 2.5s ease-in-out infinite;
   flex-shrink: 0;
 }
 
 @keyframes lvlIconPulse {
-  0%, 100% { box-shadow: 0 0 24px color-mix(in srgb, var(--rank-color) 30%, transparent); transform: scale(1); }
-  50% { box-shadow: 0 0 36px color-mix(in srgb, var(--rank-color) 50%, transparent); transform: scale(1.05); }
+  0%, 100% { box-shadow: 0 0 32px color-mix(in srgb, var(--rank-color) 35%, transparent); transform: scale(1); }
+  50% { box-shadow: 0 0 48px color-mix(in srgb, var(--rank-color) 55%, transparent); transform: scale(1.05); }
 }
 
 .lvl-modal__rank-info {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 
 .lvl-modal__rank-name {
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 800;
-  letter-spacing: -.3px;
+  letter-spacing: -.4px;
+  line-height: 1.1;
 }
 
 .lvl-modal__rank-pts {
   font-size: 14px;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .lvl-modal__rank-desc {
   font-size: 13px;
   color: var(--text);
-  opacity: .75;
-  margin-top: 6px;
-  line-height: 1.4;
+  opacity: .78;
+  margin-top: 10px;
+  line-height: 1.5;
 }
 
 /* ── XP bar ── */
 .lvl-modal__xp {
-  margin-bottom: 24px;
+  margin: 0;
 }
 
 .lvl-modal__xp-track {
-  height: 10px;
-  border-radius: 5px;
+  height: 12px;
+  border-radius: 6px;
   background: var(--border);
   overflow: hidden;
 }
 
 .lvl-modal__xp-fill {
   height: 100%;
-  border-radius: 5px;
+  border-radius: 6px;
   transition: width 1.2s cubic-bezier(.4, 0, .2, 1);
   animation: lvlXpGlow 2s ease-in-out infinite;
   position: relative;
@@ -7539,8 +7733,8 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 5px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent);
+  border-radius: 6px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.4), transparent);
   animation: lvlXpShimmer 2s ease-in-out infinite;
 }
 
@@ -7557,27 +7751,52 @@
 .lvl-modal__xp-label {
   font-size: 12px;
   color: var(--muted);
-  margin-top: 6px;
+  margin-top: 8px;
   text-align: center;
+}
+
+/* ── Strengths block wrapper (groups title + content on the left) ── */
+.lvl-modal__str-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
 }
 
 /* ── Section title ── */
 .lvl-modal__section-title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .6px;
+  letter-spacing: .8px;
   color: var(--muted);
-  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-/* ── All ranks grid ── */
+.lvl-modal__section-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border), transparent);
+}
+
+/* ── All ranks ladder ── */
 .lvl-modal__ranks {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 24px;
+  overflow-y: auto;
+  padding-right: 6px;
+  margin-right: -6px;
+  min-height: 0;
 }
+
+.lvl-modal__ranks::-webkit-scrollbar { width: 6px; }
+.lvl-modal__ranks::-webkit-scrollbar-track { background: transparent; }
+.lvl-modal__ranks::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--border) 80%, transparent); border-radius: 3px; }
+.lvl-modal__ranks::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
 .lvl-modal__rank-card {
   display: flex;
@@ -7733,19 +7952,43 @@
   animation-delay: 1s;
 }
 
-/* ── Mobile ── */
-@media (max-width: 600px) {
+/* ── Tablet / Mobile: stack panes vertically, drop 16:9 ── */
+@media (max-width: 820px) {
   .lvl-modal {
-    padding: 24px 18px 20px;
-    border-radius: 16px;
+    width: 94vw;
+    aspect-ratio: auto;
+    max-height: 90vh;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow-y: auto;
+    border-radius: 18px;
+  }
+  .lvl-modal__left {
+    padding: 28px 22px 22px;
+    gap: 18px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+  .lvl-modal__right {
+    padding: 22px;
+    grid-template-rows: auto auto;
+  }
+  .lvl-modal__ranks {
+    overflow: visible;
+    padding-right: 0;
+    margin-right: 0;
   }
   .lvl-modal__rank-icon {
-    width: 56px;
-    height: 56px;
-    font-size: 28px;
+    width: 76px;
+    height: 76px;
+    font-size: 38px;
   }
   .lvl-modal__rank-name {
-    font-size: 18px;
+    font-size: 22px;
+  }
+  .lvl-modal__str-block {
+    margin-top: 0;
   }
 }
 
