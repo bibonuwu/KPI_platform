@@ -7,7 +7,7 @@ import {
   sendPasswordResetEmail, MICROSOFT_TENANT, getDownloadURL, ref, uploadBytes
 } from "./firebase-config.js";
 import {
-  store, setState, useStore, navigate, toast, applyTheme, toggleTheme, FONT_MAP,
+  store, setState, useStore, navigate, toast, dismissToast, applyTheme, toggleTheme, FONT_MAP,
   applyFont, getDefaultAccessibility, applyAccessibility, saveAccessibilityToFirestore,
   getDefaultSiteSettings, applySiteSettings, saveSiteSettings, ROUTES, canAccess
 } from "./store.js";
@@ -1729,17 +1729,81 @@ export function TeacherProfileModal() {
   );
 }
 
+function ToastIcon({ kind }) {
+  if (kind === "ok" || kind === "success") {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <polyline points="4 12 10 18 20 6" />
+      </svg>
+    );
+  }
+  if (kind === "warning") {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <line x1="12" y1="5" x2="12" y2="14" />
+        <circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  if (kind === "error") {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <line x1="6" y1="6" x2="18" y2="18" />
+        <line x1="18" y1="6" x2="6" y2="18" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <line x1="12" y1="11" x2="12" y2="17" />
+      <circle cx="12" cy="7.5" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function ToastItem({ t: ti }) {
+  const kind = ti.kind === "success" ? "ok" : ti.kind;
+  const titleKey = kind === "error" ? "toastError" : kind === "ok" ? "toastOk" : kind === "warning" ? "toastWarn" : "toastMsg";
+  const title = ti.title || t(titleKey);
+  return (
+    <div className={`toast toast--${kind}`} role="status">
+      <div className="toast__icon" aria-hidden="true">
+        <ToastIcon kind={kind} />
+      </div>
+      <div className="toast__body">
+        <div className="toast__title">{title}</div>
+        <div className="toast__msg">{ti.msg}</div>
+      </div>
+      {ti.action && ti.actionLabel && (
+        <button
+          type="button"
+          className="toast__action"
+          onClick={() => { try { ti.action(); } finally { dismissToast(ti.id); } }}
+        >
+          {ti.actionLabel}
+        </button>
+      )}
+      <button
+        type="button"
+        className="toast__close"
+        aria-label="close"
+        onClick={() => dismissToast(ti.id)}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="6" y1="6" x2="18" y2="18" />
+          <line x1="18" y1="6" x2="6" y2="18" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function Overlays() {
   const st = useStore();
   return (
     <>
       <div className="toastwrap" aria-live="polite" aria-atomic="true">
-        {st.toasts.map(ti => (
-          <div key={ti.id} className="toast">
-            <div style={{ fontWeight: 900, marginBottom: 4 }}>{ti.kind === "error" ? t("toastError") : ti.kind === "ok" ? t("toastOk") : t("toastMsg")}</div>
-            <div className="tiny muted">{ti.msg}</div>
-          </div>
-        ))}
+        {st.toasts.map(ti => <ToastItem key={ti.id} t={ti} />)}
       </div>
       {st.modal?.kind === "crop" && <CropModal file={st.modal.file} onClose={() => setState({ modal: null })} />}
       <TeacherProfileModal />

@@ -169,9 +169,65 @@ export function updateRouteVisibility(path) {
   });
 }
 
-export function toast(msg, kind = "info") {
+let _toastAudioCtx = null;
+function _getAudioCtx() {
+  if (_toastAudioCtx) return _toastAudioCtx;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    _toastAudioCtx = new Ctx();
+  } catch { _toastAudioCtx = null; }
+  return _toastAudioCtx;
+}
+
+export function playToastSound(kind = "info") {
+  try {
+    if (localStorage.getItem("toastSound") === "off") return;
+    const ctx = _getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    // tone presets per kind
+    const presets = {
+      ok:      [{ f: 880, t: 0.00 }, { f: 1320, t: 0.09 }],
+      success: [{ f: 880, t: 0.00 }, { f: 1320, t: 0.09 }],
+      info:    [{ f: 660, t: 0.00 }, { f: 880,  t: 0.10 }],
+      warning: [{ f: 740, t: 0.00 }, { f: 740,  t: 0.12 }],
+      error:   [{ f: 320, t: 0.00 }, { f: 220,  t: 0.10 }],
+    };
+    const seq = presets[kind] || presets.info;
+    const now = ctx.currentTime;
+    seq.forEach(({ f, t }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = f;
+      const start = now + t;
+      const dur = 0.13;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.18, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + dur + 0.02);
+    });
+  } catch {}
+}
+
+export function toast(msg, kind = "info", opts = {}) {
   const id = Math.random().toString(36).slice(2);
-  const item = { id, msg, kind };
-  setState({ toasts: [item, ...store.state.toasts].slice(0, 3) });
-  setTimeout(() => setState({ toasts: store.state.toasts.filter(t => t.id !== id) }), 3200);
+  const k = kind === "success" ? "ok" : kind;
+  const item = {
+    id, msg, kind: k,
+    title: opts.title || null,
+    action: opts.action || null,
+    actionLabel: opts.actionLabel || null,
+    duration: typeof opts.duration === "number" ? opts.duration : 3800,
+  };
+  setState({ toasts: [item, ...store.state.toasts].slice(0, 4) });
+  playToastSound(k);
+  setTimeout(() => setState({ toasts: store.state.toasts.filter(t => t.id !== id) }), item.duration);
+}
+
+export function dismissToast(id) {
+  setState({ toasts: store.state.toasts.filter(t => t.id !== id) });
 }

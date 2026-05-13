@@ -161,6 +161,7 @@ export const T = {
   toastError: { kz: "Қате", ru: "Ошибка", en: "Error" },
   toastOk: { kz: "Дайын", ru: "Готово", en: "Done" },
   toastMsg: { kz: "Хабарлама", ru: "Сообщение", en: "Message" },
+  toastWarn: { kz: "Ескерту", ru: "Внимание", en: "Warning" },
 
   // ===== THEME =====
   lightTheme: { kz: "Жарық тема", ru: "Светлая тема", en: "Light theme" },

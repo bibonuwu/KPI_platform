@@ -1296,6 +1296,13 @@ export function PageAdd() {
 
   function dismissHint() { setHint(null); setHintDismissed(true); }
 
+  function onCardMouseMove(e) {
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", `${e.clientX - r.left}px`);
+    el.style.setProperty("--my", `${e.clientY - r.top}px`);
+  }
+
   function canGoNext() {
     if (step === 0) return !!section;
     if (step === 1) return !!subsection && !!type && (goalMode || !!eventDate);
@@ -1426,6 +1433,7 @@ export function PageAdd() {
                       key={s}
                       className={`add-wizard__section-card${s === section ? " is-active" : ""}`}
                       onClick={() => setSection(s)}
+                      onMouseMove={onCardMouseMove}
                       style={{ "--di": i }}
                     >
                       <span className="add-wizard__section-glyph">{s.includes("Жеке") ? "🌱" : s.includes("Кәсіби") ? "🎓" : "📌"}</span>
@@ -1469,6 +1477,7 @@ export function PageAdd() {
                     key={tp.id}
                     className={`add-wizard__type${tp.id === typeId ? " is-active" : ""}`}
                     onClick={() => setTypeId(tp.id)}
+                    onMouseMove={onCardMouseMove}
                     style={{ "--di": i }}
                   >
                     <span className="add-wizard__type-name">{tp.name}</span>

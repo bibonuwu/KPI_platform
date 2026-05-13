@@ -17,7 +17,7 @@ import {
 } from "../utils.js";
 import { DEFAULT_TYPES } from "../constants.js";
 import {
-  fetchTypesAll, fetchTypesActive, seedDefaultTypes, addType, toggleType,
+  fetchTypesAll, fetchTypesActive, seedDefaultTypes, syncDefaultTypes, addType, toggleType,
   deleteTypeDoc, updateType, fetchUsersAll, fetchMySubmissions,
   fetchPendingSubmissions, fetchAdminRecentSubs, createSubmission,
   approveSubmission, rejectSubmission, fetchMyRequests, fetchPendingRequests,
@@ -1722,6 +1722,8 @@ export function PageAdminTypes() {
   const [editForm, setEditForm] = useState({ section: "", subsection: "", name: "", defaultPoints: 5 });
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [confirmSync, setConfirmSync] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [q, setQ] = useState("");
   const [sectionFilter, setSectionFilter] = useState("");
   const [sortCol, setSortCol] = useState("");
@@ -1744,6 +1746,18 @@ export function PageAdminTypes() {
       console.error(e);
       toast(e?.message || e?.code || t("error"), "error");
     } finally { setState({ loading: false }); }
+  }
+  async function doSync() {
+    try {
+      setSyncing(true);
+      const r = await syncDefaultTypes();
+      toast(`Өшірілді: ${r.deleted}, қосылды: ${r.added}`, "ok");
+      setConfirmSync(false);
+      await refresh();
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || e?.code || t("error"), "error");
+    } finally { setSyncing(false); }
   }
   async function add() {
     try {
@@ -1837,6 +1851,28 @@ export function PageAdminTypes() {
 
   return (
     <>
+      {/* Sync KPI defaults confirmation modal */}
+      {confirmSync && createPortal(
+        <div className="modalback" onClick={() => !syncing && setConfirmSync(false)}>
+          <div className="modal glass" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+            <div className="h2" style={{ marginBottom: 12 }}>KPI базаға экспорттау</div>
+            <p className="p" style={{ marginBottom: 16 }}>
+              <b style={{ color: "var(--red, #ef4444)" }}>Назар аударыңыз:</b> базадағы барлық
+              ағымдағы KPI түрлері <b>өшіріледі</b> және constants.js файлындағы тізіммен
+              толық алмастырылады. Қолмен қосылған түрлер мен <i>active=false</i> күйлер
+              жоғалады. Тапсырылған жұмыстар (submissions) сақталады.
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn onClick={() => setConfirmSync(false)} disabled={syncing}>{t("cancel")}</Btn>
+              <Btn kind="primary" onClick={doSync} disabled={syncing}>
+                {syncing ? "..." : "Экспорттау"}
+              </Btn>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Delete confirmation modal */}
       {confirmDelete && createPortal(
         <div className="modalback" onClick={() => setConfirmDelete(null)}>
@@ -1923,6 +1959,9 @@ export function PageAdminTypes() {
         <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap", alignItems: "center" }}>
           <Btn kind="primary" onClick={() => setShowAddModal(true)}><Icon name="plus" /> {t("addTypeTitle")}</Btn>
           <Btn onClick={seed} disabled={st.loading}>{t("seedDefaults")}</Btn>
+          <Btn onClick={() => setConfirmSync(true)} disabled={syncing}>
+            <Icon name="upload" /> KPI базаға экспорттау
+          </Btn>
           <Btn onClick={refresh}><Icon name="refresh" /></Btn>
         </div>
       </div>
@@ -3614,70 +3653,33 @@ export function PageAdminEvents() {
 }
 
 /** ---------- PageAdminSkud ---------- */
-const SKUD_URL_KEY = "kpi_skud_url";
-const SKUD_DEFAULT_URL = "http://localhost:1101/";
+const SKUD_URL_KEY = "kpi_skud_url_v2";
+const SKUD_DEFAULT_URL = "http://10.15.2.16/";
 
 export function PageAdminSkud() {
   const st = useStore();
   const u = st.userDoc;
 
-  const [url, setUrl] = useState(() => {
+  const [url] = useState(() => {
     try { return localStorage.getItem(SKUD_URL_KEY) || SKUD_DEFAULT_URL; }
     catch (e) { return SKUD_DEFAULT_URL; }
   });
-  const [draft, setDraft] = useState(url);
   const [iframeKey, setIframeKey] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
 
   if (!u || u.role !== "admin") return <Guard />;
-
-  const saveUrl = () => {
-    const trimmed = (draft || "").trim();
-    if (!trimmed) return;
-    try { localStorage.setItem(SKUD_URL_KEY, trimmed); } catch (e) {}
-    setUrl(trimmed);
-    setIframeKey(k => k + 1);
-    setShowSettings(false);
-    toast("OK", "success");
-  };
 
   const reload = () => setIframeKey(k => k + 1);
 
   return (
     <div className="page page-skud">
       <div className="page-head" style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h1 className="h1">{t("skudTitle")}</h1>
-            <p className="p muted">{t("skudDesc")}</p>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <Btn size="sm" onClick={reload}><Icon name="refresh" /> {t("skudReload")}</Btn>
-            <Btn size="sm" onClick={() => window.open(url, "_blank", "noopener")}>
-              ↗ {t("skudOpenInNewTab")}
-            </Btn>
-            <Btn size="sm" onClick={() => setShowSettings(s => !s)}>
-              <Icon name="settings" /> URL
-            </Btn>
-          </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <Btn size="sm" onClick={reload}><Icon name="refresh" /> {t("skudReload")}</Btn>
+          <Btn size="sm" onClick={() => window.open(url, "_blank", "noopener")}>
+            ↗ {t("skudOpenInNewTab")}
+          </Btn>
         </div>
       </div>
-
-      {showSettings && (
-        <div className="glass card" style={{ marginBottom: 12, padding: 14 }}>
-          <div className="tiny muted" style={{ marginBottom: 6 }}>{t("skudUrlLabel")}</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Input
-              value={draft}
-              onChange={e => setDraft(e.target.value)}
-              placeholder={SKUD_DEFAULT_URL}
-              style={{ flex: 1, minWidth: 240 }}
-            />
-            <Btn kind="primary" onClick={saveUrl}>{t("skudUrlSave")}</Btn>
-          </div>
-          <div className="tiny muted" style={{ marginTop: 6 }}>{t("skudUrlHint")}</div>
-        </div>
-      )}
 
       <div
         className="glass"
@@ -3685,17 +3687,16 @@ export function PageAdminSkud() {
           padding: 0,
           overflow: "hidden",
           borderRadius: 16,
-          height: "300vh",
-          minHeight: 2400
+          height: "calc(100vh - 120px)",
+          minHeight: 480
         }}
       >
         <iframe
           key={iframeKey}
           src={url}
           title="SKUD"
-          style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
+          style={{ width: "100%", height: "100%", border: 0, background: "#fff", display: "block" }}
           referrerPolicy="no-referrer"
-          scrolling="no"
         />
       </div>
     </div>

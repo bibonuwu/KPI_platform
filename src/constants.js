@@ -1,179 +1,720 @@
+// ============================================================
+// НИШ KPI жүйесі — мұғалімдерге арналған (қайта балансталған)
+// ============================================================
+// 4 негізгі бағыт және олардың үлесі:
+//   1. Негізгі оқыту жұмысы  — ~45% (БАСТЫ — мұғалімнің тура жұмысы)
+//   2. Оқушы жетістігі       — ~25%
+//   3. Кәсіби даму           — ~20%
+//   4. Жеке даму             — ~10%
+//
+// Қосымша өрістер:
+//   - category:         "core" (негізгі) | "additional" (қосымша)
+//   - maxPerYear:       бір оқу жылындағы максималды қайталану саны
+//   - evidenceRequired: дәлелдеуге қажетті құжат
+// ============================================================
 export const DEFAULT_TYPES = [
-  { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарға қатысу (мектепішілік)", defaultPoints: 5 },
-  { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарға қатысу (аудандық)", defaultPoints: 10 },
-  { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарға қатысу (облыстық)", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарға қатысу (республикалық)", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарда баяндама жасау (мектепішілік)", defaultPoints: 10 },
-  { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарда баяндама жасау (аудандық)", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарда баяндама жасау (облыстық)", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Семинарлар", name: "Семинарда баяндама жасау (республикалық)", defaultPoints: 25 },
 
-  { section: "Кәсіби даму", subsection: "Курстар", name: "Біліктілік арттыру (36 сағатқа дейін)", defaultPoints: 10 },
-  { section: "Кәсіби даму", subsection: "Курстар", name: "Біліктілік арттыру (36–71 сағат)", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Курстар", name: "Біліктілік арттыру (72+ сағат)", defaultPoints: 25 },
-  { section: "Кәсіби даму", subsection: "Курстар", name: "Пәндік курс (сертификатпен)", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Курстар", name: "Педагогика/психология курсы", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Курстар", name: "Инклюзивті білім беру курсы", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Курстар", name: "CLIL / STEM / PBL курсы", defaultPoints: 20 },
+  // ════════════════════════════════════════════════════════════
+  // 1. НЕГІЗГІ ОҚЫТУ ЖҰМЫСЫ — мұғалімнің тура жұмысы
+  // ════════════════════════════════════════════════════════════
 
-  { section: "Кәсіби даму", subsection: "Сабақ", name: "Ашық сабақ өткізу", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Сабақ", name: "Шеберлік сыныбын өткізу", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Сабақ", name: "Интеграцияланған сабақ өткізу", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Сабақ", name: "Пән апталығында үлгілі сабақ өткізу", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Сабақ", name: "Сабаққа өзара қатысу және талдау (1 цикл)", defaultPoints: 10 },
+  // --- Сабақ сапасы (бақылау нәтижесі бойынша) ---
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сабақ сапасы",
+    name: "Сабақты бақылау — «өте жоғары» деңгей",
+    defaultPoints: 40,
+    category: "core",
+    maxPerYear: 3,
+    evidenceRequired: "Әкімшіліктің бақылау хаттамасы"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сабақ сапасы",
+    name: "Сабақты бақылау — «жоғары» деңгей",
+    defaultPoints: 25,
+    category: "core",
+    maxPerYear: 5,
+    evidenceRequired: "Әкімшіліктің бақылау хаттамасы"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сабақ сапасы",
+    name: "Дифференциация мен жеке тәсілді жүйелі қолдану",
+    defaultPoints: 20,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Сабақ жоспарлары + бақылау есебі"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сабақ сапасы",
+    name: "Қалыптастырушы бағалауды жүйелі қолдану (AfL)",
+    defaultPoints: 20,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Сабақ үлгілері + оқушылардың рефлексиясы"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сабақ сапасы",
+    name: "Цифрлық құралдар мен IT-ны сабақта тиімді қолдану",
+    defaultPoints: 12,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Сабақ материалдары + бақылау есебі"
+  },
 
-  { section: "Кәсіби даму", subsection: "Конференциялар", name: "Конференцияға қатысу (мектеп/аудан)", defaultPoints: 10 },
-  { section: "Кәсіби даму", subsection: "Конференциялар", name: "Конференцияға қатысу (облыс/республика)", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Конференцияда баяндама жасау (аудандық)", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Конференцияда баяндама жасау (облыстық)", defaultPoints: 25 },
-  { section: "Кәсіби даму", subsection: "Конференцияда баяндама жасау (республикалық)", defaultPoints: 30 },
-  { section: "Кәсіби даму", subsection: "Конференциялар", name: "Халықаралық конференцияда баяндама", defaultPoints: 40 },
+  // --- Оқушылардың академиялық нәтижесі ---
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Академиялық нәтиже",
+    name: "Сынып бойынша СОЖ орташа балы — мектеп бенчмаркінен жоғары",
+    defaultPoints: 35,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "СОЖ нәтижелерінің есебі"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Академиялық нәтиже",
+    name: "Тоқсандық/жылдық үлгерімнің оң динамикасы (≥10%)",
+    defaultPoints: 30,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Журналдан салыстырмалы есеп"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Академиялық нәтиже",
+    name: "Сапа көрсеткіші 70%-дан жоғары",
+    defaultPoints: 25,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Тоқсандық есеп"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Академиялық нәтиже",
+    name: "Үлгермеуші оқушылармен жұмыс — оң нәтиже",
+    defaultPoints: 20,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Жеке жоспар + аралық бақылау нәтижелері"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Академиялық нәтиже",
+    name: "Сабаққа қатысу 95%-дан жоғары",
+    defaultPoints: 10,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Электронды журнал есебі"
+  },
 
-  { section: "Кәсіби даму", subsection: "Әдістемелік жұмыс", name: "Әдістемелік бірлестік отырысында баяндама", defaultPoints: 10 },
-  { section: "Кәсіби даму", subsection: "Әдістемелік жұмыс", name: "ӘБ жетекшісі ретінде жұмыс", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Әдістемелік жұмыс", name: "Әдістемелік нұсқаулық әзірлеу", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Әдістемелік жұмыс", name: "ҚМЖ/ОМЖ үлгісін әзірлеп тарату", defaultPoints: 10 },
-  { section: "Кәсіби даму", subsection: "Әдістемелік жұмыс", name: "Пән бойынша тапсырмалар банкін жасау", defaultPoints: 20 },
+  // --- Сынып жетекшілігі / Тәрбие жұмысы ---
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сынып жетекшілігі",
+    name: "Сынып жетекшілік қызметі (бір оқу жылы)",
+    defaultPoints: 30,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Бұйрық + тәрбие жоспарының орындалуы"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сынып жетекшілігі",
+    name: "Ата-аналармен жүйелі жұмыс (жиналыс ≥4 рет)",
+    defaultPoints: 15,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Жиналыс хаттамалары"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сынып жетекшілігі",
+    name: "Оқушылар мен ата-аналардан қанағаттану ≥85%",
+    defaultPoints: 20,
+    category: "core",
+    maxPerYear: 1,
+    evidenceRequired: "Сауалнама нәтижелері"
+  },
+  {
+    section: "Негізгі оқыту жұмысы",
+    subsection: "Сынып жетекшілігі",
+    name: "Тәрбие шараларын ұйымдастыру (мектеп деңгейі)",
+    defaultPoints: 8,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Іс-шара жоспары + фотоесеп"
+  },
 
-  { section: "Кәсіби даму", subsection: "Менторлық", name: "Жас маманға тәлімгер болу (1 оқу жылы)", defaultPoints: 25 },
-  { section: "Кәсіби даму", subsection: "Менторлық", name: "Тәлімгерлік кездесу өткізу (1 рет)", defaultPoints: 5 },
-  { section: "Кәсіби даму", subsection: "Менторлық", name: "Сабаққа кері байланыс беру (тәлімгерлік)", defaultPoints: 5 },
-  { section: "Кәсіби даму", subsection: "Менторлық", name: "Менторлық жоспарын әзірлеу", defaultPoints: 10 },
+  // ════════════════════════════════════════════════════════════
+  // 2. ОҚУШЫ ЖЕТІСТІГІ — қосымша индикатор (баллдар азайтылды)
+  // ════════════════════════════════════════════════════════════
 
-  { section: "Кәсіби даму", subsection: "Зерттеу", name: "Lesson Study жүргізу (1 цикл)", defaultPoints: 25 },
-  { section: "Кәсіби даму", subsection: "Зерттеу", name: "Action Research жүргізу", defaultPoints: 25 },
-  { section: "Кәсіби даму", subsection: "Зерттеу", name: "Зерттеу нәтижесін мектепте таныстыру", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Зерттеу", name: "Зерттеу нәтижесін сыртқы алаңда таныстыру", defaultPoints: 25 },
+  // --- Пәндік олимпиадалар ---
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Халықаралық олимпиада жеңімпазы (алтын медаль)",
+    defaultPoints: 60,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Диплом + ресми хаттама"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Халықаралық олимпиада жеңімпазы (күміс медаль)",
+    defaultPoints: 45,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Диплом + ресми хаттама"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Халықаралық олимпиада жеңімпазы (қола медаль)",
+    defaultPoints: 35,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Диплом + ресми хаттама"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Республикалық олимпиада — I дәрежелі диплом",
+    defaultPoints: 30,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Республикалық олимпиада — II дәрежелі диплом",
+    defaultPoints: 22,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Республикалық олимпиада — III дәрежелі диплом",
+    defaultPoints: 18,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Облыстық олимпиада — I орын",
+    defaultPoints: 12,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Облыстық олимпиада — II–III орын",
+    defaultPoints: 8,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Пәндік олимпиадалар",
+    name: "Қашықтан / онлайн олимпиада жүлдегері",
+    defaultPoints: 2,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Сертификат"
+  },
 
-  { section: "Кәсіби даму", subsection: "Байқаулар", name: "Педагогикалық байқауға қатысу (мектепішілік)", defaultPoints: 10 },
-  { section: "Кәсіби даму", subsection: "Байқаулар", name: "Педагогикалық байқауға қатысу (аудандық)", defaultPoints: 15 },
-  { section: "Кәсіби даму", subsection: "Байқаулар", name: "Педагогикалық байқауға қатысу (облыстық)", defaultPoints: 20 },
-  { section: "Кәсіби даму", subsection: "Байқаулар", name: "Педагогикалық байқауға қатысу (республикалық)", defaultPoints: 25 },
-  { section: "Кәсіби даму", subsection: "Байқаулар", name: "Педагогикалық байқауда жүлделі орын (аудандық)", defaultPoints: 25 },
-  { section: "Кәсіби даму", subsection: "Байқаулар", name: "Педагогикалық байқауда жүлделі орын (облыстық)", defaultPoints: 35 },
-  { section: "Кәсіби даму", subsection: "Байқаулар", name: "Педагогикалық байқауда жүлделі орын (республикалық)", defaultPoints: 50 },
+  // --- Ғылыми жобалар ---
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Ғылыми жобалар",
+    name: "Халықаралық ғылыми жоба байқауының жеңімпазы",
+    defaultPoints: 40,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Диплом + жоба паспорты"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Ғылыми жобалар",
+    name: "Республикалық ғылыми жоба байқауының жеңімпазы",
+    defaultPoints: 25,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Диплом + жоба паспорты"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Ғылыми жобалар",
+    name: "Облыстық ғылыми жоба байқауының жеңімпазы",
+    defaultPoints: 12,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Диплом + жоба паспорты"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Ғылыми жобалар",
+    name: "Оқушының ғылыми мақаласын жариялау",
+    defaultPoints: 10,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Жарияланым көшірмесі"
+  },
 
-  // ===== ЖЕКЕ ДАМУ =====
-  { section: "Жеке даму", subsection: "Кітап оқу", name: "Кәсіби кітап оқу (1 кітап)", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Кітап оқу", name: "Педагогика/психология кітабын оқу", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Кітап оқу", name: "Оқыған кітап бойынша қысқаша шолу жазу", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Кітап оқу", name: "Кітап талқылау клубына қатысу", defaultPoints: 5 },
+  // --- Сыртқы бағалау ---
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Сыртқы бағалау",
+    name: "Cambridge IGCSE — A* / A нәтижесі",
+    defaultPoints: 15,
+    category: "additional",
+    maxPerYear: 10,
+    evidenceRequired: "Сертификат"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Сыртқы бағалау",
+    name: "A-Level — A* / A нәтижесі",
+    defaultPoints: 20,
+    category: "additional",
+    maxPerYear: 10,
+    evidenceRequired: "Сертификат"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Сыртқы бағалау",
+    name: "IELTS — 7.0+ нәтижесі",
+    defaultPoints: 18,
+    category: "additional",
+    maxPerYear: 10,
+    evidenceRequired: "Ресми нәтиже"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Сыртқы бағалау",
+    name: "IELTS — 6.0–6.5 нәтижесі",
+    defaultPoints: 10,
+    category: "additional",
+    maxPerYear: 10,
+    evidenceRequired: "Ресми нәтиже"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Сыртқы бағалау",
+    name: "SAT — 1400+ балл",
+    defaultPoints: 20,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Ресми нәтиже"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Сыртқы бағалау",
+    name: "ҰБТ — 120+ балл",
+    defaultPoints: 18,
+    category: "additional",
+    maxPerYear: 10,
+    evidenceRequired: "Ресми сертификат"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Сыртқы бағалау",
+    name: "ҰБТ — 100–119 балл",
+    defaultPoints: 10,
+    category: "additional",
+    maxPerYear: 10,
+    evidenceRequired: "Ресми сертификат"
+  },
 
-  { section: "Жеке даму", subsection: "Онлайн оқу", name: "Вебинарға қатысу (сертификатпен)", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Онлайн оқу", name: "Вебинарға қатысу (сертификатсыз)", defaultPoints: 3 },
-  { section: "Жеке даму", subsection: "Онлайн оқу", name: "MOOC курсынан модуль аяқтау", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Онлайн оқу", name: "Онлайн интенсив/марафон аяқтау", defaultPoints: 10 },
-  { section: "Жеке даму", subsection: "Онлайн оқу", name: "Подкаст/дәріс тыңдау (кәсіби)", defaultPoints: 2 },
+  // --- Шығармашылық және спорт ---
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Шығармашылық және спорт",
+    name: "Халықаралық байқау / жарыс жеңімпазы",
+    defaultPoints: 25,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Шығармашылық және спорт",
+    name: "Республикалық байқау / жарыс жеңімпазы",
+    defaultPoints: 15,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Шығармашылық және спорт",
+    name: "Облыстық байқау / жарыс жеңімпазы",
+    defaultPoints: 8,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Диплом"
+  },
 
-  { section: "Жеке даму", subsection: "Цифрлық дағды", name: "Цифрлық платформа меңгеру", defaultPoints: 10 },
-  { section: "Жеке даму", subsection: "Цифрлық дағды", name: "Жаңа EdTech құралын сабақта қолдану", defaultPoints: 10 },
-  { section: "Жеке даму", subsection: "Цифрлық дағды", name: "Google Workspace / Microsoft 365 жетілдіру", defaultPoints: 10 },
-  { section: "Жеке даму", subsection: "Цифрлық дағды", name: "Онлайн тест/викторина құралы меңгеру", defaultPoints: 8 },
-  { section: "Жеке даму", subsection: "Цифрлық дағды", name: "Бейнесабақ монтаждау дағдысын дамыту", defaultPoints: 10 },
-  { section: "Жеке даму", subsection: "Цифрлық дағды", name: "Презентация дизайнын жетілдіру", defaultPoints: 5 },
+  // --- Түлектердің жетістігі ---
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Түлектердің жетістігі",
+    name: "Шетелдегі үздік ЖОО-ға (QS Top-100) түсу",
+    defaultPoints: 30,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Қабылдау хаты"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Түлектердің жетістігі",
+    name: "«Болашақ» стипендиясын жеңіп алу",
+    defaultPoints: 25,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Стипендия туралы құжат"
+  },
+  {
+    section: "Оқушы жетістігі",
+    subsection: "Түлектердің жетістігі",
+    name: "ҚР үздік ЖОО-ларына мемлекеттік грантпен түсу",
+    defaultPoints: 12,
+    category: "additional",
+    maxPerYear: 10,
+    evidenceRequired: "Грант туралы құжат"
+  },
 
-  { section: "Жеке даму", subsection: "Тіл дамыту", name: "Қазақ тілі академиялық жазу дағдысын дамыту", defaultPoints: 10 },
-  { section: "Жеке даму", subsection: "Тіл дамыту", name: "Орыс тілі кәсіби коммуникация дағдысын дамыту", defaultPoints: 10 },
-  { section: "Жеке даму", subsection: "Тіл дамыту", name: "Ағылшын тілі курсына қатысу", defaultPoints: 15 },
-  { section: "Жеке даму", subsection: "Тіл дамыту", name: "Пәндік терминологияны үш тілде игеру", defaultPoints: 10 },
+  // ════════════════════════════════════════════════════════════
+  // 3. КӘСІБИ ДАМУ — баллдар біршама азайтылды
+  // ════════════════════════════════════════════════════════════
 
-  { section: "Жеке даму", subsection: "Soft skills", name: "Тайм-менеджмент дағдысын жетілдіру", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Soft skills", name: "Публичное выступление дағдысын дамыту", defaultPoints: 10 },
-  { section: "Жеке даму", subsection: "Soft skills", name: "Кері байланыс беру/алу мәдениетін дамыту", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Soft skills", name: "Командалық жұмыс дағдысын дамыту", defaultPoints: 5 },
+  // --- Біліктілікті арттыру ---
+  {
+    section: "Кәсіби даму",
+    subsection: "Біліктілікті арттыру",
+    name: "NIS біліктілікті арттыру курстарын аяқтау (72 сағат)",
+    defaultPoints: 12,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Сертификат"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Біліктілікті арттыру",
+    name: "Халықаралық сертификат (IELTS 7.0+, TOEFL 100+)",
+    defaultPoints: 25,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Ресми сертификат"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Біліктілікті арттыру",
+    name: "Cambridge / AQA / Pearson сертификаты",
+    defaultPoints: 20,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Ресми сертификат"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Біліктілікті арттыру",
+    name: "Педагог-сарапшы санатын алу",
+    defaultPoints: 15,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Куәлік"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Біліктілікті арттыру",
+    name: "Педагог-зерттеуші санатын алу",
+    defaultPoints: 22,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Куәлік"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Біліктілікті арттыру",
+    name: "Педагог-шебер санатын алу",
+    defaultPoints: 35,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Куәлік"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Біліктілікті арттыру",
+    name: "Магистр дәрежесін қорғау",
+    defaultPoints: 25,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Біліктілікті арттыру",
+    name: "PhD дәрежесін қорғау",
+    defaultPoints: 60,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Диплом"
+  },
 
-  { section: "Жеке даму", subsection: "Денсаулық", name: "Педагогтың эмоционалдық күйін қолдау тренингіне қатысу", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Денсаулық", name: "Стресс-менеджмент тренингі", defaultPoints: 5 },
-  { section: "Жеке даму", subsection: "Денсаулық", name: "Спорттық/сауықтыру шарасына қатысу", defaultPoints: 3 },
+  // --- Ғылыми-әдістемелік жұмыс ---
+  {
+    section: "Кәсіби даму",
+    subsection: "Ғылыми-әдістемелік жұмыс",
+    name: "Scopus / Web of Science журналдарында мақала",
+    defaultPoints: 35,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Жарияланым көшірмесі + DOI"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Ғылыми-әдістемелік жұмыс",
+    name: "ҚР БҒСБК ұсынған журналдарда мақала",
+    defaultPoints: 18,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Жарияланым көшірмесі"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Ғылыми-әдістемелік жұмыс",
+    name: "Республикалық әдістемелік басылымда мақала",
+    defaultPoints: 10,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Жарияланым көшірмесі"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Ғылыми-әдістемелік жұмыс",
+    name: "Авторлық оқу-әдістемелік кешен әзірлеу",
+    defaultPoints: 22,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Әдістемелік кеңес ұсынысы"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Ғылыми-әдістемелік жұмыс",
+    name: "Авторлық оқулық немесе монография шығару",
+    defaultPoints: 45,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Басылым көшірмесі"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Ғылыми-әдістемелік жұмыс",
+    name: "Авторлық бағдарлама әзірлеу және енгізу",
+    defaultPoints: 18,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Бағдарлама + сараптама"
+  },
 
-  // ===== ҚОСЫМША ДАМУ =====
-  { section: "Қосымша даму", subsection: "Марапаттар", name: "Грамота (мектепішілік)", defaultPoints: 5 },
-  { section: "Қосымша даму", subsection: "Марапаттар", name: "Грамота (аудандық)", defaultPoints: 10 },
-  { section: "Қосымша даму", subsection: "Марапаттар", name: "Грамота (облыстық)", defaultPoints: 15 },
-  { section: "Қосымша даму", subsection: "Марапаттар", name: "Грамота (республикалық)", defaultPoints: 20 },
-  { section: "Қосымша даму", subsection: "Марапаттар", name: "Алғыс хат (мектепішілік)", defaultPoints: 3 },
-  { section: "Қосымша даму", subsection: "Марапаттар", name: "Алғыс хат (аудандық/қалалық)", defaultPoints: 5 },
-  { section: "Қосымша даму", subsection: "Марапаттар", name: "Алғыс хат (облыстық)", defaultPoints: 10 },
-  { section: "Қосымша даму", subsection: "Марапаттар", name: "Құрмет грамотасы", defaultPoints: 20 },
+  // --- Тәжірибе алмасу ---
+  {
+    section: "Кәсіби даму",
+    subsection: "Тәжірибе алмасу",
+    name: "Халықаралық конференцияда баяндама",
+    defaultPoints: 22,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Сертификат + бағдарлама"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Тәжірибе алмасу",
+    name: "Республикалық конференцияда баяндама",
+    defaultPoints: 15,
+    category: "additional",
+    maxPerYear: 4,
+    evidenceRequired: "Сертификат + бағдарлама"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Тәжірибе алмасу",
+    name: "Облыстық / қалалық конференцияда баяндама",
+    defaultPoints: 8,
+    category: "additional",
+    maxPerYear: 4,
+    evidenceRequired: "Сертификат"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Тәжірибе алмасу",
+    name: "Республикалық деңгейдегі ашық сабақ",
+    defaultPoints: 15,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Бұйрық + бағалау парағы"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Тәжірибе алмасу",
+    name: "Облыстық деңгейдегі ашық сабақ",
+    defaultPoints: 10,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Бұйрық + бағалау парағы"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Тәжірибе алмасу",
+    name: "Мектепішілік ашық сабақ",
+    defaultPoints: 4,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Бағалау парағы"
+  },
+  {
+    section: "Кәсіби даму",
+    subsection: "Тәжірибе алмасу",
+    name: "Мастер-класс / тренинг өткізу",
+    defaultPoints: 7,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Бағдарлама + қатысушылар тізімі"
+  },
 
-  { section: "Қосымша даму", subsection: "Қоғамдық жұмыс", name: "Іс-шара ұйымдастыру", defaultPoints: 10 },
-  { section: "Қосымша даму", subsection: "Қоғамдық жұмыс", name: "Мектепішілік жобаға жетекшілік ету", defaultPoints: 15 },
-  { section: "Қосымша даму", subsection: "Қоғамдық жұмыс", name: "Аудандық іс-шараны ұйымдастыруға қатысу", defaultPoints: 20 },
-  { section: "Қосымша даму", subsection: "Қоғамдық жұмыс", name: "Қайырымдылық акциясына қатысу", defaultPoints: 5 },
-  { section: "Қосымша даму", subsection: "Қоғамдық жұмыс", name: "Волонтерлік қызмет (педагогикалық бағыт)", defaultPoints: 10 },
+  // ════════════════════════════════════════════════════════════
+  // 4. ЖЕКЕ ДАМУ — ең азғантай үлес
+  // ════════════════════════════════════════════════════════════
 
-  { section: "Қосымша даму", subsection: "Тәрбие жұмысы", name: "Сынып сағатын сапалы өткізу", defaultPoints: 5 },
-  { section: "Қосымша даму", subsection: "Тәрбие жұмысы", name: "Тәрбие жобасын әзірлеу", defaultPoints: 15 },
-  { section: "Қосымша даму", subsection: "Тәрбие жұмысы", name: "Мектеп мерекесіне сценарий жазу", defaultPoints: 10 },
-  { section: "Қосымша даму", subsection: "Тәрбие жұмысы", name: "Патриоттық/экологиялық акция ұйымдастыру", defaultPoints: 10 },
+  // --- Кәсіби құзыреттілік ---
+  {
+    section: "Жеке даму",
+    subsection: "Кәсіби құзыреттілік",
+    name: "Ағылшын тілін C1 деңгейінде меңгеру",
+    defaultPoints: 18,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Ресми сертификат"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Кәсіби құзыреттілік",
+    name: "Ағылшын тілін B2 деңгейінде меңгеру",
+    defaultPoints: 10,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Ресми сертификат"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Кәсіби құзыреттілік",
+    name: "Үшінші шет тілін меңгеру (B1+)",
+    defaultPoints: 10,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Ресми сертификат"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Кәсіби құзыреттілік",
+    name: "IT-құзыреттілік курстарын аяқтау",
+    defaultPoints: 7,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Сертификат"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Кәсіби құзыреттілік",
+    name: "Soft skills бойынша сертификатталған тренинг",
+    defaultPoints: 5,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Сертификат"
+  },
 
-  { section: "Қосымша даму", subsection: "Ата-анамен жұмыс", name: "Ата-аналар жиналысын жаңа форматта өткізу", defaultPoints: 10 },
-  { section: "Қосымша даму", subsection: "Ата-аналармен жұмыс", name: "Ата-аналарға тренинг/семинар өткізу", defaultPoints: 15 },
-  { section: "Қосымша даму", subsection: "Ата-аналармен жұмыс", name: "Ата-анамен жеке кеңес беру (жүйелі)", defaultPoints: 5 },
-  { section: "Қосымша даму", subsection: "Ата-аналармен жұмыс", name: "Отбасы мен мектеп серіктестігі жобасын іске асыру", defaultPoints: 20 },
+  // --- Тәлімгерлік ---
+  {
+    section: "Жеке даму",
+    subsection: "Тәлімгерлік",
+    name: "Жас маманға тәлімгерлік (бір оқу жылы)",
+    defaultPoints: 15,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Бұйрық + жас маман есебі"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Тәлімгерлік",
+    name: "Сертификатталған коуч / ментор",
+    defaultPoints: 20,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Сертификат"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Тәлімгерлік",
+    name: "Студент-практиканттарға жетекшілік",
+    defaultPoints: 6,
+    category: "additional",
+    maxPerYear: 3,
+    evidenceRequired: "Бұйрық + ЖОО хаты"
+  },
 
-  { section: "Қосымша даму", subsection: "Медиа", name: "Мектеп сайтына/желісіне материал жариялау", defaultPoints: 5 },
-  { section: "Қосымша даму", subsection: "Медиа", name: "Педагогикалық блог/парақша жүргізу", defaultPoints: 10 },
-  { section: "Қосымша даму", subsection: "Медиа", name: "БАҚ-та мақала/сұхбат жариялануы", defaultPoints: 15 },
-  { section: "Қосымша даму", subsection: "Медиа", name: "Оқу-тәрбие контентін тұрақты жариялау (айлық)", defaultPoints: 10 },
+  // --- Қоғамдық белсенділік ---
+  {
+    section: "Жеке даму",
+    subsection: "Қоғамдық белсенділік",
+    name: "Кәсіби қауымдастық / қазылар алқасына мүшелік",
+    defaultPoints: 10,
+    category: "additional",
+    maxPerYear: 2,
+    evidenceRequired: "Куәлік / бұйрық"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Қоғамдық белсенділік",
+    name: "БАҚ-та кәсіби тақырыпта мақала / сұхбат",
+    defaultPoints: 6,
+    category: "additional",
+    maxPerYear: 5,
+    evidenceRequired: "Жарияланым сілтемесі"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Қоғамдық белсенділік",
+    name: "«Үздік педагог» байқауының жеңімпазы",
+    defaultPoints: 35,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Диплом"
+  },
+  {
+    section: "Жеке даму",
+    subsection: "Қоғамдық белсенділік",
+    name: "Мемлекеттік / салалық наградамен марапатталу",
+    defaultPoints: 30,
+    category: "additional",
+    maxPerYear: 1,
+    evidenceRequired: "Куәлік"
+  }
 
-  // ===== ИННОВАЦИЯЛАР =====
-  { section: "Инновациялар", subsection: "Жаңа әдіс", name: "Жаңа сабақ әдісін енгізу", defaultPoints: 20 },
-  { section: "Инновациялар", subsection: "Жаңа әдіс", name: "Белсенді оқыту әдісін жүйелі қолдану", defaultPoints: 15 },
-  { section: "Инновациялар", subsection: "Жаңа әдіс", name: "Саралап оқыту тәсілін енгізу", defaultPoints: 20 },
-  { section: "Инновациялар", subsection: "Жаңа әдіс", name: "Жобалық оқыту (PBL) элементтерін енгізу", defaultPoints: 20 },
-  { section: "Инновациялар", subsection: "Жаңа әдіс", name: "STEM элементтерін сабаққа енгізу", defaultPoints: 20 },
-  { section: "Инновациялар", subsection: "Жаңа әдіс", name: "Геймификация элементін енгізу", defaultPoints: 15 },
-  { section: "Инновациялар", subsection: "Жаңа әдіс", name: "Флиппед класс тәсілін қолдану", defaultPoints: 20 },
-
-  { section: "Инновациялар", subsection: "Творчество", name: "Шығармашылық жоба жасау", defaultPoints: 25 },
-  { section: "Инновациялар", subsection: "Творчество", name: "Авторлық тапсырмалар жинағын құрастыру", defaultPoints: 25 },
-  { section: "Инновациялар", subsection: "Творчество", name: "Авторлық жұмыс дәптерін әзірлеу", defaultPoints: 25 },
-  { section: "Инновациялар", subsection: "Творчество", name: "Пән бойынша ойын/квест құрастыру", defaultPoints: 20 },
-  { section: "Инновациялар", subsection: "Творчество", name: "Бейнесабақ / mini-course жасау", defaultPoints: 20 },
-
-  { section: "Инновациялар", subsection: "Цифрландыру", name: "Сандық оқу материалын әзірлеу", defaultPoints: 15 },
-  { section: "Инновациялар", subsection: "Цифрландыру", name: "Интерактивті презентация/симуляция жасау", defaultPoints: 15 },
-  { section: "Инновациялар", subsection: "Цифрландыру", name: "Онлайн курс беті/платформа құрылымдау", defaultPoints: 20 },
-  { section: "Инновациялар", subsection: "Цифрландыру", name: "Электронды бағалау жүйесін тиімді қолдану", defaultPoints: 10 },
-
-  { section: "Инновациялар", subsection: "Бағалау", name: "Қалыптастырушы бағалау құралдарын жаңарту", defaultPoints: 15 },
-  { section: "Инновациялар", subsection: "Бағалау", name: "Рубрика/дескрипторлардың авторлық үлгісін жасау", defaultPoints: 20 },
-  { section: "Инновациялар", subsection: "Бағалау", name: "Деректерге негізделген талдау жүргізу (сынып нәтижесі)", defaultPoints: 20 },
-
-  { section: "Инновациялар", subsection: "AI / EdTech", name: "AI құралын сабақ жоспарлауда қолдану", defaultPoints: 10 },
-  { section: "Инновациялар", subsection: "AI / EdTech", name: "AI құралын тапсырма саралауда қолдану", defaultPoints: 15 },
-  { section: "Инновациялар", subsection: "AI / EdTech", name: "AI құралын кері байланыс дайындауда қолдану", defaultPoints: 10 },
-  { section: "Инновациялар", subsection: "AI / EdTech", name: "AI қолдану бойынша әріптестерге шеберлік сағаты", defaultPoints: 20 },
-
-  // ===== ОҚУШЫ ЖЕТІСТІГІ (қосымша пайдалы бөлім) =====
-  { section: "Оқушы жетістігі", subsection: "Олимпиада", name: "Оқушыны олимпиадаға дайындау (қатысу, мектепішілік)", defaultPoints: 10 },
-  { section: "Оқушы жетістігі", subsection: "Олимпиада", name: "Оқушыны олимпиадаға дайындау (аудандық қатысу)", defaultPoints: 15 },
-  { section: "Оқушы жетістігі", subsection: "Олимпиада", name: "Оқушы жүлдесі (аудандық олимпиада)", defaultPoints: 25 },
-  { section: "Оқушы жетістігі", subsection: "Олимпиада", name: "Оқушы жүлдесі (облыстық олимпиада)", defaultPoints: 35 },
-  { section: "Оқушы жетістігі", subsection: "Олимпиада", name: "Оқушы жүлдесі (республикалық олимпиада)", defaultPoints: 50 },
-
-  { section: "Оқушы жетістігі", subsection: "Байқаулар", name: "Оқушыны ғылыми жобаға дайындау (қатысу)", defaultPoints: 15 },
-  { section: "Оқушы жетістігі", subsection: "Байқаулар", name: "Оқушы жүлдесі (ғылыми жоба, аудандық)", defaultPoints: 25 },
-  { section: "Оқушы жетістігі", subsection: "Байқаулар", name: "Оқушы жүлдесі (ғылыми жоба, облыстық)", defaultPoints: 35 },
-  { section: "Оқушы жетістігі", subsection: "Байқаулар", name: "Оқушы жүлдесі (ғылыми жоба, республикалық)", defaultPoints: 50 },
-  { section: "Оқушы жетістігі", subsection: "Байқаулар", name: "Оқушыны шығармашылық/спорттық байқауға дайындау", defaultPoints: 10 },
-
-  { section: "Оқушы жетістігі", subsection: "Нәтиже", name: "Сыныптың оқу сапасының өсуі", defaultPoints: 20 },
-  { section: "Оқушы жетістігі", subsection: "Нәтиже", name: "Үлгерімі төмен оқушымен нәтижелі жұмыс", defaultPoints: 15 },
-  { section: "Оқушы жетістігі", subsection: "Нәтиже", name: "Дарынды оқушымен жеке жоспар бойынша жұмыс", defaultPoints: 15 },
-
-  // ===== ЖАРИЯЛАНЫМ / АВТОРЛЫҚ МАТЕРИАЛ =====
-  { section: "Жарияланым", subsection: "Мақалалар", name: "Мектеп деңгейінде мақала жариялау", defaultPoints: 10 },
-  { section: "Жарияланым", subsection: "Мақалалар", name: "Аудандық басылымда мақала жариялау", defaultPoints: 15 },
-  { section: "Жарияланым", subsection: "Мақалалар", name: "Облыстық басылымда мақала жариялау", defaultPoints: 20 },
-  { section: "Жарияланым", subsection: "Мақалалар", name: "Республикалық басылымда мақала жариялау", defaultPoints: 30 },
-  { section: "Жарияланым", subsection: "Мақалалар", name: "Халықаралық жинақта мақала жариялау", defaultPoints: 40 },
-
-  { section: "Жарияланым", subsection: "Авторлық материал", name: "Авторлық бағдарлама әзірлеу", defaultPoints: 30 },
-  { section: "Жарияланым", subsection: "Авторлық материал", name: "Факультатив/электив курс бағдарламасын жасау", defaultPoints: 25 },
-  { section: "Жарияланым", subsection: "Авторлық материал", name: "Әдістемелік құрал шығару", defaultPoints: 35 },
-  { section: "Жарияланым", subsection: "Авторлық материал", name: "Электронды ресурс / сайтша әзірлеу", defaultPoints: 25 }
 ].map(x => ({ ...x, active: true }));
 
 

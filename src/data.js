@@ -8,7 +8,7 @@ import {
 } from "./firebase-config.js";
 import { store, setState } from "./store.js";
 import { safeText, tsKey, ymd, dateRangeDays, REQUEST_KINDS } from "./utils.js";
-import { NEWS_CATEGORIES } from "./constants.js";
+import { NEWS_CATEGORIES, DEFAULT_TYPES } from "./constants.js";
 
 export function renderRichDesc(text) {
   if (!text) return null;
@@ -104,6 +104,30 @@ export async function seedDefaultTypes() {
   const missing = DEFAULT_TYPES.filter(t => !have.has(key(t)));
   for (const t of missing) await addDoc(collection(db, "types"), t);
   return { added: missing.length };
+}
+
+export async function syncDefaultTypes() {
+  const existing = await fetchTypesAll();
+  let deleted = 0;
+  for (const e of existing) {
+    await deleteDoc(doc(db, "types", e.id));
+    deleted++;
+  }
+  let added = 0;
+  for (const def of DEFAULT_TYPES) {
+    await addDoc(collection(db, "types"), {
+      section: def.section,
+      subsection: def.subsection,
+      name: def.name,
+      defaultPoints: Number(def.defaultPoints) || 0,
+      category: def.category || null,
+      maxPerYear: def.maxPerYear ?? null,
+      evidenceRequired: def.evidenceRequired || null,
+      active: true
+    });
+    added++;
+  }
+  return { deleted, added, total: DEFAULT_TYPES.length };
 }
 export async function addType(p) {
   await addDoc(collection(db, "types"), {
