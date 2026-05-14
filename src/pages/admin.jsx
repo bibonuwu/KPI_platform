@@ -138,9 +138,9 @@ export function PageAdminApprovals() {
       arr = arr.filter(s => {
         const tu = usersMap.get(s.uid);
         return (tu?.displayName || "").toLowerCase().includes(q) ||
-               (tu?.email || "").toLowerCase().includes(q) ||
-               (s.typeName || "").toLowerCase().includes(q) ||
-               (s.title || "").toLowerCase().includes(q);
+          (tu?.email || "").toLowerCase().includes(q) ||
+          (s.typeName || "").toLowerCase().includes(q) ||
+          (s.title || "").toLowerCase().includes(q);
       });
     }
     if (typeFilter !== "all") arr = arr.filter(s => s.typeName === typeFilter);
@@ -1147,10 +1147,10 @@ export function PageDocuments() {
       <div className="tdoc">
         {/* Stat cards */}
         <div className="treq-stats">
-          <TDocStat kind="pending"  icon="clock"      num={unsignedCount}  label={t("tabToSign")}    di={0} />
-          <TDocStat kind="balance"  icon="file"       num={docs.length}    label={t("navDocuments")} di={1} />
-          <TDocStat kind="approved" icon="check"      num={signedCount}    label={t("statusSigned")} di={2} />
-          <TDocStat kind="total"    icon="plus"       num={myTDocs.length} label={t("tabMyDocs")}    di={3} />
+          <TDocStat kind="pending" icon="clock" num={unsignedCount} label={t("tabToSign")} di={0} />
+          <TDocStat kind="balance" icon="file" num={docs.length} label={t("navDocuments")} di={1} />
+          <TDocStat kind="approved" icon="check" num={signedCount} label={t("statusSigned")} di={2} />
+          <TDocStat kind="total" icon="plus" num={myTDocs.length} label={t("tabMyDocs")} di={3} />
         </div>
 
         {/* Tabs */}
@@ -1179,8 +1179,8 @@ export function PageDocuments() {
             ) : (
               docs.map((d, idx) => {
                 const dateStr = d.createdAt ? new Date(d.createdAt.seconds * 1000).toLocaleDateString("ru-RU") : "—";
-                const isSigned  = d.status === "signed";
-                const isViewed  = d.status === "viewed";
+                const isSigned = d.status === "signed";
+                const isViewed = d.status === "viewed";
                 const statusKey = isSigned ? "signed" : isViewed ? "viewed" : "new";
                 const palette = isSigned
                   ? { c: "#34d399", c2: "#10b981" }
@@ -2403,139 +2403,139 @@ export function PageAdminUsers() {
 
       {/* ===== Users layout ===== */}
       {usersTab === "users" && <div>
-          {/* Filters */}
-          <div className="glass card" style={{ marginBottom: 16, overflow: "visible", zIndex: 10 }}>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <Input value={q} onChange={e => setQ(e.target.value)} placeholder={t("searchPlaceholder")} />
-              </div>
-              <Btn onClick={async () => { const users = await fetchUsersAll(); setState({ users }); toast(t("updated"), "ok"); }} style={{ flexShrink: 0 }}><Icon name="refresh" /></Btn>
+        {/* Filters */}
+        <div className="glass card" style={{ marginBottom: 16, overflow: "visible", zIndex: 10 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <Input value={q} onChange={e => setQ(e.target.value)} placeholder={t("searchPlaceholder")} />
             </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <Btn kind={groupFilter === "" ? "primary" : "ghost"} onClick={() => { setGroupFilter(""); setPosFilter(""); }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 8 }}>
-                {t("allStaff")} ({allUsrs.length})
-              </Btn>
-              {STAFF_GROUPS.map(g => (
-                <Btn key={g.key} kind={groupFilter === g.key ? "primary" : "ghost"} onClick={() => { setGroupFilter(groupFilter === g.key ? "" : g.key); setPosFilter(""); }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 8 }}>
-                  {g.label} ({groupCounts[g.key] || 0})
-                </Btn>
-              ))}
-            </div>
-            {uniquePositions.length > 0 && (
-              <div style={{ marginTop: 10, position: "relative" }} ref={posDdRef}>
-                <button type="button" className="input pos-dd-toggle" onClick={() => setPosDdOpen(!posDdOpen)}>
-                  <span className="pos-dd-text">{posFilter ? `${posFilter} (${posCounts[posFilter] || 0})` : `${t("allStaff")} (${afterGroupFilter.length})`}</span>
-                  <span className="pos-dd-arrow">{posDdOpen ? "\u25B2" : "\u25BC"}</span>
-                </button>
-                {posDdOpen && (
-                  <div className="pos-dd-menu">
-                    <div className={"pos-dd-item" + (!posFilter ? " active" : "")} onClick={() => { setPosFilter(""); setPosDdOpen(false); }}>
-                      {t("allStaff")} ({afterGroupFilter.length})
-                    </div>
-                    {STAFF_GROUPS.map(g => {
-                      const gPositions = uniquePositions.filter(p => {
-                        const pg = POSITION_GROUP_MAP[p.toLowerCase()];
-                        return pg ? pg === g.key : g.key === "teacher";
-                      });
-                      if (!gPositions.length) return null;
-                      return (
-                        <React.Fragment key={g.key}>
-                          <div className="pos-dd-group">{g.label} ({gPositions.reduce((s, p) => s + (posCounts[p] || 0), 0)})</div>
-                          {gPositions.map(p => (
-                            <div key={p} className={"pos-dd-item" + (posFilter === p ? " active" : "")} onClick={() => { setPosFilter(p); setPosDdOpen(false); }}>
-                              {p} ({posCounts[p] || 0})
-                            </div>
-                          ))}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+            <Btn onClick={async () => { const users = await fetchUsersAll(); setState({ users }); toast(t("updated"), "ok"); }} style={{ flexShrink: 0 }}><Icon name="refresh" /></Btn>
           </div>
-
-          {/* Employee table (Excel-style) */}
-          {!filtered.length && <div className="glass card"><p className="p muted" style={{ padding: "12px 0", textAlign: "center" }}>{t("noResults")}</p></div>}
-
-          {filtered.length > 0 && (
-            <div className="excel-table-wrap glass">
-              <table className="excel-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 44 }}>#</th>
-                    {[
-                      { key: "name", label: t("colName") },
-                      { key: "email", label: t("colEmail") },
-                      { key: "position", label: t("colPosition") },
-                      { key: "role", label: t("colRole") },
-                      { key: "points", label: t("colPoints"), style: { width: 80, textAlign: "right" } },
-                    ].map(col => (
-                      <th key={col.key} className="excel-th-sort" style={col.style || {}} onClick={() => toggleSort(col.key)}>
-                        <span>{col.label}</span>
-                        <span className="excel-sort-icon">{sortCol === col.key ? (sortDir === "asc" ? "\u25B2" : "\u25BC") : "\u25B4\u25BE"}</span>
-                      </th>
-                    ))}
-                    <th style={{ width: 120, textAlign: "center" }}>{t("colActions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((x, idx) => {
-                    const grp = getStaffGroup(x.email, x.position);
-                    const grpColor = grp === "admin" ? "#6366f1" : grp === "support" ? "#06b6d4" : "var(--accent)";
-                    const isSel = selectedUid === x.uid;
-                    const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <Btn kind={groupFilter === "" ? "primary" : "ghost"} onClick={() => { setGroupFilter(""); setPosFilter(""); }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 8 }}>
+              {t("allStaff")} ({allUsrs.length})
+            </Btn>
+            {STAFF_GROUPS.map(g => (
+              <Btn key={g.key} kind={groupFilter === g.key ? "primary" : "ghost"} onClick={() => { setGroupFilter(groupFilter === g.key ? "" : g.key); setPosFilter(""); }} style={{ fontSize: 12, padding: "5px 14px", borderRadius: 8 }}>
+                {g.label} ({groupCounts[g.key] || 0})
+              </Btn>
+            ))}
+          </div>
+          {uniquePositions.length > 0 && (
+            <div style={{ marginTop: 10, position: "relative" }} ref={posDdRef}>
+              <button type="button" className="input pos-dd-toggle" onClick={() => setPosDdOpen(!posDdOpen)}>
+                <span className="pos-dd-text">{posFilter ? `${posFilter} (${posCounts[posFilter] || 0})` : `${t("allStaff")} (${afterGroupFilter.length})`}</span>
+                <span className="pos-dd-arrow">{posDdOpen ? "\u25B2" : "\u25BC"}</span>
+              </button>
+              {posDdOpen && (
+                <div className="pos-dd-menu">
+                  <div className={"pos-dd-item" + (!posFilter ? " active" : "")} onClick={() => { setPosFilter(""); setPosDdOpen(false); }}>
+                    {t("allStaff")} ({afterGroupFilter.length})
+                  </div>
+                  {STAFF_GROUPS.map(g => {
+                    const gPositions = uniquePositions.filter(p => {
+                      const pg = POSITION_GROUP_MAP[p.toLowerCase()];
+                      return pg ? pg === g.key : g.key === "teacher";
+                    });
+                    if (!gPositions.length) return null;
                     return (
-                      <tr key={x.uid} className={isSel ? "excel-row-selected" : ""} style={{ borderLeft: `3px solid ${grpColor}` }}>
-                        <td className="excel-cell-num">{idx + 1}</td>
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            {x.avatarUrl ? (
-                              <img src={x.avatarUrl} alt="" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
-                            ) : (
-                              <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${grpColor}18`, color: grpColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{initials}</div>
-                            )}
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                {x.online && <span className="online-dot" />}
-                                <b style={{ fontSize: 13 }}>{x.displayName || "\u2014"}</b>
-                              </div>
-                            </div>
+                      <React.Fragment key={g.key}>
+                        <div className="pos-dd-group">{g.label} ({gPositions.reduce((s, p) => s + (posCounts[p] || 0), 0)})</div>
+                        {gPositions.map(p => (
+                          <div key={p} className={"pos-dd-item" + (posFilter === p ? " active" : "")} onClick={() => { setPosFilter(p); setPosDdOpen(false); }}>
+                            {p} ({posCounts[p] || 0})
                           </div>
-                        </td>
-                        <td><span className="muted" style={{ fontSize: 12 }}>{x.email}</span></td>
-                        <td>
-                          {x.position ? (
-                            <span className="excel-pos-pill" style={{ background: `${grpColor}12`, color: grpColor, borderColor: `${grpColor}30` }}>{x.position}</span>
-                          ) : <span className="muted" style={{ fontSize: 12 }}>{"\u2014"}</span>}
-                        </td>
-                        <td><Pill kind={x.role === "admin" ? "pending" : "approved"} style={{ fontSize: 11 }}>{x.role}</Pill></td>
-                        <td style={{ textAlign: "right", fontWeight: 700, color: "var(--accent)", fontSize: 14 }}>{fmtPoints(x.totalPoints)}</td>
-                        <td>
-                          <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                            <button className="excel-action-btn" title={x.role === "admin" ? "\u2192 teacher" : "\u2192 admin"} onClick={() => setConfirmRole({ uid: x.uid, newRole: x.role === "admin" ? "teacher" : "admin" })} disabled={st.loading}>
-                              <Icon name="refresh" />
-                            </button>
-                            <button className={`excel-action-btn${isSel ? " active" : ""}`} title={t("position")} onClick={() => setSelectedUid(isSel ? null : x.uid)}>
-                              <Icon name="briefcase" />
-                            </button>
-                            <button className="excel-action-btn" title={t("profileBtn")} onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })}>
-                              <Icon name="user" />
-                            </button>
-                            {x.uid !== u.uid && (
-                              <button className="excel-action-btn excel-action-del" title={t("delete")} onClick={() => setConfirmDelete(x.uid || x.id)}>
-                                <Icon name="x" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                        ))}
+                      </React.Fragment>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
           )}
+        </div>
+
+        {/* Employee table (Excel-style) */}
+        {!filtered.length && <div className="glass card"><p className="p muted" style={{ padding: "12px 0", textAlign: "center" }}>{t("noResults")}</p></div>}
+
+        {filtered.length > 0 && (
+          <div className="excel-table-wrap glass">
+            <table className="excel-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 44 }}>#</th>
+                  {[
+                    { key: "name", label: t("colName") },
+                    { key: "email", label: t("colEmail") },
+                    { key: "position", label: t("colPosition") },
+                    { key: "role", label: t("colRole") },
+                    { key: "points", label: t("colPoints"), style: { width: 80, textAlign: "right" } },
+                  ].map(col => (
+                    <th key={col.key} className="excel-th-sort" style={col.style || {}} onClick={() => toggleSort(col.key)}>
+                      <span>{col.label}</span>
+                      <span className="excel-sort-icon">{sortCol === col.key ? (sortDir === "asc" ? "\u25B2" : "\u25BC") : "\u25B4\u25BE"}</span>
+                    </th>
+                  ))}
+                  <th style={{ width: 120, textAlign: "center" }}>{t("colActions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((x, idx) => {
+                  const grp = getStaffGroup(x.email, x.position);
+                  const grpColor = grp === "admin" ? "#6366f1" : grp === "support" ? "#06b6d4" : "var(--accent)";
+                  const isSel = selectedUid === x.uid;
+                  const initials = (x.displayName || x.email || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <tr key={x.uid} className={isSel ? "excel-row-selected" : ""} style={{ borderLeft: `3px solid ${grpColor}` }}>
+                      <td className="excel-cell-num">{idx + 1}</td>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {x.avatarUrl ? (
+                            <img src={x.avatarUrl} alt="" style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                          ) : (
+                            <div style={{ width: 30, height: 30, borderRadius: "50%", background: `${grpColor}18`, color: grpColor, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 11, flexShrink: 0 }}>{initials}</div>
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              {x.online && <span className="online-dot" />}
+                              <b style={{ fontSize: 13 }}>{x.displayName || "\u2014"}</b>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span className="muted" style={{ fontSize: 12 }}>{x.email}</span></td>
+                      <td>
+                        {x.position ? (
+                          <span className="excel-pos-pill" style={{ background: `${grpColor}12`, color: grpColor, borderColor: `${grpColor}30` }}>{x.position}</span>
+                        ) : <span className="muted" style={{ fontSize: 12 }}>{"\u2014"}</span>}
+                      </td>
+                      <td><Pill kind={x.role === "admin" ? "pending" : "approved"} style={{ fontSize: 11 }}>{x.role}</Pill></td>
+                      <td style={{ textAlign: "right", fontWeight: 700, color: "var(--accent)", fontSize: 14 }}>{fmtPoints(x.totalPoints)}</td>
+                      <td>
+                        <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                          <button className="excel-action-btn" title={x.role === "admin" ? "\u2192 teacher" : "\u2192 admin"} onClick={() => setConfirmRole({ uid: x.uid, newRole: x.role === "admin" ? "teacher" : "admin" })} disabled={st.loading}>
+                            <Icon name="refresh" />
+                          </button>
+                          <button className={`excel-action-btn${isSel ? " active" : ""}`} title={t("position")} onClick={() => setSelectedUid(isSel ? null : x.uid)}>
+                            <Icon name="briefcase" />
+                          </button>
+                          <button className="excel-action-btn" title={t("profileBtn")} onClick={() => navigate("admin/teacher", { uid: (x.uid || x.id) })}>
+                            <Icon name="user" />
+                          </button>
+                          {x.uid !== u.uid && (
+                            <button className="excel-action-btn excel-action-del" title={t("delete")} onClick={() => setConfirmDelete(x.uid || x.id)}>
+                              <Icon name="x" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>}
 
       {/* ===== History tab ===== */}
@@ -3166,7 +3166,7 @@ const EVENT_COLORS = [
 function _evDaysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
 function _evStartDow(y, m) { const d = new Date(y, m, 1).getDay(); return d === 0 ? 6 : d - 1; }
 function _evYmd(date) {
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 function _evGetWeekDates(baseDate) {
   const d = new Date(baseDate);
@@ -3329,8 +3329,8 @@ export function PageAdminEvents() {
     setWeekBase(d);
   };
 
-  const miniPrev = () => { if (miniMonth === 0) { setMiniMonth(11); setMiniYear(y => y-1); } else setMiniMonth(m => m-1); };
-  const miniNext = () => { if (miniMonth === 11) { setMiniMonth(0); setMiniYear(y => y+1); } else setMiniMonth(m => m+1); };
+  const miniPrev = () => { if (miniMonth === 0) { setMiniMonth(11); setMiniYear(y => y - 1); } else setMiniMonth(m => m - 1); };
+  const miniNext = () => { if (miniMonth === 11) { setMiniMonth(0); setMiniYear(y => y + 1); } else setMiniMonth(m => m + 1); };
 
   return (
     <div className="aev-page">
@@ -3352,7 +3352,7 @@ export function PageAdminEvents() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <h2 className="h2">{editId ? t("eventEdit") : t("eventNew")}</h2>
             <button className="cal-nav-btn" onClick={resetForm}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             </button>
           </div>
 
@@ -3422,24 +3422,24 @@ export function PageAdminEvents() {
           <div className="aev-mini glass slide-up">
             <div className="aev-mini__head">
               <button className="cal-nav-btn" onClick={miniPrev} style={{ width: 28, height: 28 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
               <span className="aev-mini__title">
-                {Array.isArray(monthNames) ? monthNames[miniMonth] : (miniMonth+1)} <span className="muted">{miniYear}</span>
+                {Array.isArray(monthNames) ? monthNames[miniMonth] : (miniMonth + 1)} <span className="muted">{miniYear}</span>
               </span>
               <button className="cal-nav-btn" onClick={miniNext} style={{ width: 28, height: 28 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             </div>
             <div className="aev-mini__grid aev-mini__wdays">
-              {(Array.isArray(weekDaysShort) ? weekDaysShort : ["Mo","Tu","We","Th","Fr","Sa","Su"]).map(d => (
+              {(Array.isArray(weekDaysShort) ? weekDaysShort : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]).map(d => (
                 <div key={d} className="aev-mini__wday">{d}</div>
               ))}
             </div>
             <div className="aev-mini__grid">
               {miniCells.map((day, i) => {
                 if (day === null) return <div key={`e${i}`} />;
-                const ds = `${miniYear}-${String(miniMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                const ds = `${miniYear}-${String(miniMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                 const isToday = ds === todayStr;
                 const hasEv = (evMap[ds] || []).length > 0;
                 const inWeek = ds >= weekStart && ds <= weekEnd;
@@ -3503,18 +3503,18 @@ export function PageAdminEvents() {
           <div className="aev-toolbar glass">
             <div className="aev-toolbar__nav">
               <button className="cal-nav-btn" onClick={prevWeek}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
               <Btn kind="ghost" size="sm" onClick={goThisWeek}>{t("calendarToday")}</Btn>
               <button className="cal-nav-btn" onClick={nextWeek}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             </div>
             <div className="aev-toolbar__period">
               {Array.isArray(monthNames) ? monthNames[weekDates[0].getMonth()] : ""} {weekDates[0].getDate()} – {weekDates[6].getDate()}, {weekDates[0].getFullYear()}
             </div>
             <div className="aev-toolbar__views">
-              {["week","month","list"].map(v => (
+              {["week", "month", "list"].map(v => (
                 <button key={v} className={`aev-view-btn${view === v ? " aev-view-btn--active" : ""}`}
                   onClick={() => setView(v)}>
                   {t(v + "View")}
@@ -3587,14 +3587,14 @@ export function PageAdminEvents() {
           {!loading && view === "month" && (
             <div className="aev-month glass slide-up">
               <div className="cal-grid cal-weekdays">
-                {(Array.isArray(weekDaysShort) ? weekDaysShort : ["Mo","Tu","We","Th","Fr","Sa","Su"]).map(d => (
+                {(Array.isArray(weekDaysShort) ? weekDaysShort : ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]).map(d => (
                   <div key={d} className="cal-wday">{d}</div>
                 ))}
               </div>
               <div className="cal-grid cal-days">
                 {miniCells.map((day, i) => {
                   if (day === null) return <div key={`e${i}`} className="cal-cell cal-cell--empty" />;
-                  const ds = `${miniYear}-${String(miniMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+                  const ds = `${miniYear}-${String(miniMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                   const dayEv = evMap[ds] || [];
                   const isToday = ds === todayStr;
                   return (

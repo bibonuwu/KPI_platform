@@ -29,7 +29,7 @@ import {
 } from "../data.js";
 import {
   Icon, Btn, Input, Select, Textarea, Pill, DataCards, QuarterFilter,
-  GoalsWidget, LoadingScreen, BarChart, LineChart, AreaLineChart,
+  GoalsWidget, LoadingScreen, BarChart, PointsDynamicsChart,
   DonutChart, RadarChart, GaugeChart, StackedBarChart, HistogramChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
   FileDrop, ErrorBoundary, Guard, TeammatesPicker
@@ -2412,6 +2412,72 @@ export function PageRating() {
 
 
 
+function fmtTpl(s, vars) {
+  let out = String(s || "");
+  for (const k in vars) out = out.split(`{${k}}`).join(vars[k]);
+  return out;
+}
+
+function StatsHero({ icon, title, sub, value, trail, accent }) {
+  const tilt = useWowTilt(6);
+  return (
+    <div
+      ref={tilt.ref}
+      onMouseMove={tilt.onMouseMove}
+      onMouseLeave={tilt.onMouseLeave}
+      className="stats-hero"
+      style={{ "--accent-h": accent }}
+    >
+      <span className="stats-hero__glow" aria-hidden="true" />
+      <span className="stats-hero__spot" aria-hidden="true" />
+      <div className="stats-hero__icon" aria-hidden="true">{icon}</div>
+      <div className="stats-hero__body">
+        <div className="stats-hero__sub">{sub}</div>
+        <div className="stats-hero__value">{value}</div>
+        <div className="stats-hero__title">{title}</div>
+        {trail ? <div className="stats-hero__trail">{trail}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function StatMini({ label, value, hint, accent = "#87bc2e" }) {
+  const tilt = useWowTilt(3);
+  return (
+    <div
+      ref={tilt.ref}
+      onMouseMove={tilt.onMouseMove}
+      onMouseLeave={tilt.onMouseLeave}
+      className="stat-mini"
+      style={{ "--stat-color": accent }}
+    >
+      <span className="stat-mini__spot" aria-hidden="true" />
+      <div className="stat-mini__label">{label}</div>
+      <div className="stat-mini__value">{value}</div>
+      {hint ? <div className="stat-mini__hint">{hint}</div> : null}
+    </div>
+  );
+}
+
+function InsightCard({ kind = "tip", icon, title, body }) {
+  const tilt = useWowTilt(4);
+  return (
+    <div
+      ref={tilt.ref}
+      onMouseMove={tilt.onMouseMove}
+      onMouseLeave={tilt.onMouseLeave}
+      className={`insight insight--${kind}`}
+    >
+      <span className="insight__spot" aria-hidden="true" />
+      <div className="insight__icon" aria-hidden="true">{icon}</div>
+      <div className="insight__body">
+        <div className="insight__title">{title}</div>
+        <div className="insight__text">{body}</div>
+      </div>
+    </div>
+  );
+}
+
 export function PageStats() {
   const st = useStore();
   const u = st.userDoc;
@@ -2455,7 +2521,7 @@ export function PageStats() {
   const qf = st.quarterFilter || "all";
 
   const Controls = () => (
-    <div className="stats-controls">
+    <div className="stats-controls stats-controls--clean">
       {u.role === "teacher" ? (
         <div className="stats-controls__group">
           <Btn kind={view === "mine" ? "primary" : ""} onClick={() => setState({ statsView: "mine" })}><Icon name="user" /> {t("mine")}</Btn>
@@ -2508,7 +2574,6 @@ export function PageStats() {
     const totalPts = sum(approved, s => s.points);
     const bySeries = bins.map(b => seriesPoints(approved, b));
 
-    // Trend calculation
     const recentPts = sum(approved.filter(s => {
       const k = (s.eventDate || "").slice(0, 7);
       return recentBins.has(k);
@@ -2534,60 +2599,171 @@ export function PageStats() {
     const topSections = Array.from(sectionMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const totalForPie = sum(topSections, x => x[1]) || 1;
 
-    // For gauge: use user's active goal or default 200
     const allTimeTotal = Number(u.totalPoints) || 0;
     const activeGoal = (st.myGoals || []).find(g => !g.completed);
     const GOAL = activeGoal ? Number(activeGoal.targetPoints) || 200 : 200;
 
+    const lvl = levelFromPoints(allTimeTotal);
+    const ptsToNext = lvl.next ? Math.max(0, lvl.next - allTimeTotal) : 0;
+
+    const teachers = (st.users || []).filter(x => (x.role || "teacher") !== "admin");
+    const sortedTeachers = teachers
+      .map(tc => ({ uid: tc.uid, pts: Number(tc.totalPoints) || 0 }))
+      .sort((a, b) => b.pts - a.pts);
+    const myRankIdx = sortedTeachers.findIndex(x => x.uid === u.uid);
+    const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
+    const teachersN = sortedTeachers.length;
+
+    const approvalPct = subs.length ? Math.round((approved.length / subs.length) * 100) : 0;
+
+    const bestMonthBin = bins
+      .map(b => ({ b, v: sum(approved.filter(s => (s.eventDate || "").slice(0, 7) === b.key), s => s.points) }))
+      .sort((a, b) => b.v - a.v)[0];
+    const activeMonthsCount = bins.filter(b => seriesPoints(approved, b) > 0).length;
+
+    const trendPct365 = trendPct(recentPts, olderPts);
+
+    const allSections = new Set((st.types || []).map(tp => tp.section).filter(Boolean));
+    const mySections = new Set(approved.map(s => s.typeSection).filter(Boolean));
+    const missingSections = Array.from(allSections).filter(x => !mySections.has(x));
+
+    const insights = [];
+    if (!approved.length) {
+      insights.push({ kind: "alert", icon: "💡", title: t("recommend"), body: t("tipNoData") });
+    } else {
+      if (myRank && teachersN && myRank <= Math.max(10, Math.ceil(teachersN * 0.1))) {
+        insights.push({
+          kind: "achievement",
+          icon: "🏆",
+          title: t("achievement"),
+          body: fmtTpl(t("tipTopRank"), { n: myRank }) + " " + t("tipKeepGoing")
+        });
+      }
+      if (topSections.length) {
+        const [bestSec, bestPts] = topSections[0];
+        const pct = Math.round((bestPts / totalForPie) * 100);
+        insights.push({
+          kind: "achievement",
+          icon: "⭐",
+          title: t("achievement"),
+          body: fmtTpl(t("tipBestCategory"), { cat: bestSec, pct })
+        });
+      }
+      if (lvl.next && ptsToNext > 0 && ptsToNext <= 200) {
+        insights.push({
+          kind: "tip",
+          icon: lvl.icon,
+          title: t("recommend"),
+          body: fmtTpl(t("tipReachLevel"), { lvl: RANK_TABLE[lvl.idx + 1] ? t(RANK_TABLE[lvl.idx + 1].key) : "", p: ptsToNext })
+        });
+      }
+      if (olderPts > 0) {
+        if (trendPct365 >= 0) {
+          insights.push({ kind: "achievement", icon: "📈", title: t("growth"), body: fmtTpl(t("tipGrowthUp"), { pct: Math.abs(trendPct365) }) });
+        } else {
+          insights.push({ kind: "alert", icon: "📉", title: t("alert"), body: fmtTpl(t("tipGrowthDown"), { pct: Math.abs(trendPct365) }) });
+        }
+      }
+      if (missingSections.length) {
+        insights.push({
+          kind: "tip",
+          icon: "🎯",
+          title: t("recommend"),
+          body: fmtTpl(t("tipBoostCategory"), { cat: missingSections[0] })
+        });
+      }
+      if (bestMonthBin && bestMonthBin.v > 0) {
+        insights.push({ kind: "tip", icon: "🗓️", title: t("bestMonth"), body: fmtTpl(t("tipBestMonth"), { m: bestMonthBin.b.label }) });
+      }
+      if (pending.length >= 3) {
+        insights.push({ kind: "alert", icon: "⏳", title: t("alert"), body: fmtTpl(t("tipPending"), { n: pending.length }) });
+      }
+      if (rejected.length >= 2) {
+        insights.push({ kind: "alert", icon: "⚠️", title: t("alert"), body: fmtTpl(t("tipRejected"), { n: rejected.length }) });
+      }
+      if (activeGoal && allTimeTotal < GOAL && allTimeTotal >= GOAL * 0.7) {
+        const pct = Math.round((allTimeTotal / GOAL) * 100);
+        insights.push({ kind: "achievement", icon: "🎯", title: t("goalProgress"), body: fmtTpl(t("tipGoalClose"), { pct }) });
+      }
+    }
+    const shown = insights.slice(0, 6);
+
     return (
-      <div className="glass card">
-        <p className="p">
-          {t("quarter")}: <b>{qf === "all" ? t("allQuarters") : t(qf)}</b> · {t("academicYear")}: <b>{getAcademicYearLabel()}</b>
-        </p>
+      <div className="stats-wrap">
         <Controls />
 
-        <div className="sep"></div>
-
-        <div className="grid3">
-          <div className="kpi">
-            <div>
-              <div className="muted tiny">{t("approved")}</div>
-              <b>{fmtPoints(totalPts)}</b>
-              <TrendBadge curr={recentPts} prev={olderPts} />
-            </div>
-            <Pill kind="approved">{t("approved")}</Pill>
-          </div>
-          <div className="kpi">
-            <div><div className="muted tiny">{t("pending")}</div><b>{pending.length}</b></div>
-            <Pill kind="pending">{t("pending")}</Pill>
-          </div>
-          <div className="kpi">
-            <div><div className="muted tiny">{t("rejected")}</div><b>{rejected.length}</b></div>
-            <Pill kind="rejected">{t("rejected")}</Pill>
-          </div>
+        <div className="stats-hero-grid">
+          <StatsHero
+            icon={lvl.icon}
+            sub={t("yourLevel")}
+            value={lvl.name}
+            title={`${fmtPoints(allTimeTotal)} ${t("pts")}`}
+            trail={lvl.next ? `${fmtPoints(ptsToNext)} ${t("toNextLevel")}` : "MAX"}
+            accent={lvl.color}
+          />
+          <StatsHero
+            icon="🏅"
+            sub={t("yourRank")}
+            value={myRank ? `#${myRank}` : "—"}
+            title={teachersN ? `${teachersN} ${t("ofTeachers")}` : ""}
+            trail={myRank && teachersN ? `Top ${Math.max(1, Math.round((myRank / teachersN) * 100))}%` : null}
+            accent="#f59e0b"
+          />
+          <StatsHero
+            icon="✨"
+            sub={t("approved")}
+            value={fmtPoints(totalPts)}
+            title={t("thisYear")}
+            trail={olderPts > 0 ? `${trendPct365 >= 0 ? "▲" : "▼"} ${Math.abs(trendPct365)}%` : null}
+            accent="#22c55e"
+          />
         </div>
 
-        <div className="sep"></div>
+        {shown.length ? (
+          <div className="insights">
+            <div className="insights__head">
+              <span className="insights__title">{t("insightsTitle")}</span>
+              <span className="insights__count tiny muted">{shown.length}</span>
+            </div>
+            <div className="insights__grid">
+              {shown.map((ins, i) => (
+                <InsightCard key={i} kind={ins.kind} icon={ins.icon} title={ins.title} body={ins.body} />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
-        <div className="grid2">
-          <div className="glass card">
-            <div className="h2">{t("pointsDynamic")}</div>
-            <div className="sep"></div>
-            <AreaLineChart values={bySeries} labels={bins.map(x => x.label)} />
+        <div className="stats-mini-grid">
+          <StatMini label={t("apprRatePct")} value={`${approvalPct}%`} hint={`${approved.length}/${subs.length}`} accent="#34d399" />
+          <StatMini label={t("pending")} value={pending.length} accent="#fbbf24" />
+          <StatMini label={t("rejected")} value={rejected.length} accent="#ef4444" />
+          <StatMini label={t("consistency")} value={`${activeMonthsCount}/12`} hint={t("activeMonths")} accent="#a78bfa" />
+        </div>
+
+        <div className="grid2 stats-grid">
+          <div className="glass card stats-block stats-block--wide">
+            <div className="stats-block__head">
+              <div className="h2">{t("pointsDynamic")}</div>
+              <span className="tiny muted">{t("pdynHint")}</span>
+            </div>
+            <PointsDynamicsChart values={bySeries} labels={bins.map(x => x.label)} accent="#87bc2e" />
           </div>
 
-          <div className="glass card" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div className="h2" style={{ alignSelf: "flex-start" }}>{t("goalProgress")} ({GOAL} {t("pts")})</div>
-            <div className="sep" style={{ alignSelf: "stretch" }}></div>
+          <div className="glass card stats-block stats-block--center">
+            <div className="stats-block__head">
+              <div className="h2">{t("goalProgress")}</div>
+              <span className="tiny muted">{GOAL} {t("pts")}</span>
+            </div>
             <GaugeChart value={Math.min(allTimeTotal, GOAL)} max={GOAL} label={`${fmtPoints(allTimeTotal)} / ${GOAL}`} sublabel={t("total")} />
-            <p className="help" style={{ marginTop: 8, textAlign: "center" }}>
+            <p className="help stats-block__foot">
               {allTimeTotal >= GOAL ? `🎉 ${t("goalReached")}` : `${fmtPoints(GOAL - allTimeTotal)} ${t("ptsRemaining")}`}
             </p>
           </div>
 
-          <div className="glass card">
-            <div className="h2">{t("statusSubs")}</div>
-            <div className="sep"></div>
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("statusSubs")}</div>
+            </div>
             <DonutChart
               segments={[
                 { label: "approved", value: approved.length },
@@ -2598,74 +2774,66 @@ export function PageStats() {
             />
           </div>
 
-          <div className="glass card">
-            <div className="h2">{t("byCategories")}</div>
-            <div className="sep"></div>
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("byCategories")}</div>
+            </div>
             {topSections.length ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div className="stats-sections">
                 {topSections.map(([sec, pts]) => {
                   const pct = Math.round((pts / totalForPie) * 100);
                   return (
-                    <div key={sec}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 3 }}>
-                        <span style={{ color: "var(--text)", fontWeight: 600 }}>{sec}</span>
-                        <span style={{ color: "var(--accent)", fontWeight: 700 }}>{fmtPoints(pts)} балл ({pct}%)</span>
+                    <div key={sec} className="stats-section">
+                      <div className="stats-section__row">
+                        <span className="stats-section__name">{sec}</span>
+                        <span className="stats-section__pts">{fmtPoints(pts)} · {pct}%</span>
                       </div>
-                      <div style={{ height: 7, background: "var(--border)", borderRadius: 4, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: "var(--accent)", borderRadius: 4, transition: "width .5s" }} />
+                      <div className="stats-section__bar">
+                        <div className="stats-section__fill" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   );
                 })}
               </div>
-            ) : <p className="p">{t("noData")}</p>}
+            ) : <p className="p muted">{t("noData")}</p>}
           </div>
         </div>
 
-        <div className="sep"></div>
-
-        <div className="grid2">
-          <div className="glass card">
-            <div className="h2">{t("histogram")}</div>
-            <div className="sep"></div>
-            <HistogramChart data={approved.map(s => Number(s.points) || 0)} />
-          </div>
-
-          <div className="glass card">
-            <div className="h2">{t("radarTopCat")}</div>
-            <div className="sep"></div>
-            <RadarChart labels={radar.map(x => x[0])} values={radar.map(x => x[1])} />
-            {!radar.length ? <p className="p">{t("noKpiInRange")}</p> : null}
-          </div>
-        </div>
-
-        <div className="sep"></div>
-
-        <div className="glass card">
-          <div className="h2">{t("topTypes")}</div>
-          <div className="sep"></div>
-          {topType.length ? (
-            <div className="stats-toplist">
-              {topType.slice(0, 12).map(([name, pts], i) => {
-                const max = topType[0][1];
-                return (
-                  <div key={name} className="stats-toplist__row">
-                    <span className="stats-toplist__num muted tiny">{i + 1}</span>
-                    <div className="stats-toplist__bar-wrap">
-                      <div className="stats-toplist__label tiny">{name}</div>
-                      <div className="stats-toplist__bar">
-                        <div className="stats-toplist__fill" style={{ width: `${Math.round((pts / max) * 100)}%` }} />
-                      </div>
-                    </div>
-                    <span className="stats-toplist__pts"><b>{fmtPoints(pts)}</b></span>
-                  </div>
-                );
-              })}
+        <div className="grid2 stats-grid">
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("radarTopCat")}</div>
             </div>
-          ) : <p className="p">{t("noData")}</p>}
+            <RadarChart labels={radar.map(x => x[0])} values={radar.map(x => x[1])} />
+            {!radar.length ? <p className="p muted">{t("noKpiInRange")}</p> : null}
+          </div>
+
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("topTypes")}</div>
+            </div>
+            {topType.length ? (
+              <div className="stats-toplist">
+                {topType.slice(0, 8).map(([name, pts], i) => {
+                  const max = topType[0][1];
+                  return (
+                    <div key={name} className="stats-toplist__row">
+                      <span className="stats-toplist__num muted tiny">{i + 1}</span>
+                      <div className="stats-toplist__bar-wrap">
+                        <div className="stats-toplist__label tiny">{name}</div>
+                        <div className="stats-toplist__bar">
+                          <div className="stats-toplist__fill" style={{ width: `${Math.round((pts / max) * 100)}%` }} />
+                        </div>
+                      </div>
+                      <span className="stats-toplist__pts"><b>{fmtPoints(pts)}</b></span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <p className="p muted">{t("noData")}</p>}
+          </div>
         </div>
 
-        <div className="sep"></div>
         <GoalsWidget />
       </div>
     );
@@ -2737,45 +2905,113 @@ export function PageStats() {
 
     const hasAny = (st.users || []).length || (st.adminRecentSubs || []).length;
 
+    const trendPctP = trendPct(recentPts, olderPts);
+    const totalPlatformPts = sum(teachers, x => Number(x.totalPoints) || 0);
+    const avgPts = teachers.length ? Math.round(totalPlatformPts / teachers.length) : 0;
+    const activeTeachersN = new Set(approved.map(s => s.uid)).size;
+    const activeMonthsCount = bins.filter(b => seriesPoints(approved, b) > 0).length;
+    const approvalPct = subs.length ? Math.round((approved.length / subs.length) * 100) : 0;
+
+    const bestMonthBin = bins
+      .map(b => ({ b, v: sum(approved.filter(s => (s.eventDate || "").slice(0, 7) === b.key), s => s.points) }))
+      .sort((a, b) => b.v - a.v)[0];
+
+    const insights = [];
+    if (!hasAny) {
+      insights.push({ kind: "alert", icon: "💡", title: t("alert"), body: t("generalNotLoaded") });
+    } else {
+      if (topTeachers[0]) {
+        const top = topTeachers[0];
+        const name = top.user?.displayName || top.user?.email || "—";
+        insights.push({ kind: "achievement", icon: "👑", title: t("achievement"), body: fmtTpl(t("tipPlatformLeader"), { name, pts: fmtPoints(top.pts) }) });
+      }
+      if (activeTeachersN) {
+        insights.push({ kind: "tip", icon: "👥", title: t("recommend"), body: fmtTpl(t("tipPlatformActive"), { n: activeTeachersN }) });
+      }
+      if (olderPts > 0) {
+        if (trendPctP >= 0) {
+          insights.push({ kind: "achievement", icon: "📈", title: t("growth"), body: fmtTpl(t("tipPlatformGrowth"), { pct: Math.abs(trendPctP) }) });
+        } else {
+          insights.push({ kind: "alert", icon: "📉", title: t("alert"), body: fmtTpl(t("tipGrowthDown"), { pct: Math.abs(trendPctP) }) });
+        }
+      }
+      if (topSections[0]) {
+        const totalSec = sum(topSections, x => x[1]) || 1;
+        const pct = Math.round((topSections[0][1] / totalSec) * 100);
+        insights.push({ kind: "tip", icon: "⭐", title: t("recommend"), body: fmtTpl(t("tipBestCategory"), { cat: topSections[0][0], pct }) });
+      }
+      if (pending.length >= 5) {
+        insights.push({ kind: "alert", icon: "⏳", title: t("alert"), body: fmtTpl(t("tipPlatformPending"), { n: pending.length }) });
+      }
+      if (bestMonthBin && bestMonthBin.v > 0) {
+        insights.push({ kind: "tip", icon: "🗓️", title: t("bestMonth"), body: fmtTpl(t("tipBestMonth"), { m: bestMonthBin.b.label }) });
+      }
+    }
+    const shown = insights.slice(0, 6);
+
     return (
-      <div className="glass card">
-        <p className="p">
-          {t("overallView")} <b>{t("rangeYear")}</b>.
-        </p>
+      <div className="stats-wrap">
         <Controls />
 
-        <div className="sep"></div>
-
-        {!hasAny ? (
-          <p className="p">{t("generalNotLoaded")} <b>{t("refresh")}</b>.</p>
-        ) : null}
-
-        <div className="grid2">
-          <div className="kpi"><div><div className="muted tiny">{t("teachers")}</div><b>{teachers.length}</b></div><Pill kind="approved">users</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">{t("subsInRange")}</div><b>{subs.length}</b></div><Pill kind="pending">range</Pill></div>
-          <div className="kpi"><div><div className="muted tiny">{t("pending")}</div><b>{pending.length}</b></div><Pill kind="pending">{t("pending")}</Pill></div>
-          <div className="kpi">
-            <div>
-              <div className="muted tiny">{t("approved")}</div>
-              <b>{fmtPoints(totalApprovedPts)}</b>
-              <TrendBadge curr={recentPts} prev={olderPts} />
-            </div>
-            <Pill kind="approved">points</Pill>
-          </div>
+        <div className="stats-hero-grid">
+          <StatsHero
+            icon="👥"
+            sub={t("teachers")}
+            value={teachers.length}
+            title={activeTeachersN ? `${activeTeachersN} active` : ""}
+            accent="#38bdf8"
+          />
+          <StatsHero
+            icon="✨"
+            sub={t("approved")}
+            value={fmtPoints(totalApprovedPts)}
+            title={t("thisYear")}
+            trail={olderPts > 0 ? `${trendPctP >= 0 ? "▲" : "▼"} ${Math.abs(trendPctP)}%` : null}
+            accent="#22c55e"
+          />
+          <StatsHero
+            icon="📊"
+            sub={"Avg / teacher"}
+            value={fmtPoints(avgPts)}
+            title={`${t("totalPoints")}: ${fmtPoints(totalPlatformPts)}`}
+            accent="#a78bfa"
+          />
         </div>
 
-        <div className="sep"></div>
+        {shown.length ? (
+          <div className="insights">
+            <div className="insights__head">
+              <span className="insights__title">{t("insightsPlatform")}</span>
+              <span className="insights__count tiny muted">{shown.length}</span>
+            </div>
+            <div className="insights__grid">
+              {shown.map((ins, i) => (
+                <InsightCard key={i} kind={ins.kind} icon={ins.icon} title={ins.title} body={ins.body} />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
-        <div className="grid2">
-          <div className="glass card">
-            <div className="h2">{t("pointsDynamic")}</div>
-            <div className="sep"></div>
-            <LineChart values={bySeries} labels={bins.map(x => x.label)} />
+        <div className="stats-mini-grid">
+          <StatMini label={t("subsInRange")} value={subs.length} accent="#38bdf8" />
+          <StatMini label={t("apprRatePct")} value={`${approvalPct}%`} hint={`${approved.length}/${subs.length}`} accent="#34d399" />
+          <StatMini label={t("pending")} value={pending.length} accent="#fbbf24" />
+          <StatMini label={t("consistency")} value={`${activeMonthsCount}/12`} hint={t("activeMonths")} accent="#a78bfa" />
+        </div>
+
+        <div className="grid2 stats-grid">
+          <div className="glass card stats-block stats-block--wide">
+            <div className="stats-block__head">
+              <div className="h2">{t("pointsDynamic")}</div>
+              <span className="tiny muted">{t("pdynHint")}</span>
+            </div>
+            <PointsDynamicsChart values={bySeries} labels={bins.map(x => x.label)} accent="#38bdf8" />
           </div>
 
-          <div className="glass card">
-            <div className="h2">{t("statusSubs")}</div>
-            <div className="sep"></div>
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("statusSubs")}</div>
+            </div>
             <DonutChart
               segments={[
                 { label: "approved", value: approved.length },
@@ -2786,47 +3022,46 @@ export function PageStats() {
             />
           </div>
 
-          <div className="glass card">
-            <div className="h2">{t("top10Teachers")}</div>
-            <div className="sep"></div>
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("top10Teachers")}</div>
+            </div>
             {topTeachers.length ? (
               <BarChart
                 values={topTeachers.map(x => x.pts)}
                 labels={topTeachers.map(x => (x.user?.displayName || x.user?.email || "—").slice(0, 10) + "…")}
               />
-            ) : <p className="p">{t("noData")}</p>}
+            ) : <p className="p muted">{t("noData")}</p>}
           </div>
 
-          <div className="glass card">
-            <div className="h2">{t("radarSections")}</div>
-            <div className="sep"></div>
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("radarSections")}</div>
+            </div>
             <RadarChart labels={topSections.map(x => x[0])} values={topSections.map(x => x[1])} />
-            {!topSections.length ? <p className="p">{t("noData")}</p> : null}
+            {!topSections.length ? <p className="p muted">{t("noData")}</p> : null}
           </div>
         </div>
 
-        <div className="sep"></div>
-
-        <div className="glass card">
-          <div className="h2">{t("byPeriods")}: approved / pending / rejected</div>
-          <p className="p muted" style={{ fontSize: 12 }}>
-            <span style={{ color: "rgba(135,188,46,.9)" }}>▇</span> Мақұлданды балл &nbsp;
-            <span style={{ color: "rgba(251,191,36,.9)" }}>▇</span> Күтуде ×5 &nbsp;
-            <span style={{ color: "rgba(239,68,68,.9)" }}>▇</span> Қабылданбады ×3
-          </p>
-          <div className="sep"></div>
+        <div className="glass card stats-block">
+          <div className="stats-block__head">
+            <div className="h2">{t("byPeriods")}</div>
+            <span className="tiny muted">
+              <span style={{ color: "rgba(135,188,46,.95)" }}>●</span> {t("approved")} &nbsp;
+              <span style={{ color: "rgba(251,191,36,.95)" }}>●</span> {t("pending")} ×5 &nbsp;
+              <span style={{ color: "rgba(239,68,68,.95)" }}>●</span> {t("rejected")} ×3
+            </span>
+          </div>
           <StackedBarChart data={stackedData} labels={bins.map(x => x.label)} />
         </div>
 
-        <div className="sep"></div>
-
-        <div className="glass card">
-          <div className="h2">{t("heatmap")}</div>
-          <p className="p">Тек <b>мақұлданған</b> балдар / Только <b>одобренные</b> баллы. Топ-10 по диапазону.</p>
-          <div className="sep"></div>
-
+        <div className="glass card stats-block">
+          <div className="stats-block__head">
+            <div className="h2">{t("heatmap")}</div>
+            <span className="tiny muted">{t("heatmapHelp")}</span>
+          </div>
           {!hmTeachers.length
-            ? <p className="p">{t("noData")}</p>
+            ? <p className="p muted">{t("noData")}</p>
             : (
               <div className="heatmap-wrap">
                 <div className="heatmap-scroll">
@@ -2838,11 +3073,11 @@ export function PageStats() {
                       </tr>
                     </thead>
                     <tbody>
-                      {hmTeachers.map(t => (
-                        <tr key={t.uid}>
-                          <td className="tiny heatmap-name-col"><b>{(t.displayName || t.email || "—").slice(0, 14)}</b></td>
+                      {hmTeachers.map(tc => (
+                        <tr key={tc.uid}>
+                          <td className="tiny heatmap-name-col"><b>{(tc.displayName || tc.email || "—").slice(0, 14)}</b></td>
                           {bins.map(b => {
-                            const v = sum(approved.filter(s => s.uid === t.uid && (s.eventDate || "").slice(0, 7) === b.key), s => s.points);
+                            const v = sum(approved.filter(s => s.uid === tc.uid && (s.eventDate || "").slice(0, 7) === b.key), s => s.points);
                             return (
                               <td key={b.key} className="tiny" style={{ ...cellStyle(v), textAlign: "center", padding: "6px 4px", fontSize: 11 }} title={`${b.label}: ${v}`}>
                                 {v ? fmtPoints(v) : ""}

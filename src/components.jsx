@@ -1810,6 +1810,674 @@ export function Overlays() {
       <ForcePasswordChange />
       <OnlineWidget />
       <AccessibilityModal />
+      <AIChatWidget />
+    </>
+  );
+}
+
+/* ---------- NIS AI by Bibon — расширенный мини-виджет чата ---------- */
+const AI_ENDPOINT = "https://chat-qlebq6gwma-uc.a.run.app";
+const AI_STORAGE = "nis-ai-bibon:kpi-history";
+const AI_PREFS = "nis-ai-bibon:prefs";
+const AI_VERSION_STORAGE = "nis-ai-bibon:version";
+const AI_MAX_HISTORY = 50;
+/** Версия клиента виджета (не сервера). Поднимать при значимых правках UI. */
+const AI_CLIENT_VERSION = "2.2.0";
+
+/** Локализация UI виджета — три языка. */
+const AI_T = {
+  brand:      { ru: "NIS AI",            kz: "NIS AI",                en: "NIS AI" },
+  by:         { ru: "by Bibon",          kz: "by Bibon",              en: "by Bibon" },
+  subtitleOn: { ru: "Готов отвечать",    kz: "Жауап беруге дайын",    en: "Ready to help" },
+  subtitleBz: { ru: "Думаю…",            kz: "Ойланып жатырмын…",     en: "Thinking…" },
+  ariaOpen:   { ru: "Открыть чат",       kz: "Чатты ашу",             en: "Open chat" },
+  ariaClose:  { ru: "Закрыть",           kz: "Жабу",                  en: "Close" },
+  ariaClear:  { ru: "Очистить",          kz: "Тазалау",               en: "Clear" },
+  ariaMax:    { ru: "На весь размер",    kz: "Үлкейту",               en: "Maximize" },
+  ariaMin:    { ru: "Свернуть",          kz: "Қайтару",               en: "Restore" },
+  ariaVoice:  { ru: "Голосовой ввод",    kz: "Дауыспен енгізу",       en: "Voice input" },
+  ariaSend:   { ru: "Отправить",         kz: "Жіберу",                en: "Send" },
+  ariaCopy:   { ru: "Копировать",        kz: "Көшіру",                en: "Copy" },
+  ariaLike:   { ru: "Полезно",           kz: "Пайдалы",               en: "Helpful" },
+  ariaDis:    { ru: "Не помогло",        kz: "Көмектескен жоқ",       en: "Not helpful" },
+  scrollDown: { ru: "Вниз",              kz: "Төменге",               en: "To bottom" },
+  placeholder:{ ru: "Спросите про сайт… (Shift+Enter — перенос)", kz: "Сайт туралы сұраңыз… (Shift+Enter — жаңа жол)", en: "Ask about the site… (Shift+Enter for newline)" },
+  pickTopic:  { ru: "Или выберите тему",  kz: "Немесе тақырып таңдаңыз", en: "Or pick a topic" },
+  hello:      {
+    ru: "Привет! Я **NIS AI by Bibon** — помогу разобраться с KPI-платформой. Спросите про достижения, баллы, рейтинг, заявки или админку.\n\nКоманды: `/help`, `/topics`, `/export`, `/clear`, `/lang ru|kz|en`.",
+    kz: "Сәлем! Мен **NIS AI by Bibon** — KPI-платформадан көмектесемін. Жетістіктер, ұпайлар, рейтинг, өтінімдер, әкімші панелі туралы сұраңыз.\n\nКомандалар: `/help`, `/topics`, `/export`, `/clear`, `/lang ru|kz|en`.",
+    en: "Hi! I'm **NIS AI by Bibon** — your guide to the KPI platform. Ask about achievements, points, rating, requests or the admin panel.\n\nCommands: `/help`, `/topics`, `/export`, `/clear`, `/lang ru|kz|en`.",
+  },
+  cmdHelp:    {
+    ru: "**Команды виджета:**\n- `/help` — этот список\n- `/topics` — категории тем\n- `/clear` — очистить чат\n- `/export` — скачать переписку (.txt)\n- `/lang ru|kz|en` — сменить язык интерфейса\n- `/about` или `/version` — версия клиента и сервера\n\n**Подсказки по запросам:**\n- «сколько баллов за PhD?»\n- «как взять отгул?»\n- «что такое уровень Мастер?»\n- «как сменить пароль?»",
+    kz: "**Виджет командалары:**\n- `/help` — осы тізім\n- `/topics` — тақырыптар\n- `/clear` — чатты тазалау\n- `/export` — хат-хабарды жүктеу (.txt)\n- `/lang ru|kz|en` — интерфейс тілін ауыстыру\n- `/about` немесе `/version` — клиент пен сервердің нұсқасы",
+    en: "**Widget commands:**\n- `/help` — this list\n- `/topics` — topic categories\n- `/clear` — clear chat\n- `/export` — download transcript (.txt)\n- `/lang ru|kz|en` — switch UI language\n- `/about` or `/version` — client & server version",
+  },
+  cmdAbout:   {
+    ru: "Я локальный rule-based бот: **никаких внешних AI-сервисов**. Все ответы — про KPI-платформу NIS, по правилам. Быстро, бесплатно, приватно.\n\nАвтор: **Bibon**. Если ответ не подошёл — нажмите 👎 и переформулируйте.\n\n%VERSIONS%",
+    kz: "Мен жергілікті rule-based ботпын: **сыртқы AI қызметтері жоқ**. Барлық жауаптар — NIS KPI-платформасы туралы, ережелер бойынша. Жылдам, тегін, жеке.\n\nАвторы: **Bibon**.\n\n%VERSIONS%",
+    en: "I'm a local rule-based bot — **no external AI services**. All answers are about the NIS KPI platform, by rules. Fast, free, private.\n\nAuthor: **Bibon**.\n\n%VERSIONS%",
+  },
+  cmdCleared: { ru: "История очищена.", kz: "Тарих тазартылды.", en: "History cleared." },
+  cmdExportOk:{ ru: "Переписка сохранена в файл.", kz: "Хат-хабар файлға сақталды.", en: "Transcript saved to file." },
+  cmdExportEmpty: { ru: "Пока нечего экспортировать.", kz: "Әзірше экспортқа ештеңе жоқ.", en: "Nothing to export yet." },
+  cmdLangOk:  { ru: "Язык виджета изменён.", kz: "Виджет тілі ауыстырылды.", en: "Widget language switched." },
+  cmdLangErr: { ru: "Использование: `/lang ru` | `/lang kz` | `/lang en`.", kz: "Қолдану: `/lang ru` | `/lang kz` | `/lang en`.", en: "Usage: `/lang ru` | `/lang kz` | `/lang en`." },
+  cmdUnknown: { ru: "Неизвестная команда. Напишите `/help`.", kz: "Белгісіз команда. `/help` жазыңыз.", en: "Unknown command. Type `/help`." },
+  emptyReply: { ru: "Пустой ответ — попробуйте переформулировать.", kz: "Бос жауап — басқаша жазып көріңіз.", en: "Empty reply — please rephrase." },
+  netErr:     { ru: "Нет связи с сервером", kz: "Серверге қосылу жоқ", en: "Network error" },
+  thanks:     { ru: "Спасибо за отзыв!", kz: "Пікіріңіз үшін рахмет!", en: "Thanks for the feedback!" },
+  copied:     { ru: "Скопировано", kz: "Көшірілді", en: "Copied" },
+  voiceFail:  { ru: "Голосовой ввод не поддерживается в этом браузере.", kz: "Браузерде дауыс енгізу қолданылмайды.", en: "Voice input not supported here." },
+  topicsTitle:{ ru: "Темы", kz: "Тақырыптар", en: "Topics" },
+  verLabel:   { ru: "версия",  kz: "нұсқа",   en: "version" },
+  verClient:  { ru: "клиент",  kz: "клиент",  en: "client" },
+  verServer:  { ru: "сервер",  kz: "сервер",  en: "server" },
+  verSyncing: { ru: "ожидаю ответ сервера…", kz: "сервер жауабын күтемін…", en: "waiting for server…" },
+};
+
+const aiT = (key, lang) => (AI_T[key] && AI_T[key][lang]) || (AI_T[key] && AI_T[key].ru) || key;
+
+/** Категории тем на стартовом экране (по 3 быстрых вопроса в каждой). */
+const AI_TOPICS = [
+  {
+    id: "achievements", icon: "🏆",
+    title: { ru: "Достижения", kz: "Жетістіктер", en: "Achievements" },
+    qs: {
+      ru: ["Как добавить достижение?", "Какой документ прикреплять?", "Почему отклонили заявку?"],
+      kz: ["Жетістікті қалай қосуға болады?", "Қандай құжат тіркеу керек?", "Неге өтінім қабылданбады?"],
+      en: ["How do I submit an achievement?", "What evidence to attach?", "Why was my submission rejected?"],
+    },
+  },
+  {
+    id: "points", icon: "💯",
+    title: { ru: "Баллы", kz: "Ұпайлар", en: "Points" },
+    qs: {
+      ru: ["Сколько баллов за PhD?", "Сколько за олимпиаду?", "Баллы за IELTS"],
+      kz: ["PhD үшін қанша ұпай?", "Олимпиадаға қанша?", "IELTS ұпайлары"],
+      en: ["Points for a PhD?", "Points for an olympiad?", "IELTS points"],
+    },
+  },
+  {
+    id: "rating", icon: "📈",
+    title: { ru: "Рейтинг", kz: "Рейтинг", en: "Rating" },
+    qs: {
+      ru: ["Где мой рейтинг?", "Какие есть уровни?", "Что такое Мастер?"],
+      kz: ["Менің рейтингім қайда?", "Қандай деңгейлер бар?", "Шебер дегеніміз не?"],
+      en: ["Where is my rating?", "What levels exist?", "What is Master level?"],
+    },
+  },
+  {
+    id: "requests", icon: "📝",
+    title: { ru: "Заявки", kz: "Өтінімдер", en: "Requests" },
+    qs: {
+      ru: ["Как взять отгул?", "Что такое weekend work?", "Сколько у меня компенсаций?"],
+      kz: ["Қалай еркін күн алу?", "Weekend work дегеніміз не?", "Менде қанша өтемақы?"],
+      en: ["How do I take leave?", "What is weekend work?", "My comp balance?"],
+    },
+  },
+  {
+    id: "profile", icon: "👤",
+    title: { ru: "Профиль", kz: "Профиль", en: "Profile" },
+    qs: {
+      ru: ["Как сменить пароль?", "Как поменять аватар?", "Как выйти?"],
+      kz: ["Құпиясөзді қалай ауыстыру?", "Аватарды қалай ауыстыру?", "Қалай шығу?"],
+      en: ["How to change password?", "How to change avatar?", "How to log out?"],
+    },
+  },
+  {
+    id: "settings", icon: "⚙️",
+    title: { ru: "Настройки", kz: "Баптаулар", en: "Settings" },
+    qs: {
+      ru: ["Как сменить язык?", "Как переключить тему?", "Шрифт побольше"],
+      kz: ["Тілді қалай ауыстыру?", "Тақырыпты қалай ауыстыру?", "Шрифт үлкенірек"],
+      en: ["Switch language?", "Switch theme?", "Larger font"],
+    },
+  },
+  {
+    id: "admin", icon: "🛠",
+    title: { ru: "Админка", kz: "Әкімші панелі", en: "Admin" },
+    qs: {
+      ru: ["Что в админ-кабинете?", "Что такое Approvals?", "Что такое СКУД?"],
+      kz: ["Әкімші кабинетінде не бар?", "Approvals дегеніміз не?", "СКУД дегеніміз не?"],
+      en: ["What is in the admin panel?", "What are Approvals?", "What is SKUD?"],
+    },
+  },
+  {
+    id: "help", icon: "❓",
+    title: { ru: "Помощь", kz: "Көмек", en: "Help" },
+    qs: {
+      ru: ["Сайт тормозит", "Не могу войти", "Сообщить о баге"],
+      kz: ["Сайт баяу жұмыс істейді", "Кіре алмаймын", "Қате туралы хабарлау"],
+      en: ["Site is slow", "Cannot log in", "Report a bug"],
+    },
+  },
+];
+
+/** Локальные followup-цепочки: если сервер не вернул suggestions — выбираем по теме. */
+const AI_FOLLOWUPS = {
+  ru: {
+    achievement: ["Какие лимиты у типов?", "Какой документ прикреплять?", "Где статус заявки?"],
+    points:      ["Сколько за статью Scopus?", "Баллы за открытый урок", "Баллы за IELTS"],
+    rating:      ["Какие есть уровни?", "Что такое Гроссмейстер?", "Как считаются четверти?"],
+    request:     ["Что такое weekend work?", "Как ранний уход?", "Сколько у меня дней?"],
+    profile:     ["Как поменять аватар?", "Как сменить пароль?", "Как выйти?"],
+    settings:    ["Как сменить язык?", "Как переключить тему?", "Доступность"],
+    admin:       ["Что в Approvals?", "Что такое СКУД?", "Где Director?"],
+    default:     ["Что умеет сайт?", "Где рейтинг?", "Как добавить достижение?"],
+  },
+  kz: {
+    achievement: ["Түрлердің лимиттері қандай?", "Қандай құжат тіркеу?", "Өтінім статусы қайда?"],
+    points:      ["Scopus мақала үшін?", "Ашық сабақ ұпайлары", "IELTS ұпайлары"],
+    rating:      ["Деңгейлер қандай?", "Гроссмейстер дегеніміз не?", "Тоқсандар қалай саналады?"],
+    request:     ["Weekend work дегеніміз не?", "Ертерек кету?", "Қанша күн қалды?"],
+    profile:     ["Аватарды ауыстыру?", "Құпиясөз ауыстыру?", "Қалай шығу?"],
+    settings:    ["Тілді ауыстыру?", "Тақырып ауыстыру?", "Қолжетімділік"],
+    admin:       ["Approvals дегеніміз не?", "СКУД дегеніміз не?", "Director қайда?"],
+    default:     ["Сайт не істей алады?", "Рейтинг қайда?", "Жетістікті қалай қосу?"],
+  },
+  en: {
+    achievement: ["Type limits?", "Which evidence file?", "Where is request status?"],
+    points:      ["Points for Scopus paper?", "Open lesson points", "IELTS points"],
+    rating:      ["What levels are there?", "What is Grandmaster?", "How are quarters counted?"],
+    request:     ["What is weekend work?", "Early leave?", "How many days do I have?"],
+    profile:     ["Change avatar?", "Change password?", "Log out?"],
+    settings:    ["Switch language?", "Switch theme?", "Accessibility"],
+    admin:       ["What's in Approvals?", "What is SKUD?", "Where is Director?"],
+    default:     ["What can the site do?", "Where is rating?", "How to add an achievement?"],
+  },
+};
+
+/** Эвристика: определяет тему ответа бота по ключевым словам, чтобы подобрать followup-чипы. */
+function guessTopic(text) {
+  const t = String(text || "").toLowerCase();
+  if (/(достижен|жетіст|achiev|submit|заявк подал)/i.test(t)) return "achievement";
+  if (/(балл|ұпай|point|score|олимпиад|ielts|scopus)/i.test(t)) return "points";
+  if (/(рейтинг|rank|deңгей|level|уровень|четверт|тоқсан|quarter)/i.test(t)) return "rating";
+  if (/(отгул|leave|weekend|выходн|early|компенсац|өтем)/i.test(t)) return "request";
+  if (/(профил|profile|аватар|пароль|password|выход|logout)/i.test(t)) return "profile";
+  if (/(тема|theme|язык|тіл|lang|шрифт|font|доступн)/i.test(t)) return "settings";
+  if (/(админ|admin|approval|скуд|skud|director)/i.test(t)) return "admin";
+  return "default";
+}
+
+/** Мини-markdown: **жирный**, `код`, ссылки http(s)://…, маркированные/нумерованные списки. */
+function renderMarkdown(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const out = [];
+  let bullets = null; let ordered = null;
+
+  const flushBullets = () => { if (bullets) { out.push(<ul key={`ul-${out.length}`}>{bullets}</ul>); bullets = null; } };
+  const flushOrdered = () => { if (ordered) { out.push(<ol key={`ol-${out.length}`}>{ordered}</ol>); ordered = null; } };
+
+  lines.forEach((rawLine, idx) => {
+    const line = rawLine.replace(/\s+$/, "");
+    const mBullet = line.match(/^\s*[-•*]\s+(.*)$/);
+    const mOrdered = line.match(/^\s*(\d+)[.)]\s+(.*)$/);
+
+    if (mBullet) {
+      flushOrdered();
+      if (!bullets) bullets = [];
+      bullets.push(<li key={`li-${idx}`}>{renderInline(mBullet[1])}</li>);
+      return;
+    }
+    if (mOrdered) {
+      flushBullets();
+      if (!ordered) ordered = [];
+      ordered.push(<li key={`li-${idx}`}>{renderInline(mOrdered[2])}</li>);
+      return;
+    }
+    flushBullets(); flushOrdered();
+    if (!line) { out.push(<br key={`br-${idx}`} />); return; }
+    out.push(<div key={`p-${idx}`} className="ai-md-line">{renderInline(line)}</div>);
+  });
+  flushBullets(); flushOrdered();
+  return out;
+}
+
+function renderInline(text) {
+  const nodes = [];
+  let i = 0; let key = 0;
+  const re = /(\*\*([^*]+)\*\*)|(`([^`]+)`)|(https?:\/\/[^\s)]+)/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > i) nodes.push(text.slice(i, m.index));
+    if (m[2]) nodes.push(<strong key={`b-${key++}`}>{m[2]}</strong>);
+    else if (m[4]) nodes.push(<code key={`c-${key++}`}>{m[4]}</code>);
+    else if (m[5]) nodes.push(<a key={`a-${key++}`} href={m[5]} target="_blank" rel="noopener noreferrer">{m[5]}</a>);
+    i = re.lastIndex;
+  }
+  if (i < text.length) nodes.push(text.slice(i));
+  return nodes;
+}
+
+export function AIChatWidget() {
+  // язык интерфейса виджета — берём из глобального стора, но даём возможность переопределить /lang
+  const globalLang = (typeof getLang === "function" ? getLang() : "ru");
+  const [lang, setLangLocal] = useState(() => {
+    try { const p = JSON.parse(localStorage.getItem(AI_PREFS) || "{}"); return p.lang || globalLang; } catch { return globalLang; }
+  });
+
+  const [open, setOpen] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const [msgs, setMsgs] = useState(() => {
+    try {
+      const raw = localStorage.getItem(AI_STORAGE);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.slice(-AI_MAX_HISTORY) : [];
+    } catch { return []; }
+  });
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [feedback, setFeedback] = useState(() => { // {idx: "up"|"down"}
+    try { return JSON.parse(localStorage.getItem(AI_PREFS + ":fb") || "{}"); } catch { return {}; }
+  });
+  const [unread, setUnread] = useState(0);
+  const [showJump, setShowJump] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState(-1);
+  const [serverVer, setServerVer] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(AI_VERSION_STORAGE) || "null"); }
+    catch { return null; }
+  });
+
+  const logRef = useRef(null);
+  const inputRef = useRef(null);
+  const recogRef = useRef(null);
+
+  // persist
+  useEffect(() => {
+    try { localStorage.setItem(AI_STORAGE, JSON.stringify(msgs.slice(-AI_MAX_HISTORY))); } catch { /* quota */ }
+  }, [msgs]);
+  useEffect(() => {
+    try { localStorage.setItem(AI_PREFS, JSON.stringify({ lang })); } catch { /* ignore */ }
+  }, [lang]);
+  useEffect(() => {
+    try { localStorage.setItem(AI_PREFS + ":fb", JSON.stringify(feedback)); } catch { /* ignore */ }
+  }, [feedback]);
+
+  // autoscroll + focus
+  useEffect(() => {
+    if (!open) return;
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    setUnread(0);
+    setTimeout(() => inputRef.current?.focus(), 80);
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const el = logRef.current;
+    if (!el) return;
+    // если пользователь близко к низу — скроллим, иначе показываем кнопку «вниз»
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
+    else setShowJump(true);
+  }, [msgs.length, busy, open]);
+
+  // Escape — закрыть
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        if (maximized) setMaximized(false);
+        else setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, maximized]);
+
+  // непрочитанные: считаем bot-ответы, пришедшие пока окно закрыто
+  const lastBotCountRef = useRef(msgs.filter(m => m.role === "assistant").length);
+  useEffect(() => {
+    const botCount = msgs.filter(m => m.role === "assistant").length;
+    if (!open && botCount > lastBotCountRef.current) {
+      setUnread(u => u + (botCount - lastBotCountRef.current));
+    }
+    lastBotCountRef.current = botCount;
+  }, [msgs, open]);
+
+  /* ---------------- Слэш-команды ---------------- */
+  function handleSlash(raw) {
+    const [cmd, ...rest] = raw.trim().split(/\s+/);
+    const arg = rest.join(" ").trim().toLowerCase();
+    const push = (content) => setMsgs(m => [...m, { role: "user", content: raw }, { role: "assistant", content, meta: { local: true } }]);
+
+    const renderAbout = () => {
+      const lines = [
+        `- **${aiT("verClient", lang)}**: v${AI_CLIENT_VERSION}`,
+        `- **${aiT("verServer", lang)}**: ${serverVer ? `v${serverVer.version}${serverVer.name ? ` «${serverVer.name}»` : ""}${serverVer.date ? ` · ${serverVer.date}` : ""}` : aiT("verSyncing", lang)}`,
+      ];
+      return aiT("cmdAbout", lang).replace("%VERSIONS%", lines.join("\n"));
+    };
+
+    switch (cmd) {
+      case "/help":    push(aiT("cmdHelp", lang)); return true;
+      case "/about":   push(renderAbout()); return true;
+      case "/version": push(renderAbout()); return true;
+      case "/clear":   setMsgs([]); setErr(""); setFeedback({}); try { localStorage.removeItem(AI_STORAGE); } catch { /* ignore */ } toast(aiT("cmdCleared", lang), "info"); return true;
+      case "/topics":  push(aiT("pickTopic", lang) + ":\n\n" + AI_TOPICS.map(t => `- ${t.icon} ${t.title[lang] || t.title.ru}`).join("\n")); return true;
+      case "/export":  exportTranscript(); return true;
+      case "/lang": {
+        if (["ru", "kz", "en"].includes(arg)) { setLangLocal(arg); push(aiT("cmdLangOk", arg)); }
+        else push(aiT("cmdLangErr", lang));
+        return true;
+      }
+      default: push(aiT("cmdUnknown", lang)); return true;
+    }
+  }
+
+  function exportTranscript() {
+    if (!msgs.length) { toast(aiT("cmdExportEmpty", lang), "info"); return; }
+    const lines = msgs.map(m => `[${m.role === "user" ? "You" : "AI"}] ${m.content}`).join("\n\n");
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    const blob = new Blob([lines], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `nis-ai-chat-${stamp}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(aiT("cmdExportOk", lang), "success");
+  }
+
+  /* ---------------- Сетевой запрос ---------------- */
+  async function ask(rawText) {
+    const text = String(rawText || "").trim();
+    if (!text || busy) return;
+    if (text.startsWith("/")) { handleSlash(text); setInput(""); return; }
+
+    setErr("");
+    const next = [...msgs, { role: "user", content: text }];
+    setMsgs(next);
+    setInput("");
+    setBusy(true);
+    try {
+      const res = await fetch(AI_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: next.slice(-10), lang }),
+      });
+      const raw = await res.text();
+      if (!res.ok) {
+        let parsed = {};
+        try { parsed = JSON.parse(raw); } catch { /* not json */ }
+        const detail = parsed?.error || parsed?.detail || raw.slice(0, 160) || res.statusText;
+        setErr(`${res.status}: ${detail}`);
+        return;
+      }
+      let data = {};
+      try { data = JSON.parse(raw); } catch { /* not json */ }
+      const reply = (data?.reply || "").trim();
+      if (!reply) { setErr(aiT("emptyReply", lang)); return; }
+      const suggestions = Array.isArray(data?.suggestions) ? data.suggestions.filter(s => typeof s === "string").slice(0, 4) : null;
+      const topic = typeof data?.topic === "string" ? data.topic : null;
+      // Запоминаем версию сервера и кэшируем — чтобы шапка показывала её даже офлайн.
+      if (typeof data?.version === "string" && data.version) {
+        const sv = { version: data.version, date: data.versionDate || "", name: data.versionName || "" };
+        setServerVer(sv);
+        try { localStorage.setItem(AI_VERSION_STORAGE, JSON.stringify(sv)); } catch { /* quota */ }
+      }
+      setMsgs(m => [...m, { role: "assistant", content: reply, meta: { suggestions, topic } }]);
+    } catch (e) {
+      console.error("[ai-chat] failed", e);
+      setErr(`${aiT("netErr", lang)}: ${String(e?.message || e).slice(0, 120)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onSubmit(e) {
+    e.preventDefault();
+    ask(input);
+  }
+  function onKeyDownInput(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      ask(input);
+    }
+  }
+
+  function clearChat() {
+    setMsgs([]); setErr(""); setFeedback({});
+    try { localStorage.removeItem(AI_STORAGE); } catch { /* ignore */ }
+  }
+
+  function copyMessage(idx, text) {
+    try {
+      navigator.clipboard?.writeText(text);
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(c => (c === idx ? -1 : c)), 1200);
+    } catch { /* ignore */ }
+  }
+
+  function rate(idx, kind) {
+    setFeedback(f => ({ ...f, [idx]: f[idx] === kind ? undefined : kind }));
+    if (kind === "up") toast(aiT("thanks", lang), "success");
+  }
+
+  /* ---------------- Голосовой ввод ---------------- */
+  function toggleVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast(aiT("voiceFail", lang), "error"); return; }
+    if (listening && recogRef.current) {
+      try { recogRef.current.stop(); } catch { /* ignore */ }
+      setListening(false);
+      return;
+    }
+    const rec = new SR();
+    rec.lang = lang === "kz" ? "kk-KZ" : lang === "en" ? "en-US" : "ru-RU";
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (ev) => {
+      let s = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) s += ev.results[i][0].transcript;
+      setInput(prev => (prev ? prev + " " : "") + s.trim());
+    };
+    rec.onerror = () => setListening(false);
+    rec.onend = () => setListening(false);
+    try { rec.start(); recogRef.current = rec; setListening(true); }
+    catch { setListening(false); }
+  }
+
+  /* ---------------- Render ---------------- */
+  const onScrollLog = () => {
+    const el = logRef.current; if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    setShowJump(!nearBottom && msgs.length > 0);
+  };
+  const jumpToBottom = () => {
+    const el = logRef.current; if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    setShowJump(false);
+  };
+
+  const lastBotIdx = (() => {
+    for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].role === "assistant") return i;
+    return -1;
+  })();
+  const lastBot = lastBotIdx >= 0 ? msgs[lastBotIdx] : null;
+  const tail = lastBot?.meta?.suggestions
+    || (lastBot ? (AI_FOLLOWUPS[lang] || AI_FOLLOWUPS.ru)[lastBot?.meta?.topic || guessTopic(lastBot.content)] : null);
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`ai-fab${open ? " is-open" : ""}`}
+        aria-label={aiT(open ? "ariaClose" : "ariaOpen", lang)}
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        {open ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></svg>
+        ) : (
+          <svg className="ai-fab__plant" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="aiFabLeaf" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#86efac" />
+                <stop offset="55%" stopColor="#22c55e" />
+                <stop offset="100%" stopColor="#15803d" />
+              </linearGradient>
+              <linearGradient id="aiFabStem" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#22c55e" />
+                <stop offset="100%" stopColor="#14532d" />
+              </linearGradient>
+            </defs>
+            <path d="M12 21c0-4 .2-7 .9-9.4" stroke="url(#aiFabStem)" strokeWidth="1.6" strokeLinecap="round" />
+            <path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z" fill="url(#aiFabLeaf)" stroke="#14532d" strokeWidth=".7" strokeLinejoin="round" />
+            <path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z" fill="url(#aiFabLeaf)" stroke="#14532d" strokeWidth=".7" strokeLinejoin="round" />
+            <circle cx="18.2" cy="4.6" r=".9" fill="#fde68a" opacity=".95" />
+          </svg>
+        )}
+        {!open && <span className="ai-fab__pulse" aria-hidden="true" />}
+        {!open && unread > 0 && <span className="ai-fab__badge" aria-label={`${unread}`}>{unread > 9 ? "9+" : unread}</span>}
+      </button>
+
+      {open && (
+        <div className={`ai-panel${maximized ? " is-max" : ""}`} role="dialog" aria-label={aiT("brand", lang)}>
+          <header className="ai-panel__head">
+            <div className="ai-panel__brand">
+              <div className="ai-panel__logo">AI</div>
+              <div className="ai-panel__title">
+                <div className="ai-panel__name">
+                  {aiT("brand", lang)} <span className="muted">{aiT("by", lang)}</span>
+                  <span
+                    className="ai-panel__ver"
+                    title={`${aiT("verClient", lang)}: v${AI_CLIENT_VERSION}\n${aiT("verServer", lang)}: ${serverVer ? `v${serverVer.version}${serverVer.name ? ` «${serverVer.name}»` : ""}${serverVer.date ? ` (${serverVer.date})` : ""}` : aiT("verSyncing", lang)}`}
+                  >
+                    v{serverVer?.version || AI_CLIENT_VERSION}
+                    {serverVer && serverVer.version !== AI_CLIENT_VERSION && <span className="ai-panel__ver-warn" aria-hidden="true">·</span>}
+                  </span>
+                </div>
+                <div className="ai-panel__sub"><span className={`ai-dot${busy ? " is-busy" : ""}`} /> {busy ? aiT("subtitleBz", lang) : aiT("subtitleOn", lang)}</div>
+              </div>
+            </div>
+            <div className="ai-panel__actions">
+              <button className="ai-iconbtn" type="button" onClick={() => setMaximized(v => !v)} aria-label={aiT(maximized ? "ariaMin" : "ariaMax", lang)} title={aiT(maximized ? "ariaMin" : "ariaMax", lang)}>
+                {maximized
+                  ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 3v6H3M15 21v-6h6M3 21l6-6M21 3l-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  : <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+              </button>
+              {msgs.length > 0 && (
+                <button className="ai-iconbtn" type="button" onClick={clearChat} aria-label={aiT("ariaClear", lang)} title={aiT("ariaClear", lang)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M6 6l1 14a2 2 0 002 2h6a2 2 0 002-2l1-14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </button>
+              )}
+              <button className="ai-iconbtn" type="button" onClick={() => setOpen(false)} aria-label={aiT("ariaClose", lang)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              </button>
+            </div>
+          </header>
+
+          <div className="ai-panel__log" ref={logRef} onScroll={onScrollLog}>
+            {msgs.length === 0 && (
+              <>
+                <div className="ai-msg ai-msg--bot">
+                  <div className="ai-ava">AI</div>
+                  <div className="ai-bubble">{renderMarkdown(aiT("hello", lang))}</div>
+                </div>
+                <div className="ai-topics">
+                  <div className="ai-topics__title">{aiT("topicsTitle", lang)}</div>
+                  <div className="ai-topics__grid">
+                    {AI_TOPICS.map(tp => (
+                      <button key={tp.id} className="ai-topic" type="button" onClick={() => ask((tp.qs[lang] || tp.qs.ru)[0])}>
+                        <span className="ai-topic__icon">{tp.icon}</span>
+                        <span className="ai-topic__label">{tp.title[lang] || tp.title.ru}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="ai-quick">
+                    {(AI_TOPICS[0].qs[lang] || AI_TOPICS[0].qs.ru).slice(0, 3).map(q => (
+                      <button key={q} className="ai-quick__btn" type="button" onClick={() => ask(q)}>{q}</button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {msgs.map((m, i) => {
+              const isBot = m.role !== "user";
+              const isLastBot = isBot && i === lastBotIdx;
+              return (
+                <div key={i} className={`ai-msg ai-msg--${isBot ? "bot" : "user"}`}>
+                  <div className="ai-ava">{isBot ? "AI" : (lang === "kz" ? "Мен" : lang === "en" ? "Me" : "Я")}</div>
+                  <div className="ai-bubble">
+                    {renderMarkdown(m.content)}
+                    {isBot && !m.meta?.local && (
+                      <div className="ai-bubble__tools">
+                        <button className="ai-btool" type="button" onClick={() => copyMessage(i, m.content)} title={aiT("ariaCopy", lang)} aria-label={aiT("ariaCopy", lang)}>
+                          {copiedIdx === i
+                            ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            : <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M5 15V5a2 2 0 012-2h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
+                        </button>
+                        <button className={`ai-btool${feedback[i] === "up" ? " is-active" : ""}`} type="button" onClick={() => rate(i, "up")} title={aiT("ariaLike", lang)} aria-label={aiT("ariaLike", lang)}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M7 11v9H4a1 1 0 01-1-1v-7a1 1 0 011-1h3zm0 0l5-8a2 2 0 013 1l-1 5h5a2 2 0 012 2.4l-1.5 7A2 2 0 0117 19H7" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+                        </button>
+                        <button className={`ai-btool${feedback[i] === "down" ? " is-active is-down" : ""}`} type="button" onClick={() => rate(i, "down")} title={aiT("ariaDis", lang)} aria-label={aiT("ariaDis", lang)}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ transform: "scaleY(-1)" }}><path d="M7 11v9H4a1 1 0 01-1-1v-7a1 1 0 011-1h3zm0 0l5-8a2 2 0 013 1l-1 5h5a2 2 0 012 2.4l-1.5 7A2 2 0 0117 19H7" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
+                        </button>
+                      </div>
+                    )}
+                    {isLastBot && !busy && tail && tail.length > 0 && (
+                      <div className="ai-quick">
+                        {tail.slice(0, 4).map(q => (
+                          <button key={q} className="ai-quick__btn" type="button" onClick={() => ask(q)}>{q}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {busy && (
+              <div className="ai-msg ai-msg--bot">
+                <div className="ai-ava">AI</div>
+                <div className="ai-bubble"><span className="ai-typing"><span /><span /><span /></span></div>
+              </div>
+            )}
+            {err && (
+              <div className="ai-msg ai-msg--bot">
+                <div className="ai-ava">!</div>
+                <div className="ai-bubble ai-bubble--err">
+                  {err}
+                  <div className="ai-quick">
+                    <button className="ai-quick__btn" type="button" onClick={() => { setErr(""); const last = [...msgs].reverse().find(m => m.role === "user"); if (last) ask(last.content); }}>↻</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {showJump && (
+            <button className="ai-jump" type="button" onClick={jumpToBottom} aria-label={aiT("scrollDown", lang)} title={aiT("scrollDown", lang)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          )}
+
+          <form className="ai-panel__form" onSubmit={onSubmit}>
+            <button className={`ai-iconbtn ai-mic${listening ? " is-listening" : ""}`} type="button" onClick={toggleVoice} aria-label={aiT("ariaVoice", lang)} title={aiT("ariaVoice", lang)}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="12" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M5 11a7 7 0 0014 0M12 18v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+            <textarea
+              ref={inputRef}
+              className="ai-input ai-input--ta"
+              placeholder={aiT("placeholder", lang)}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={onKeyDownInput}
+              disabled={busy}
+              maxLength={2000}
+              rows={1}
+            />
+            <button className="ai-send" type="submit" disabled={busy || !input.trim()} aria-label={aiT("ariaSend", lang)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+          </form>
+        </div>
+      )}
     </>
   );
 }
@@ -2073,6 +2741,275 @@ export function AreaLineChart({ values, labels }) {
         <text x={W / 2} y={H - 8} textAnchor="middle" fill="rgba(255,255,255,.62)" fontSize="12">{mid}</text>
         <text x={W - pad} y={H - 8} textAnchor="end" fill="rgba(255,255,255,.62)" fontSize="12">{last}</text>
       </svg>
+    </div>
+  );
+}
+
+function niceCeilValue(v) {
+  if (!Number.isFinite(v) || v <= 0) return 1;
+  const exp = Math.pow(10, Math.floor(Math.log10(v)));
+  const m = v / exp;
+  const nice = m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10;
+  return nice * exp;
+}
+
+export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTrend = true, defaultMode = "period" }) {
+  const nums = (values || []).map(v => Number(v) || 0);
+  const lbls = labels || [];
+  const n = nums.length;
+
+  const [mode, setMode] = useState(defaultMode);
+  const [hover, setHover] = useState(null);
+
+  const cumulative = useMemo(() => {
+    let acc = 0;
+    return nums.map(v => (acc += v));
+  }, [values]);
+
+  const data = mode === "cumulative" ? cumulative : nums;
+  const total = nums.reduce((a, b) => a + b, 0);
+  const peak = nums.length ? Math.max(...nums) : 0;
+  const peakIdx = nums.indexOf(peak);
+  const activeMonths = nums.filter(v => v > 0).length;
+  const avg = activeMonths ? total / activeMonths : 0;
+
+  const maxV = Math.max(1, ...data);
+  const niceMax = niceCeilValue(maxV);
+
+  const W = 720, H = 280;
+  const padL = 48, padR = 18, padT = 22, padB = 44;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const xStep = innerW / Math.max(1, n - 1);
+
+  const pts = data.map((v, i) => {
+    const x = padL + (n <= 1 ? innerW / 2 : i * xStep);
+    const y = padT + innerH - (v / niceMax) * innerH;
+    return [x, y];
+  });
+
+  const ticks = 4;
+  const yTicks = Array.from({ length: ticks + 1 }, (_, i) => {
+    const v = (niceMax / ticks) * (ticks - i);
+    return { y: padT + (i / ticks) * innerH, value: v };
+  });
+
+  const linePoints = pts.map(p => `${p[0]},${p[1]}`).join(" ");
+  const areaPath = pts.length
+    ? `M ${pts[0][0]} ${padT + innerH} L ${pts.map(p => `${p[0]} ${p[1]}`).join(" L ")} L ${pts[pts.length - 1][0]} ${padT + innerH} Z`
+    : "";
+
+  const gid = useMemo(() => `pdg_${Math.random().toString(16).slice(2)}`, []);
+  const aid = useMemo(() => `pdf_${Math.random().toString(16).slice(2)}`, []);
+
+  const avgY = padT + innerH - (avg / niceMax) * innerH;
+
+  const xLabelEvery = n > 12 ? Math.ceil(n / 8) : 1;
+
+  function handleMove(e) {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const xRel = ((e.clientX - rect.left) / rect.width) * W;
+    if (xRel < padL - xStep / 2 || xRel > padL + innerW + xStep / 2) {
+      setHover(null);
+      return;
+    }
+    const idx = Math.max(0, Math.min(n - 1, Math.round((xRel - padL) / xStep)));
+    setHover(idx);
+  }
+
+  function fmtTickLabel(v) {
+    if (v >= 1000) return `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`;
+    return String(Math.round(v));
+  }
+
+  const empty = n === 0 || total === 0 && mode === "period";
+
+  const hoverData = hover != null && hover >= 0 && hover < n ? {
+    label: lbls[hover] || "",
+    value: nums[hover] || 0,
+    cum: cumulative[hover] || 0,
+    delta: hover > 0 ? (nums[hover] - nums[hover - 1]) : null,
+    x: pts[hover]?.[0] ?? 0,
+    y: pts[hover]?.[1] ?? 0,
+  } : null;
+
+  return (
+    <div className="pdyn">
+      <div className="pdyn__head">
+        <div className="pdyn__stats">
+          <div className="pdyn__stat">
+            <span className="pdyn__stat-label">{t("total")}</span>
+            <span className="pdyn__stat-value">{fmtPoints(Math.round(total))}</span>
+          </div>
+          <div className="pdyn__stat">
+            <span className="pdyn__stat-label">{t("avgMonth")}</span>
+            <span className="pdyn__stat-value">{fmtPoints(Math.round(avg))}</span>
+          </div>
+          <div className="pdyn__stat">
+            <span className="pdyn__stat-label">{t("bestMonth")}</span>
+            <span className="pdyn__stat-value">
+              {peak > 0 ? `${fmtPoints(Math.round(peak))}` : "—"}
+              {peak > 0 && lbls[peakIdx] ? <span className="pdyn__stat-sub"> · {lbls[peakIdx]}</span> : null}
+            </span>
+          </div>
+        </div>
+        <div className="pdyn__modes" role="tablist" aria-label={t("pointsDynamic")}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "period"}
+            className={`pdyn__mode ${mode === "period" ? "is-active" : ""}`}
+            onClick={() => setMode("period")}
+          >
+            {t("pdynPerPeriod")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "cumulative"}
+            className={`pdyn__mode ${mode === "cumulative" ? "is-active" : ""}`}
+            onClick={() => setMode("cumulative")}
+          >
+            {t("pdynCumulative")}
+          </button>
+        </div>
+      </div>
+
+      <div className="pdyn__chart">
+        <svg
+          className="pdyn__svg"
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={t("pointsDynamic")}
+          onMouseMove={handleMove}
+          onMouseLeave={() => setHover(null)}
+          onTouchMove={(e) => {
+            const touch = e.touches[0];
+            if (!touch) return;
+            handleMove({ currentTarget: e.currentTarget, clientX: touch.clientX });
+          }}
+          onTouchEnd={() => setHover(null)}
+        >
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={accent} stopOpacity="0.95" />
+              <stop offset="100%" stopColor={accent} stopOpacity="0.7" />
+            </linearGradient>
+            <linearGradient id={aid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity="0.32" />
+              <stop offset="100%" stopColor={accent} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {yTicks.map((tk, i) => (
+            <g key={i}>
+              <line x1={padL} y1={tk.y} x2={padL + innerW} y2={tk.y} className="pdyn__grid" />
+              <text x={padL - 8} y={tk.y + 4} textAnchor="end" className="pdyn__axis">{fmtTickLabel(tk.value)}</text>
+            </g>
+          ))}
+
+          {showTrend && mode === "period" && avg > 0 && pts.length > 1 ? (
+            <g>
+              <line
+                x1={padL} y1={avgY}
+                x2={padL + innerW} y2={avgY}
+                className="pdyn__avg-line"
+              />
+              <text x={padL + innerW - 4} y={avgY - 6} textAnchor="end" className="pdyn__avg-label">
+                {t("avg")} {fmtPoints(Math.round(avg))}
+              </text>
+            </g>
+          ) : null}
+
+          {pts.length > 1 ? (
+            <>
+              <path d={areaPath} fill={`url(#${aid})`} />
+              <polyline
+                fill="none"
+                stroke={`url(#${gid})`}
+                strokeWidth="2.6"
+                points={linePoints}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {pts.map((p, i) => (
+                <circle
+                  key={i}
+                  cx={p[0]} cy={p[1]} r={hover === i ? 5.5 : 3.2}
+                  fill={hover === i ? accent : "rgba(255,255,255,.92)"}
+                  stroke={hover === i ? "rgba(255,255,255,.95)" : "transparent"}
+                  strokeWidth="2"
+                  className="pdyn__dot"
+                />
+              ))}
+            </>
+          ) : pts.length === 1 ? (
+            <circle cx={pts[0][0]} cy={pts[0][1]} r="5" fill={accent} />
+          ) : null}
+
+          {empty ? (
+            <text x={W / 2} y={H / 2} textAnchor="middle" className="pdyn__empty">{t("noChartData")}</text>
+          ) : null}
+
+          {hoverData ? (
+            <g>
+              <line
+                x1={hoverData.x} y1={padT}
+                x2={hoverData.x} y2={padT + innerH}
+                className="pdyn__crosshair"
+              />
+            </g>
+          ) : null}
+
+          {lbls.map((lab, i) => {
+            if (i % xLabelEvery !== 0 && i !== n - 1) return null;
+            const x = padL + (n <= 1 ? innerW / 2 : i * xStep);
+            return (
+              <text
+                key={i}
+                x={x}
+                y={padT + innerH + 22}
+                textAnchor="middle"
+                className={`pdyn__xlabel ${hover === i ? "is-active" : ""}`}
+              >
+                {lab}
+              </text>
+            );
+          })}
+        </svg>
+
+        {hoverData ? (
+          <div
+            className="pdyn__tip"
+            style={{
+              left: `${(hoverData.x / W) * 100}%`,
+              top: `${(hoverData.y / H) * 100}%`,
+            }}
+          >
+            <div className="pdyn__tip-label">{hoverData.label}</div>
+            <div className="pdyn__tip-row">
+              <span className="pdyn__tip-dot" style={{ background: accent }} />
+              <span className="pdyn__tip-key">{t("pdynPeriod")}</span>
+              <span className="pdyn__tip-val">{fmtPoints(Math.round(hoverData.value))} {t("pts")}</span>
+            </div>
+            <div className="pdyn__tip-row">
+              <span className="pdyn__tip-dot pdyn__tip-dot--ghost" />
+              <span className="pdyn__tip-key">{t("pdynCum")}</span>
+              <span className="pdyn__tip-val">{fmtPoints(Math.round(hoverData.cum))} {t("pts")}</span>
+            </div>
+            {hoverData.delta != null ? (
+              <div className="pdyn__tip-row">
+                <span className="pdyn__tip-key">{t("pdynVsPrev")}</span>
+                <span className={`pdyn__tip-delta ${hoverData.delta >= 0 ? "is-up" : "is-down"}`}>
+                  {hoverData.delta >= 0 ? "▲" : "▼"} {fmtPoints(Math.abs(Math.round(hoverData.delta)))}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
