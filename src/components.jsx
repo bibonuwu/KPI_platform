@@ -428,7 +428,7 @@ export function QuarterFilter({ value, onChange, showLabel = true }) {
 }
 
 /** ---------- Goals widget ---------- */
-export function GoalsWidget({ compact = false }) {
+export function GoalsWidget({ compact = false, dense = false }) {
   const st = useStore();
   const u = st.userDoc;
   const goals = st.myGoals || [];
@@ -833,7 +833,7 @@ export function GoalsWidget({ compact = false }) {
 
   return (
     <>
-    <div className="glass card goals-widget">
+    <div className={`glass card goals-widget${dense ? " goals-widget--dense" : ""}`}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
         <div className="h2">{t("goalsAndDeadlines")}</div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -904,7 +904,7 @@ export function GoalsWidget({ compact = false }) {
         <p className="p muted" style={{ textAlign: "center", padding: "20px 0" }}>{t("noGoals")}</p>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="goals-widget__list" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {filtered.map(g => {
           const prog = computeProgress(g);
           const overdue = isOverdue(g);
@@ -1412,58 +1412,172 @@ export function TopbarRight() {
   );
 }
 
+function OnlineRow({ user, isMe }) {
+  const name = user.displayName || user.email || "—";
+  const initials = (user.displayName || user.email || "?")
+    .split(/\s+/).slice(0, 2).map(s => s[0] || "").join("").toUpperCase() || "?";
+  const meta = user.school || user.subject || user.email || "";
+  return (
+    <div className={`online-row${isMe ? " online-row--me" : ""}`}>
+      <div className="online-row__avatar">
+        {user.avatarUrl
+          ? <img src={user.avatarUrl} alt="" loading="lazy" />
+          : <span className="online-row__initials">{initials}</span>}
+        <span className="online-row__dot" aria-hidden="true" />
+      </div>
+      <div className="online-row__info">
+        <div className="online-row__name">
+          <span className="online-row__name-text">{name}</span>
+          {isMe && <span className="online-row__me-badge">{t("onlineYou")}</span>}
+        </div>
+        {meta && <div className="online-row__meta">{meta}</div>}
+      </div>
+    </div>
+  );
+}
+
+function OnlineGroup({ label, users, currentUid }) {
+  if (!users.length) return null;
+  return (
+    <div className="online-group">
+      <div className="online-group__head">
+        <span className="online-group__label">{label}</span>
+        <span className="online-group__count">{users.length}</span>
+      </div>
+      <div className="online-group__list">
+        {users.map(x => <OnlineRow key={x.uid} user={x} isMe={x.uid === currentUid} />)}
+      </div>
+    </div>
+  );
+}
+
 export function OnlineWidget() {
   const st = useStore();
   const u = st.userDoc;
-  const [showOnline, setShowOnline] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const allUsers = st.users;
+
+  const { onlineList, totalCount } = useMemo(() => {
+    const list = allUsers || [];
+    const map = new Map();
+    for (const x of list) {
+      if (x && x.uid && x.online === true) map.set(x.uid, x);
+    }
+    if (u?.uid) {
+      const prev = map.get(u.uid);
+      map.set(u.uid, { ...(prev || u), ...u, online: true });
+    }
+    return { onlineList: Array.from(map.values()), totalCount: list.length || map.size };
+  }, [allUsers, u]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return onlineList;
+    return onlineList.filter(x =>
+      (x.displayName || "").toLowerCase().includes(q) ||
+      (x.email || "").toLowerCase().includes(q) ||
+      (x.school || "").toLowerCase().includes(q) ||
+      (x.subject || "").toLowerCase().includes(q)
+    );
+  }, [onlineList, query]);
+
+  const { admins, teachers } = useMemo(() => {
+    const meUid = u?.uid;
+    const cmp = (a, b) => {
+      if (a.uid === meUid) return -1;
+      if (b.uid === meUid) return 1;
+      return (a.displayName || a.email || "").localeCompare(b.displayName || b.email || "", undefined, { sensitivity: "base" });
+    };
+    const ad = [], te = [];
+    for (const x of filtered) (x.role === "admin" ? ad : te).push(x);
+    ad.sort(cmp); te.sort(cmp);
+    return { admins: ad, teachers: te };
+  }, [filtered, u?.uid]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  useEffect(() => { if (!open) setQuery(""); }, [open]);
+
   if (!u) return null;
-  const allUsers = st.users || [];
-  const onlineUsers = allUsers.filter(x => x.online === true);
-  const onlineCount = onlineUsers.length + 1;
-  const totalCount = allUsers.length;
+
+  const onlineCount = onlineList.length;
+  const showSearch = onlineList.length >= 8;
+
   return (
     <>
-      {showOnline && (
-        <div className="modalback" onClick={() => setShowOnline(false)}>
-          <div className="modal glass" style={{ maxWidth: 400, width: "90vw" }} onClick={e => e.stopPropagation()}>
-            <div className="modal__head">
-              <div className="h2">{t("onlineNow")}</div>
-              <Btn onClick={() => setShowOnline(false)}>✕</Btn>
+      {open && (
+        <div className="modalback" onClick={() => setOpen(false)} role="presentation">
+          <div
+            className="modal glass online-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="online-modal-title"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="modal__head online-modal__head">
+              <div className="online-modal__heading">
+                <div id="online-modal-title" className="h2 online-modal__title">
+                  <span className="online-dot online-dot--lg" aria-hidden="true" />
+                  {t("onlineNow")}
+                </div>
+                <div className="online-modal__sub">
+                  <b>{onlineCount}</b> / {totalCount} {t("employee")}
+                </div>
+              </div>
+              <Btn onClick={() => setOpen(false)} aria-label="Close">✕</Btn>
             </div>
-            {onlineUsers.length === 0 ? (
-              <p className="p muted">{t("noActiveUsers")}</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
-                {onlineUsers.map(x => (
-                  <div key={x.uid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "var(--hover-bg)", borderRadius: 8 }}>
-                    <span className="online-dot" />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{x.displayName || x.email || "—"}</div>
-                      <div className="tiny muted">{x.role} · {x.school || x.subject || x.email}</div>
-                    </div>
-                  </div>
-                ))}
+
+            {showSearch && (
+              <div className="online-modal__search">
+                <input
+                  className="input"
+                  type="search"
+                  placeholder={t("onlineSearchPh")}
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  autoFocus
+                />
               </div>
             )}
-            <p className="help" style={{ marginTop: 12 }}>{t("totalUsers")}: {totalCount} {t("employee")}</p>
+
+            <div className="online-modal__body">
+              {filtered.length === 0 ? (
+                <p className="p muted online-modal__empty">{t("noActiveUsers")}</p>
+              ) : (
+                <>
+                  <OnlineGroup label={t("administrators")} users={admins} currentUid={u.uid} />
+                  <OnlineGroup label={t("teachers")} users={teachers} currentUid={u.uid} />
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
-      <div className={`online-widget${collapsed ? " online-widget--collapsed" : ""}`}>
+
+      <div className="online-widget">
         <button
+          type="button"
           className="online-widget__btn"
-          onClick={() => setShowOnline(true)}
+          onClick={() => setOpen(true)}
           title={t("onlineNow")}
+          aria-label={`${t("onlineNow")}: ${onlineCount} / ${totalCount}`}
         >
-          <span className="online-dot" />
-          {!collapsed && (
-            <div className="online-widget__info">
-              <span className="online-widget__count">{onlineCount}</span>
-              <span className="online-widget__label">онлайн</span>
+          <span className="online-widget__pulse" aria-hidden="true">
+            <span className="online-dot" />
+          </span>
+          <span className="online-widget__info">
+            <span className="online-widget__count" aria-live="polite">{onlineCount}</span>
+            <span className="online-widget__meta">
+              <span className="online-widget__label">{t("online")}</span>
               <span className="online-widget__total">/ {totalCount}</span>
-            </div>
-          )}
+            </span>
+          </span>
         </button>
       </div>
     </>
@@ -1800,6 +1914,9 @@ function ToastItem({ t: ti }) {
 
 export function Overlays() {
   const st = useStore();
+  const site = st.siteSettings || {};
+  const showOnline = site.showOnline !== false;
+  const showAi = site.showAi !== false;
   return (
     <>
       <div className="toastwrap" aria-live="polite" aria-atomic="true">
@@ -1808,9 +1925,9 @@ export function Overlays() {
       {st.modal?.kind === "crop" && <CropModal file={st.modal.file} onClose={() => setState({ modal: null })} />}
       <TeacherProfileModal />
       <ForcePasswordChange />
-      <OnlineWidget />
+      {showOnline && <OnlineWidget />}
       <AccessibilityModal />
-      <AIChatWidget />
+      {showAi && <AIChatWidget />}
     </>
   );
 }
@@ -2615,18 +2732,33 @@ export function CropModal({ file, onClose }) {
 
 /** ---------- charts ---------- */
 export function BarChart({ values, labels }) {
-  const max = Math.max(1, ...values.map(v => Number(v) || 0));
+  const nums = (values || []).map(v => Number(v) || 0);
+  const max = Math.max(1, ...nums);
+  const [hover, setHover] = useState(null);
   return (
-    <div>
-      <div className="barchart">
-        {values.map((v, i) => (
-          <div key={i} className="bar" style={{ height: `${Math.max(4, Math.round(((Number(v) || 0) / max) * 100))}%` }} title={`${labels[i]}: ${v}`} />
-        ))}
+    <div className="barchart-v2">
+      <div className="barchart barchart--v2">
+        {nums.map((v, i) => {
+          const h = Math.max(4, Math.round((v / max) * 100));
+          const active = hover === i;
+          return (
+            <div
+              key={i}
+              className={`bar bar--v2 ${active ? "is-active" : ""}`}
+              style={{ height: `${h}%` }}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+              title={`${labels[i]}: ${v}`}
+            >
+              <span className="bar__value">{fmtPoints(v)}</span>
+            </div>
+          );
+        })}
       </div>
-      <div className="barlabel">
-        <span>{labels[0]}</span>
-        <span>{labels[Math.floor(labels.length / 2)]}</span>
-        <span>{labels[labels.length - 1]}</span>
+      <div className="barlabel barlabel--v2">
+        {labels.map((l, i) => (
+          <span key={i} className={`barlabel__tick ${hover === i ? "is-active" : ""}`}>{l}</span>
+        ))}
       </div>
     </div>
   );
@@ -2753,13 +2885,61 @@ function niceCeilValue(v) {
   return nice * exp;
 }
 
-export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTrend = true, defaultMode = "period" }) {
+function AnimatedNumber({ value, duration = 720 }) {
+  const target = Number(value) || 0;
+  const [display, setDisplay] = useState(target);
+  const fromRef = useRef(target);
+  const rafRef = useRef(0);
+  useEffect(() => {
+    const from = fromRef.current;
+    const to = target;
+    if (from === to) return;
+    const start = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const v = from + (to - from) * eased;
+      setDisplay(v);
+      if (p < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = to;
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [target, duration]);
+  return <>{fmtPoints(Math.round(display))}</>;
+}
+
+export function PointsDynamicsChart({ values, labels, showTrend = true, defaultMode = "period" }) {
   const nums = (values || []).map(v => Number(v) || 0);
   const lbls = labels || [];
   const n = nums.length;
 
   const [mode, setMode] = useState(defaultMode);
   const [hover, setHover] = useState(null);
+  const [animKey, setAnimKey] = useState(0);
+  useEffect(() => { setAnimKey(k => k + 1); }, [mode, n]);
+
+  const wrapRef = useRef(null);
+  const [W, setW] = useState(720);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = Math.max(280, Math.round(el.clientWidth));
+      setW(w);
+    };
+    update();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(update);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const cumulative = useMemo(() => {
     let acc = 0;
@@ -2776,7 +2956,7 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
   const maxV = Math.max(1, ...data);
   const niceMax = niceCeilValue(maxV);
 
-  const W = 720, H = 280;
+  const H = Math.max(240, Math.min(340, Math.round(W * 0.36)));
   const padL = 48, padR = 18, padT = 22, padB = 44;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
@@ -2798,9 +2978,6 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
   const areaPath = pts.length
     ? `M ${pts[0][0]} ${padT + innerH} L ${pts.map(p => `${p[0]} ${p[1]}`).join(" L ")} L ${pts[pts.length - 1][0]} ${padT + innerH} Z`
     : "";
-
-  const gid = useMemo(() => `pdg_${Math.random().toString(16).slice(2)}`, []);
-  const aid = useMemo(() => `pdf_${Math.random().toString(16).slice(2)}`, []);
 
   const avgY = padT + innerH - (avg / niceMax) * innerH;
 
@@ -2835,21 +3012,25 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
   } : null;
 
   return (
-    <div className="pdyn">
+    <div className="pdyn" ref={wrapRef}>
       <div className="pdyn__head">
-        <div className="pdyn__stats">
-          <div className="pdyn__stat">
+        <div className="pdyn__stats" key={`stats-${animKey}`}>
+          <div className="pdyn__stat" style={{ animationDelay: "0ms" }}>
             <span className="pdyn__stat-label">{t("total")}</span>
-            <span className="pdyn__stat-value">{fmtPoints(Math.round(total))}</span>
+            <span className="pdyn__stat-value">
+              <AnimatedNumber value={Math.round(total)} />
+            </span>
           </div>
-          <div className="pdyn__stat">
+          <div className="pdyn__stat" style={{ animationDelay: "60ms" }}>
             <span className="pdyn__stat-label">{t("avgMonth")}</span>
-            <span className="pdyn__stat-value">{fmtPoints(Math.round(avg))}</span>
+            <span className="pdyn__stat-value">
+              <AnimatedNumber value={Math.round(avg)} />
+            </span>
           </div>
-          <div className="pdyn__stat">
+          <div className="pdyn__stat" style={{ animationDelay: "120ms" }}>
             <span className="pdyn__stat-label">{t("bestMonth")}</span>
             <span className="pdyn__stat-value">
-              {peak > 0 ? `${fmtPoints(Math.round(peak))}` : "—"}
+              {peak > 0 ? <AnimatedNumber value={Math.round(peak)} /> : "—"}
               {peak > 0 && lbls[peakIdx] ? <span className="pdyn__stat-sub"> · {lbls[peakIdx]}</span> : null}
             </span>
           </div>
@@ -2876,11 +3057,12 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
         </div>
       </div>
 
-      <div className="pdyn__chart">
+      <div className="pdyn__chart" style={{ height: H }}>
         <svg
           className="pdyn__svg"
+          width={W}
+          height={H}
           viewBox={`0 0 ${W} ${H}`}
-          preserveAspectRatio="none"
           role="img"
           aria-label={t("pointsDynamic")}
           onMouseMove={handleMove}
@@ -2892,21 +3074,10 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
           }}
           onTouchEnd={() => setHover(null)}
         >
-          <defs>
-            <linearGradient id={gid} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor={accent} stopOpacity="0.95" />
-              <stop offset="100%" stopColor={accent} stopOpacity="0.7" />
-            </linearGradient>
-            <linearGradient id={aid} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={accent} stopOpacity="0.32" />
-              <stop offset="100%" stopColor={accent} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-
           {yTicks.map((tk, i) => (
             <g key={i}>
               <line x1={padL} y1={tk.y} x2={padL + innerW} y2={tk.y} className="pdyn__grid" />
-              <text x={padL - 8} y={tk.y + 4} textAnchor="end" className="pdyn__axis">{fmtTickLabel(tk.value)}</text>
+              <text x={padL - 10} y={tk.y + 4} textAnchor="end" className="pdyn__axis">{fmtTickLabel(tk.value)}</text>
             </g>
           ))}
 
@@ -2924,12 +3095,12 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
           ) : null}
 
           {pts.length > 1 ? (
-            <>
-              <path d={areaPath} fill={`url(#${aid})`} />
+            <g key={`series-${animKey}`}>
+              <path d={areaPath} className="pdyn__area pdyn__area--anim" />
               <polyline
+                className="pdyn__line pdyn__line--anim"
                 fill="none"
-                stroke={`url(#${gid})`}
-                strokeWidth="2.6"
+                strokeWidth="1.8"
                 points={linePoints}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -2937,16 +3108,14 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
               {pts.map((p, i) => (
                 <circle
                   key={i}
-                  cx={p[0]} cy={p[1]} r={hover === i ? 5.5 : 3.2}
-                  fill={hover === i ? accent : "rgba(255,255,255,.92)"}
-                  stroke={hover === i ? "rgba(255,255,255,.95)" : "transparent"}
-                  strokeWidth="2"
-                  className="pdyn__dot"
+                  cx={p[0]} cy={p[1]}
+                  r={hover === i ? 5 : 0}
+                  className={`pdyn__dot ${hover === i ? "is-active" : ""}`}
                 />
               ))}
-            </>
+            </g>
           ) : pts.length === 1 ? (
-            <circle cx={pts[0][0]} cy={pts[0][1]} r="5" fill={accent} />
+            <circle cx={pts[0][0]} cy={pts[0][1]} r="4" className="pdyn__dot is-active" />
           ) : null}
 
           {empty ? (
@@ -2990,7 +3159,7 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
           >
             <div className="pdyn__tip-label">{hoverData.label}</div>
             <div className="pdyn__tip-row">
-              <span className="pdyn__tip-dot" style={{ background: accent }} />
+              <span className="pdyn__tip-dot" />
               <span className="pdyn__tip-key">{t("pdynPeriod")}</span>
               <span className="pdyn__tip-val">{fmtPoints(Math.round(hoverData.value))} {t("pts")}</span>
             </div>
@@ -3003,7 +3172,7 @@ export function PointsDynamicsChart({ values, labels, accent = "#87bc2e", showTr
               <div className="pdyn__tip-row">
                 <span className="pdyn__tip-key">{t("pdynVsPrev")}</span>
                 <span className={`pdyn__tip-delta ${hoverData.delta >= 0 ? "is-up" : "is-down"}`}>
-                  {hoverData.delta >= 0 ? "▲" : "▼"} {fmtPoints(Math.abs(Math.round(hoverData.delta)))}
+                  {fmtPoints(Math.abs(Math.round(hoverData.delta)))}
                 </span>
               </div>
             ) : null}
@@ -3062,33 +3231,62 @@ export function HistogramChart({ data, binCount = 7 }) {
   );
 }
 
-export function DonutChart({ segments, centerLabel }) {
-  const segs = (segments || []).map(s => ({ label: String(s.label || ""), value: Number(s.value) || 0 })).filter(s => s.value > 0);
-  const total = Math.max(1, segs.reduce((a, s) => a + s.value, 0));
+const STATUS_PALETTE = {
+  approved: "var(--chart-c-green, #22c55e)",
+  pending: "var(--chart-c-amber, #f59e0b)",
+  rejected: "var(--chart-c-red, #ef4444)"
+};
 
-  const size = 170;
-  const thickness = 18;
+const DEFAULT_DONUT_PALETTE = [
+  "var(--chart-c-1, #38bdf8)",
+  "var(--chart-c-2, #8b5cf6)",
+  "var(--chart-c-3, #22c55e)",
+  "var(--chart-c-4, #f59e0b)",
+  "var(--chart-c-5, #ef4444)",
+  "var(--chart-c-6, #ec4899)",
+  "var(--chart-c-7, #14b8a6)"
+];
+
+function donutLabel(label) {
+  const key = String(label || "").toLowerCase();
+  if (key === "approved" || key === "pending" || key === "rejected") return t(key);
+  return label;
+}
+
+export function DonutChart({ segments, centerLabel }) {
+  const segs = (segments || []).map(s => ({
+    raw: s.label,
+    label: donutLabel(s.label),
+    value: Number(s.value) || 0
+  })).filter(s => s.value > 0);
+  const total = Math.max(1, segs.reduce((a, s) => a + s.value, 0));
+  const [hover, setHover] = useState(null);
+
+  const colorFor = (s, i) => {
+    const key = String(s.raw || "").toLowerCase();
+    return STATUS_PALETTE[key] || DEFAULT_DONUT_PALETTE[i % DEFAULT_DONUT_PALETTE.length];
+  };
+
+  const size = 200;
+  const thickness = 22;
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
 
   let offset = 0;
-  const palette = [
-    "rgba(135,188,46,.95)",
-    "rgba(90,140,26,.95)",
-    "rgba(53,208,127,.95)",
-    "rgba(255,200,87,.95)",
-    "rgba(255,90,122,.95)"
-  ];
+
+  const hovered = hover != null && segs[hover] ? segs[hover] : null;
+  const centerMain = hovered ? hovered.value : (centerLabel ?? total);
+  const centerSub = hovered ? `${Math.round((hovered.value / total) * 100)}%` : t("total");
 
   return (
-    <div className="donutWrap">
-      <div className="donutBox">
+    <div className="donutWrap donut-v2">
+      <div className="donutBox donutBox--v2">
         <svg className="donutSvg" width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Donut chart">
           <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
             <circle
               cx={size / 2} cy={size / 2} r={r}
               fill="none"
-              stroke="rgba(255,255,255,.12)"
+              className="donut-v2__track"
               strokeWidth={thickness}
             />
             {segs.map((s, i) => {
@@ -3096,26 +3294,30 @@ export function DonutChart({ segments, centerLabel }) {
               const dash = `${len} ${Math.max(0, c - len)}`;
               const dashOffset = -offset;
               offset += len;
+              const active = hover === i;
               return (
                 <circle
                   key={i}
                   cx={size / 2} cy={size / 2} r={r}
                   fill="none"
-                  stroke={palette[i % palette.length]}
-                  strokeWidth={thickness}
+                  stroke={colorFor(s, i)}
+                  strokeWidth={active ? thickness + 4 : thickness}
                   strokeDasharray={dash}
                   strokeDashoffset={dashOffset}
                   strokeLinecap="round"
+                  className={`donut-v2__seg ${hover != null && !active ? "is-dim" : ""}`}
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover(null)}
                 />
               );
             })}
           </g>
 
-          <text x="50%" y="47%" textAnchor="middle" fill="rgba(255,255,255,.92)" fontSize="18" fontWeight="900">
-            {centerLabel || total}
+          <text x="50%" y="47%" textAnchor="middle" className="donut-v2__main">
+            {centerMain}
           </text>
-          <text x="50%" y="60%" textAnchor="middle" fill="rgba(255,255,255,.62)" fontSize="12">
-            всего
+          <text x="50%" y="62%" textAnchor="middle" className="donut-v2__sub">
+            {centerSub}
           </text>
         </svg>
       </div>
@@ -3123,11 +3325,21 @@ export function DonutChart({ segments, centerLabel }) {
       <div className="donutLegend">
         {segs.map((s, i) => {
           const pct = Math.round((s.value / total) * 100);
+          const active = hover === i;
           return (
-            <div key={i} className="legendItem">
-              <span className="legendDot" style={{ background: palette[i % palette.length] }} />
-              <div className="tiny">
-                <b>{s.label}</b> — {s.value} <span className="muted">({pct}%)</span>
+            <div
+              key={i}
+              className={`legendItem donut-v2__legend ${active ? "is-active" : ""} ${hover != null && !active ? "is-dim" : ""}`}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+            >
+              <span className="legendDot" style={{ background: colorFor(s, i) }} />
+              <div className="tiny donut-v2__legend-body">
+                <b>{s.label}</b>
+                <span className="donut-v2__legend-meta">
+                  <span className="donut-v2__legend-val">{s.value}</span>
+                  <span className="muted">({pct}%)</span>
+                </span>
               </div>
             </div>
           );
@@ -3141,11 +3353,12 @@ export function RadarChart({ labels, values }) {
   const labs = (labels || []).map(x => String(x || ""));
   const nums = (values || []).map(v => Math.max(0, Number(v) || 0));
   const n = Math.min(labs.length, nums.length);
+  const [hover, setHover] = useState(null);
   if (!n) return <p className="p">{t("noRadarData")}</p>;
 
-  const W = 280, H = 280;
+  const W = 300, H = 300;
   const cx = W / 2, cy = H / 2;
-  const R = 92;
+  const R = 100;
   const max = Math.max(1, ...nums.slice(0, n));
 
   const ringCount = 4;
@@ -3158,16 +3371,14 @@ export function RadarChart({ labels, values }) {
   });
 
   const poly = points.map(p => p.join(",")).join(" ");
-  const paletteFill = "rgba(135,188,46,.18)";
-  const paletteStroke = "rgba(90,140,26,.95)";
 
   return (
-    <div className="chartBox">
-      <svg className="radarSvg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Radar chart">
+    <div className="chartBox radar-v2">
+      <svg className="radarSvg radar-v2__svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Radar chart">
         {Array.from({ length: ringCount }, (_, k) => {
           const rr = (R / ringCount) * (k + 1);
           return (
-            <circle key={k} cx={cx} cy={cy} r={rr} fill="none" stroke="rgba(255,255,255,.14)" strokeWidth="1" />
+            <circle key={k} cx={cx} cy={cy} r={rr} fill="none" className="radar-v2__ring" />
           );
         })}
 
@@ -3176,46 +3387,109 @@ export function RadarChart({ labels, values }) {
           const x = cx + Math.cos(ang) * R;
           const y = cy + Math.sin(ang) * R;
           return (
-            <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(255,255,255,.14)" strokeWidth="1" />
+            <line key={i} x1={cx} y1={cy} x2={x} y2={y} className="radar-v2__spoke" />
           );
         })}
 
-        <polygon points={poly} fill={paletteFill} stroke={paletteStroke} strokeWidth="2" />
+        <polygon points={poly} className="radar-v2__poly" />
+
+        {points.map((p, i) => (
+          <circle
+            key={`pt-${i}`}
+            cx={p[0]} cy={p[1]}
+            r={hover === i ? 6 : 3.5}
+            className={`radar-v2__dot ${hover === i ? "is-active" : ""}`}
+            onMouseEnter={() => setHover(i)}
+            onMouseLeave={() => setHover(null)}
+          />
+        ))}
 
         {Array.from({ length: n }, (_, i) => {
           const ang = (-90 + (360 / n) * i) * (Math.PI / 180);
-          const x = cx + Math.cos(ang) * (R + 18);
-          const y = cy + Math.sin(ang) * (R + 18);
+          const x = cx + Math.cos(ang) * (R + 22);
+          const y = cy + Math.sin(ang) * (R + 22);
           const anchor = Math.cos(ang) > 0.25 ? "start" : Math.cos(ang) < -0.25 ? "end" : "middle";
           return (
-            <text key={i} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" fill="rgba(255,255,255,.70)" fontSize="11">
+            <text key={i} x={x} y={y} textAnchor={anchor} dominantBaseline="middle" className={`radar-v2__label ${hover === i ? "is-active" : ""}`}>
               {labs[i].slice(0, 16)}{labs[i].length > 16 ? "…" : ""}
             </text>
           );
         })}
       </svg>
+      {hover != null && labs[hover] ? (
+        <div className="radar-v2__tip">
+          <span className="radar-v2__tip-label">{labs[hover]}</span>
+          <span className="radar-v2__tip-val">{fmtPoints(Math.round(nums[hover]))} {t("pts")}</span>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 /** ---------- GaugeChart ---------- */
 export function GaugeChart({ value = 0, max = 100, label = "", sublabel = "" }) {
-  const pct = Math.min(1, Math.max(0, (Number(value) || 0) / (Number(max) || 1)));
-  const W = 180, H = 110;
-  const cx = W / 2, cy = 100;
-  const R = 75;
+  const numVal = Number(value) || 0;
+  const numMax = Number(max) || 1;
+  const pct = Math.min(1, Math.max(0, numVal / numMax));
+  const pctRound = Math.round(pct * 100);
+  const W = 240, H = 150;
+  const cx = W / 2, cy = 132;
+  const R = 96;
+  const stroke = 16;
   const start = Math.PI;
   const end = 0;
   const ang = start + (end - start) * pct;
   const x1 = cx + Math.cos(start) * R, y1 = cy + Math.sin(start) * R;
   const x2 = cx + Math.cos(ang) * R, y2 = cy + Math.sin(ang) * R;
+  const xEnd = cx + Math.cos(end) * R, yEnd = cy + Math.sin(end) * R;
   const large = pct > 0.5 ? 1 : 0;
+  const gid = useMemo(() => `gg_${Math.random().toString(16).slice(2)}`, []);
+
+  const tickCount = 5;
+  const ticks = Array.from({ length: tickCount }, (_, i) => {
+    const a = start + (end - start) * (i / (tickCount - 1));
+    const inner = R - stroke / 2 - 4;
+    const outer = R + stroke / 2 + 4;
+    return {
+      x1: cx + Math.cos(a) * inner,
+      y1: cy + Math.sin(a) * inner,
+      x2: cx + Math.cos(a) * outer,
+      y2: cy + Math.sin(a) * outer
+    };
+  });
+
   return (
-    <div className="gauge-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H}>
-        <path d={`M ${x1} ${y1} A ${R} ${R} 0 1 1 ${cx + R} ${cy}`} fill="none" stroke="var(--border)" strokeWidth="10" strokeLinecap="round" />
-        {pct > 0.001 && <path d={`M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`} fill="none" stroke="url(#gaugeGrad)" strokeWidth="10" strokeLinecap="round" />}
-        <defs><linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stopColor="var(--accent)" /><stop offset="100%" stopColor="var(--accent2)" /></linearGradient></defs>
+    <div className="gauge-wrap gauge-wrap--v2">
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="gauge-svg">
+        <defs>
+          <linearGradient id={gid} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="var(--chart-c-1, var(--accent))" />
+            <stop offset="50%" stopColor="var(--chart-c-3, var(--accent2))" />
+            <stop offset="100%" stopColor="var(--chart-c-green, var(--green))" />
+          </linearGradient>
+        </defs>
+        <path
+          d={`M ${x1} ${y1} A ${R} ${R} 0 1 1 ${xEnd} ${yEnd}`}
+          fill="none"
+          className="gauge-svg__track"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+        />
+        {ticks.map((tk, i) => (
+          <line key={i} x1={tk.x1} y1={tk.y1} x2={tk.x2} y2={tk.y2} className="gauge-svg__tick" />
+        ))}
+        {pct > 0.001 && (
+          <path
+            d={`M ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2}`}
+            fill="none"
+            stroke={`url(#${gid})`}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            className="gauge-svg__fill"
+          />
+        )}
+        <circle cx={x2} cy={y2} r={pct > 0.001 ? 7 : 0} className="gauge-svg__knob" />
+        <text x={cx} y={cy - 28} textAnchor="middle" className="gauge-svg__pct">{pctRound}%</text>
       </svg>
       <div className="gauge-value">{value}</div>
       {label && <div className="gauge-label">{label}</div>}
@@ -3226,27 +3500,580 @@ export function GaugeChart({ value = 0, max = 100, label = "", sublabel = "" }) 
 
 /** ---------- StackedBarChart ---------- */
 export function StackedBarChart({ data, labels }) {
-  // data: array of { label, segments: [{value, color}] }
   if (!data || !data.length) return <p className="p">{t("noBarData")}</p>;
+  const [hover, setHover] = useState(null);
   const maxVal = Math.max(1, ...data.map(d => d.segments.reduce((a, s) => a + (Number(s.value) || 0), 0)));
   const colors = ["var(--accent)", "var(--accent2)", "var(--green)", "var(--yellow)", "var(--red)", "#f472b6", "#38bdf8"];
   return (
-    <div>
-      <div className="barchart" style={{ height: 160 }}>
+    <div className="stacked-v2">
+      <div className="barchart barchart--stacked" style={{ height: 180 }}>
         {data.map((d, i) => {
           const total = d.segments.reduce((a, s) => a + (Number(s.value) || 0), 0);
           const h = (total / maxVal) * 100;
+          const active = hover === i;
           return (
-            <div key={i} style={{ flex: 1, height: `${h}%`, display: "flex", flexDirection: "column-reverse", borderRadius: 6, overflow: "hidden", minWidth: 4 }} title={`${d.label}: ${total}`}>
+            <div
+              key={i}
+              className={`stacked-v2__col ${active ? "is-active" : ""}`}
+              style={{ height: `${h}%` }}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+              title={`${d.label}: ${Math.round(total)}`}
+            >
               {d.segments.map((s, j) => {
                 const sh = total ? (s.value / total) * 100 : 0;
-                return <div key={j} style={{ height: `${sh}%`, background: s.color || colors[j % colors.length], minHeight: s.value ? 2 : 0 }} />;
+                return (
+                  <div
+                    key={j}
+                    className="stacked-v2__seg"
+                    style={{ height: `${sh}%`, background: s.color || colors[j % colors.length], minHeight: s.value ? 2 : 0 }}
+                  />
+                );
               })}
+              {active && total > 0 ? (
+                <span className="stacked-v2__chip">{Math.round(total)}</span>
+              ) : null}
             </div>
           );
         })}
       </div>
-      {labels && <div className="barlabel">{labels.map((l, i) => <span key={i}>{l}</span>)}</div>}
+      {labels && (
+        <div className="barlabel barlabel--v2">
+          {labels.map((l, i) => (
+            <span key={i} className={`barlabel__tick ${hover === i ? "is-active" : ""}`}>{l}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** ---------- LevelChart (milestone progress) ---------- */
+export function LevelChart({ value = 0, milestones = [], current = "", next = "" }) {
+  const max = Math.max(1, ...(milestones.map(m => Number(m.value) || 0)));
+  const pct = Math.min(100, Math.max(0, (Number(value) / max) * 100));
+  return (
+    <div className="lvlchart">
+      <div className="lvlchart__head">
+        <div className="lvlchart__cur">{current}</div>
+        <div className="lvlchart__next tiny muted">{next}</div>
+      </div>
+      <div className="lvlchart__track">
+        <div className="lvlchart__fill" style={{ width: `${pct}%` }} />
+        <div className="lvlchart__cursor" style={{ left: `${pct}%` }}>
+          <span className="lvlchart__cursor-val">{fmtPoints(value)}</span>
+        </div>
+        {milestones.map((m, i) => {
+          const p = Math.min(100, (Number(m.value) / max) * 100);
+          const reached = Number(value) >= Number(m.value);
+          return (
+            <div key={i} className={`lvlchart__mile ${reached ? "is-reached" : ""}`} style={{ left: `${p}%` }} title={`${m.label}: ${m.value}`}>
+              <span className="lvlchart__mile-dot" />
+              <span className="lvlchart__mile-label tiny">{m.label}</span>
+              <span className="lvlchart__mile-val tiny">{fmtPoints(m.value)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** ---------- VerticalBarChart (clean vertical bars w/ axis) ---------- */
+export function VerticalBarChart({ values = [], labels = [], color = "#a5b4fc" }) {
+  const nums = values.map(v => Number(v) || 0);
+  const max = Math.max(1, ...nums);
+  const niceMax = niceCeilValue(max);
+  const [hover, setHover] = useState(null);
+  if (!nums.length) return <p className="p muted">{t("noChartData")}</p>;
+  const barBg = `linear-gradient(180deg, ${color} 0%, ${color}66 70%, ${color}22 100%)`;
+  return (
+    <div className="vbarchart">
+      <div className="vbarchart__yaxis tiny">
+        <span>{fmtPoints(niceMax)}</span>
+        <span>{fmtPoints(Math.round(niceMax / 2))}</span>
+        <span>0</span>
+      </div>
+      <div className="vbarchart__plot">
+        <div className="vbarchart__grid">
+          <span /><span /><span />
+        </div>
+        <div className="vbarchart__bars">
+          {nums.map((v, i) => {
+            const h = Math.max(2, Math.round((v / niceMax) * 100));
+            const active = hover === i;
+            return (
+              <div key={i} className={`vbarchart__col ${active ? "is-active" : ""}`}
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+                title={`${labels[i] || ""}: ${v}`}>
+                <span className="vbarchart__val tiny">{active ? fmtPoints(v) : ""}</span>
+                <span className="vbarchart__bar" style={{ height: `${h}%`, background: barBg }} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="vbarchart__xlabels tiny">
+        {labels.map((l, i) => (
+          <span key={i} className={hover === i ? "is-active" : ""}>{l}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** ---------- IntensityChart (gradient bars by intensity) ---------- */
+export function IntensityChart({ values = [], labels = [] }) {
+  const nums = values.map(v => Number(v) || 0);
+  const max = Math.max(1, ...nums);
+  if (!nums.length) return <p className="p muted">{t("noChartData")}</p>;
+  const cellColor = (v) => {
+    const t = Math.min(1, v / max);
+    if (t === 0) return "rgba(255,255,255,.08)";
+    if (t < 0.25) return "rgba(165,180,252,.35)";
+    if (t < 0.5)  return "rgba(129,140,248,.55)";
+    if (t < 0.75) return "rgba(99,102,241,.75)";
+    return "rgba(76,29,149,.95)";
+  };
+  return (
+    <div className="intchart">
+      <div className="intchart__strip">
+        {nums.map((v, i) => (
+          <div key={i} className="intchart__cell" style={{ background: cellColor(v) }} title={`${labels[i] || ""}: ${v}`}>
+            <span className="intchart__cell-v tiny">{v > 0 ? fmtPoints(v) : ""}</span>
+          </div>
+        ))}
+      </div>
+      <div className="intchart__xlabels tiny">
+        {labels.map((l, i) => <span key={i}>{l}</span>)}
+      </div>
+      <div className="intchart__legend tiny muted">
+        <span>{t("intensityLow")}</span>
+        <span className="intchart__legend-bar" />
+        <span>{t("intensityHigh")}</span>
+      </div>
+    </div>
+  );
+}
+
+/** ---------- StackedColumnChart (rounded stacked cols w/ legend) ---------- */
+export function StackedColumnChart({ data = [], labels = [], series = [] }) {
+  if (!data.length) return <p className="p muted">{t("noBarData")}</p>;
+  const totals = data.map(d => d.segments.reduce((a, s) => a + (Number(s.value) || 0), 0));
+  const max = Math.max(1, ...totals);
+  const niceMax = niceCeilValue(max);
+  const [hover, setHover] = useState(null);
+  const colors = ["#a5b4fc", "#c4b5fd", "#f9a8d4", "#fcd34d", "#86efac"];
+  return (
+    <div className="stcol">
+      <div className="stcol__yaxis tiny">
+        <span>{fmtPoints(niceMax)}</span>
+        <span>{fmtPoints(Math.round(niceMax / 2))}</span>
+        <span>0</span>
+      </div>
+      <div className="stcol__plot">
+        <div className="stcol__grid"><span /><span /><span /></div>
+        <div className="stcol__bars">
+          {data.map((d, i) => {
+            const total = totals[i];
+            const h = Math.max(2, Math.round((total / niceMax) * 100));
+            const active = hover === i;
+            return (
+              <div key={i} className={`stcol__col ${active ? "is-active" : ""}`}
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}>
+                {active && total > 0 ? <span className="stcol__chip tiny">{fmtPoints(Math.round(total))}</span> : null}
+                <div className="stcol__bar" style={{ height: `${h}%` }}>
+                  {d.segments.map((s, j) => {
+                    const sh = total ? (s.value / total) * 100 : 0;
+                    return (
+                      <div key={j} className="stcol__seg"
+                        style={{ height: `${sh}%`, background: s.color || colors[j % colors.length], minHeight: s.value ? 2 : 0 }}
+                        title={`${(series[j]?.label) || ""}: ${s.value}`} />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="stcol__xlabels tiny">
+        {labels.map((l, i) => <span key={i} className={hover === i ? "is-active" : ""}>{l}</span>)}
+      </div>
+      {series.length ? (
+        <div className="stcol__legend tiny">
+          {series.map((s, i) => (
+            <span key={i} className="stcol__leg">
+              <span className="stcol__leg-dot" style={{ background: s.color || colors[i % colors.length] }} />
+              {s.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** ---------- UserDataChart (table of bars w/ user-supplied rows) ---------- */
+export function UserDataChart({ rows = [] }) {
+  const max = Math.max(1, ...rows.map(r => Number(r.value) || 0));
+  if (!rows.length) return <p className="p muted">{t("noData")}</p>;
+  return (
+    <div className="udatachart">
+      {rows.map((r, i) => {
+        const v = Number(r.value) || 0;
+        const pct = Math.round((v / max) * 100);
+        return (
+          <div key={i} className="udatachart__row" style={{ "--delay": `${i * 60}ms` }}>
+            <div className="udatachart__head">
+              <span className="udatachart__name">{r.label}</span>
+              <span className="udatachart__val">{r.display || fmtPoints(v)}</span>
+            </div>
+            <div className="udatachart__bar">
+              <div className="udatachart__fill" style={{ width: `${pct}%`, background: r.color || "linear-gradient(90deg,#a5b4fc,#c4b5fd)" }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** ---------- MonthlyAverageChart (area + line + avg ref line) ---------- */
+function smoothPath(points) {
+  if (!points || points.length < 2) return "";
+  if (points.length === 2) return `M ${points[0][0]} ${points[0][1]} L ${points[1][0]} ${points[1][1]}`;
+  const d = [`M ${points[0][0]} ${points[0][1]}`];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+    const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+    d.push(`C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2[0]} ${p2[1]}`);
+  }
+  return d.join(" ");
+}
+
+export function MonthlyAverageChart({ values = [], labels = [] }) {
+  const nums = values.map(v => Number(v) || 0);
+  const n = nums.length;
+  const lineId = useMemo(() => `mav_l_${Math.random().toString(16).slice(2)}`, []);
+  const areaId = useMemo(() => `mav_a_${Math.random().toString(16).slice(2)}`, []);
+  const glowId = useMemo(() => `mav_g_${Math.random().toString(16).slice(2)}`, []);
+  const [hover, setHover] = useState(null);
+
+  const wrapRef = useRef(null);
+  const [W, setW] = useState(720);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => setW(Math.max(320, Math.round(el.clientWidth)));
+    update();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(update);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  if (!n) return <div ref={wrapRef}><p className="p muted">{t("noChartData")}</p></div>;
+
+  const avg = nums.reduce((a, b) => a + b, 0) / n;
+  const maxVal = Math.max(...nums);
+  const minVal = Math.min(...nums);
+  const total = nums.reduce((a, b) => a + b, 0);
+  const niceMax = niceCeilValue(Math.max(maxVal, avg, 1));
+  const maxIdx = nums.indexOf(maxVal);
+  const minIdx = nums.indexOf(minVal);
+  const half = Math.ceil(n / 2);
+  const recent = nums.slice(-half).reduce((a, b) => a + b, 0);
+  const older = nums.slice(0, half).reduce((a, b) => a + b, 0);
+  const trendPct = older ? Math.round(((recent - older) / older) * 100) : (recent > 0 ? 100 : 0);
+  const trendUp = trendPct >= 0;
+
+  const H = 260;
+  const padL = 50, padR = 80, padT = 20, padB = 36;
+  const innerW = Math.max(40, W - padL - padR);
+  const innerH = H - padT - padB;
+  const xStep = innerW / Math.max(1, n - 1);
+  const yFor = (v) => padT + innerH - (v / niceMax) * innerH;
+  const pts = nums.map((v, i) => [padL + i * xStep, yFor(v)]);
+  const linePath = smoothPath(pts);
+  const areaPath = pts.length
+    ? `${linePath} L ${pts[n - 1][0]} ${padT + innerH} L ${pts[0][0]} ${padT + innerH} Z`
+    : "";
+  const avgY = yFor(avg);
+  const ticks = 4;
+  const tickVals = Array.from({ length: ticks + 1 }, (_, i) => (niceMax * i) / ticks);
+
+  return (
+    <div className="mavchart mavchart--pro">
+      <div className="mavchart__chips">
+        <span className="mavchart__chip mavchart__chip--avg">
+          <span className="mavchart__chip-label">{t("avg")}</span>
+          <span className="mavchart__chip-val">{fmtPoints(Math.round(avg))}</span>
+        </span>
+        <span className="mavchart__chip">
+          <span className="mavchart__chip-label">{t("max")}</span>
+          <span className="mavchart__chip-val">{fmtPoints(maxVal)}</span>
+        </span>
+        <span className="mavchart__chip">
+          <span className="mavchart__chip-label">{t("min")}</span>
+          <span className="mavchart__chip-val">{fmtPoints(minVal)}</span>
+        </span>
+        <span className="mavchart__chip">
+          <span className="mavchart__chip-label">{t("total")}</span>
+          <span className="mavchart__chip-val">{fmtPoints(total)}</span>
+        </span>
+        <span className={`mavchart__chip mavchart__chip--trend ${trendUp ? "is-up" : "is-down"}`}>
+          <span aria-hidden="true">{trendUp ? "↗" : "↘"}</span>
+          {Math.abs(trendPct)}%
+          <span className="mavchart__chip-meta">{t("vsPrev")}</span>
+        </span>
+      </div>
+
+      <div ref={wrapRef} className="mavchart__plot">
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="mavchart__svg" role="img" aria-label="Monthly average chart">
+          <defs>
+            <linearGradient id={lineId} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#c4b5fd" />
+              <stop offset="50%" stopColor="#a5b4fc" />
+              <stop offset="100%" stopColor="#f9a8d4" />
+            </linearGradient>
+            <linearGradient id={areaId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(196,181,253,.55)" />
+              <stop offset="60%" stopColor="rgba(165,180,252,.18)" />
+              <stop offset="100%" stopColor="rgba(196,181,253,0)" />
+            </linearGradient>
+            <filter id={glowId} x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2.2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {tickVals.map((v, i) => {
+            const y = yFor(v);
+            return (
+              <g key={i}>
+                <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="currentColor" strokeOpacity={i === 0 ? ".22" : ".08"} strokeDasharray={i === 0 ? "" : "3 3"} />
+                <text x={padL - 8} y={y + 4} textAnchor="end" fill="currentColor" fillOpacity=".55" fontSize="11" fontWeight="600">{fmtPoints(Math.round(v))}</text>
+              </g>
+            );
+          })}
+
+          <path d={areaPath} fill={`url(#${areaId})`} />
+          <path d={linePath} fill="none" stroke={`url(#${lineId})`} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" filter={`url(#${glowId})`} />
+
+          <line x1={padL} y1={avgY} x2={W - padR} y2={avgY} stroke="#a5b4fc" strokeOpacity=".85" strokeWidth="1.5" strokeDasharray="5 5" />
+          <g transform={`translate(${W - padR + 6}, ${avgY})`}>
+            <rect x="0" y="-9" width="68" height="18" rx="9" fill="#a5b4fc" />
+            <text x="34" y="4" textAnchor="middle" fill="#fff" fontSize="11" fontWeight="700">
+              {t("avg")} {fmtPoints(Math.round(avg))}
+            </text>
+          </g>
+
+          {maxVal > 0 ? (
+            <g>
+              <circle cx={pts[maxIdx][0]} cy={pts[maxIdx][1]} r="6" fill="#22c55e" stroke="var(--surface, #fff)" strokeWidth="2" />
+              <text x={pts[maxIdx][0]} y={pts[maxIdx][1] - 12} textAnchor="middle" fill="#16a34a" fontSize="11" fontWeight="800">↑</text>
+            </g>
+          ) : null}
+          {minIdx !== maxIdx && nums[minIdx] !== nums[maxIdx] ? (
+            <g>
+              <circle cx={pts[minIdx][0]} cy={pts[minIdx][1]} r="5" fill="#ef4444" stroke="var(--surface, #fff)" strokeWidth="2" />
+              <text x={pts[minIdx][0]} y={pts[minIdx][1] + 18} textAnchor="middle" fill="#dc2626" fontSize="11" fontWeight="800">↓</text>
+            </g>
+          ) : null}
+
+          {pts.map((p, i) => {
+            const active = hover === i;
+            const tipW = 80, tipH = 32;
+            const tipX = Math.max(padL, Math.min(W - padR - tipW, p[0] - tipW / 2));
+            const tipAbove = p[1] > padT + tipH + 10;
+            const tipY = tipAbove ? p[1] - tipH - 10 : p[1] + 10;
+            return (
+              <g key={i} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+                <rect x={p[0] - xStep / 2} y={padT} width={xStep || 8} height={innerH} fill="transparent" />
+                {active && (
+                  <line x1={p[0]} y1={padT} x2={p[0]} y2={padT + innerH} stroke="#a5b4fc" strokeOpacity=".5" strokeDasharray="2 3" />
+                )}
+                <circle cx={p[0]} cy={p[1]} r={active ? 6 : 3.5} fill="var(--surface, #fff)" stroke="#a5b4fc" strokeWidth={active ? 3 : 2} />
+                {active ? (
+                  <g>
+                    <rect x={tipX} y={tipY} width={tipW} height={tipH} rx="8" fill="currentColor" fillOpacity=".92" />
+                    <text x={tipX + tipW / 2} y={tipY + 14} textAnchor="middle" fill="var(--surface, #fff)" fontSize="12" fontWeight="800">{fmtPoints(nums[i])}</text>
+                    <text x={tipX + tipW / 2} y={tipY + 26} textAnchor="middle" fill="var(--surface, #fff)" fontSize="10" fontWeight="600" opacity=".78">
+                      {nums[i] >= avg ? "+" : "−"}{fmtPoints(Math.abs(Math.round(nums[i] - avg)))} {t("avg")}
+                    </text>
+                  </g>
+                ) : null}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      <div className="mavchart__xlabels tiny" style={{ paddingLeft: padL, paddingRight: padR }}>
+        {labels.map((l, i) => <span key={i} className={hover === i ? "is-active" : ""}>{l}</span>)}
+      </div>
+    </div>
+  );
+}
+
+/** ---------- WorldwidePopulationChart (estimated-style growth tile) ---------- */
+export function WorldwidePopulationChart({ value = 0, label = "", sublabel = "", trendPct = 0, series = [] }) {
+  const up = Number(trendPct) >= 0;
+  const nums = series.map(v => Number(v) || 0);
+  const hasSeries = nums.length > 0;
+  const maxVal = hasSeries ? Math.max(...nums) : 0;
+  const minVal = hasSeries ? Math.min(...nums) : 0;
+  const avgVal = hasSeries ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+  const total = hasSeries ? nums.reduce((a, b) => a + b, 0) : 0;
+  const lineId = useMemo(() => `wwp_l_${Math.random().toString(16).slice(2)}`, []);
+  const areaId = useMemo(() => `wwp_a_${Math.random().toString(16).slice(2)}`, []);
+
+  const wrapRef = useRef(null);
+  const [W, setW] = useState(560);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => setW(Math.max(280, Math.round(el.clientWidth)));
+    update();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(update);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+
+  const H = 140, padL = 10, padR = 14, padT = 14, padB = 18;
+  const innerW = Math.max(20, W - padL - padR);
+  const innerH = H - padT - padB;
+  const xStep = nums.length > 1 ? innerW / (nums.length - 1) : 0;
+  const max = Math.max(1, maxVal);
+  const yFor = (v) => padT + innerH - (v / max) * innerH;
+  const pts = nums.map((v, i) => [padL + i * xStep, yFor(v)]);
+  const linePath = smoothPath(pts);
+  const areaPath = pts.length
+    ? `${linePath} L ${pts[pts.length - 1][0]} ${padT + innerH} L ${pts[0][0]} ${padT + innerH} Z`
+    : "";
+
+  const maxIdx = nums.indexOf(maxVal);
+  const minIdx = nums.indexOf(minVal);
+  const lastIdx = nums.length - 1;
+  const avgY = yFor(avgVal);
+
+  return (
+    <div className="wwpop wwpop--pro">
+      <div className="wwpop__head">
+        <div className="wwpop__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <circle cx="12" cy="12" r="9" />
+            <ellipse cx="12" cy="12" rx="9" ry="4" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="12" y1="3" x2="12" y2="21" />
+          </svg>
+        </div>
+        <div className="wwpop__caption">
+          <div className="wwpop__title">{label}</div>
+          {sublabel ? <div className="wwpop__sub">{sublabel}</div> : null}
+        </div>
+        <div className={`wwpop__trend ${up ? "is-up" : "is-down"}`} aria-label={`${trendPct}%`}>
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            {up
+              ? <path d="M3 11l5-6 5 6 M8 5v9" />
+              : <path d="M3 5l5 6 5-6 M8 11V2" />}
+          </svg>
+          <span>{Math.abs(Number(trendPct) || 0)}%</span>
+        </div>
+      </div>
+
+      <div className="wwpop__value-row">
+        <div className="wwpop__value">
+          <AnimatedNumber value={value} />
+        </div>
+        <span className="wwpop__value-meta">{t("vsPrev")}</span>
+      </div>
+
+      {hasSeries ? (
+        <div ref={wrapRef} className="wwpop__chart">
+          <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="wwpop__spark" role="img" aria-label="Spark trend">
+            <defs>
+              <linearGradient id={lineId} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#a5b4fc" />
+                <stop offset="100%" stopColor="#f9a8d4" />
+              </linearGradient>
+              <linearGradient id={areaId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="rgba(196,181,253,.55)" />
+                <stop offset="100%" stopColor="rgba(196,181,253,0)" />
+              </linearGradient>
+            </defs>
+
+            {/* baseline */}
+            <line x1={padL} y1={padT + innerH} x2={W - padR} y2={padT + innerH} stroke="currentColor" strokeOpacity=".15" />
+            {/* avg line */}
+            {avgVal > 0 ? (
+              <line x1={padL} y1={avgY} x2={W - padR} y2={avgY} stroke="currentColor" strokeOpacity=".3" strokeDasharray="4 4" />
+            ) : null}
+            {/* area + line */}
+            <path d={areaPath} fill={`url(#${areaId})`} />
+            <path d={linePath} fill="none" stroke={`url(#${lineId})`} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            {/* min / max markers */}
+            {maxVal > 0 && maxIdx >= 0 ? (
+              <g>
+                <circle cx={pts[maxIdx][0]} cy={pts[maxIdx][1]} r="3.5" fill="#22c55e" stroke="var(--surface, #fff)" strokeWidth="1.5" />
+              </g>
+            ) : null}
+            {minIdx >= 0 && minIdx !== maxIdx ? (
+              <g>
+                <circle cx={pts[minIdx][0]} cy={pts[minIdx][1]} r="3" fill="#ef4444" stroke="var(--surface, #fff)" strokeWidth="1.5" />
+              </g>
+            ) : null}
+            {/* latest pulse */}
+            {lastIdx >= 0 ? (
+              <g>
+                <circle cx={pts[lastIdx][0]} cy={pts[lastIdx][1]} r="8" fill="#a5b4fc" fillOpacity=".18">
+                  <animate attributeName="r" values="5;12;5" dur="2.2s" repeatCount="indefinite" />
+                  <animate attributeName="fill-opacity" values=".3;0;.3" dur="2.2s" repeatCount="indefinite" />
+                </circle>
+                <circle cx={pts[lastIdx][0]} cy={pts[lastIdx][1]} r="4" fill="var(--surface, #fff)" stroke="#a5b4fc" strokeWidth="2.2" />
+              </g>
+            ) : null}
+          </svg>
+        </div>
+      ) : null}
+
+      <div className="wwpop__stats">
+        <div className="wwpop__stat">
+          <span className="wwpop__stat-label">{t("avg")}</span>
+          <span className="wwpop__stat-val">{fmtPoints(Math.round(avgVal))}</span>
+        </div>
+        <div className="wwpop__stat">
+          <span className="wwpop__stat-label">{t("max") || "Max"}</span>
+          <span className="wwpop__stat-val wwpop__stat-val--up">{fmtPoints(maxVal)}</span>
+        </div>
+        <div className="wwpop__stat">
+          <span className="wwpop__stat-label">{t("min") || "Min"}</span>
+          <span className="wwpop__stat-val wwpop__stat-val--down">{fmtPoints(minVal)}</span>
+        </div>
+        <div className="wwpop__stat">
+          <span className="wwpop__stat-label">{t("total")}</span>
+          <span className="wwpop__stat-val">{fmtPoints(total)}</span>
+        </div>
+      </div>
     </div>
   );
 }

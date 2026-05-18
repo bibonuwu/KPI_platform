@@ -31,6 +31,8 @@ import {
   Icon, Btn, Input, Select, Textarea, Pill, DataCards, QuarterFilter,
   GoalsWidget, LoadingScreen, BarChart, PointsDynamicsChart,
   DonutChart, RadarChart, GaugeChart, StackedBarChart, HistogramChart,
+  LevelChart, VerticalBarChart, IntensityChart, StackedColumnChart,
+  UserDataChart, MonthlyAverageChart, WorldwidePopulationChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
   FileDrop, ErrorBoundary, Guard, TeammatesPicker
 } from "../components.jsx";
@@ -1244,7 +1246,6 @@ export function PageAdd() {
   const u = st.userDoc;
 
   // ALL hooks before any early return
-  const [step, setStep] = useState(0); // 0: category, 1: type+date, 2: details
   const [section, setSection] = useState("");
   const [subsection, setSubsection] = useState("");
   const [typeId, setTypeId] = useState("");
@@ -1282,7 +1283,6 @@ export function PageAdd() {
   if (!canAccess("add", u)) return <Guard />;
 
   const type = opts.find(x => x.id === typeId) || null;
-  const stepLabels = [t("addStepCategory") || "Категория", t("addStepType") || "Тип и дата", t("addStepDetails") || "Описание"];
 
   function applyHint() {
     if (!hint) return;
@@ -1295,19 +1295,6 @@ export function PageAdd() {
   }
 
   function dismissHint() { setHint(null); setHintDismissed(true); }
-
-  function onCardMouseMove(e) {
-    const el = e.currentTarget;
-    const r = el.getBoundingClientRect();
-    el.style.setProperty("--mx", `${e.clientX - r.left}px`);
-    el.style.setProperty("--my", `${e.clientY - r.top}px`);
-  }
-
-  function canGoNext() {
-    if (step === 0) return !!section;
-    if (step === 1) return !!subsection && !!type && (goalMode || !!eventDate);
-    return true;
-  }
 
   async function submit(e) {
     e?.preventDefault?.();
@@ -1360,282 +1347,179 @@ export function PageAdd() {
   }
 
   return (
-    <div className="add-wizard">
-      <div className="add-wizard__aurora" aria-hidden="true">
-        <span className="add-wizard__blob add-wizard__blob--1" />
-        <span className="add-wizard__blob add-wizard__blob--2" />
-      </div>
+    <div className="add-form">
+      <div className="add-form__main">
+        <div className="add-form__card">
+          <header className="add-form__header">
+            <h2 className="add-form__title">{t("addKpiTitle") || "Добавить KPI"}</h2>
+            <p className="add-form__sub">{t("addKpiDesc")}</p>
+          </header>
 
-      {/* Slide track */}
-      <div className="add-wizard__track" data-step={step}>
-        <div className="add-wizard__shell glass">
-          <span className="add-wizard__shell-glow" aria-hidden="true" />
-
-          {/* Step indicator */}
-          <div className="add-wizard__steps" role="tablist">
-            {stepLabels.map((lbl, i) => (
-              <React.Fragment key={lbl}>
-                <button
-                  type="button"
-                  className={`add-wizard__step${i === step ? " is-active" : ""}${i < step ? " is-done" : ""}`}
-                  onClick={() => { if (i < step) setStep(i); }}
-                >
-                  <span className="add-wizard__step-num">{i < step ? "✓" : i + 1}</span>
-                  <span className="add-wizard__step-label">{lbl}</span>
-                </button>
-                {i < stepLabels.length - 1 && <span className={`add-wizard__step-line${i < step ? " is-done" : ""}`} />}
-              </React.Fragment>
-            ))}
-          </div>
-
-          {/* Compact summary strip (top of shell) */}
-          <div className="add-wizard__summary-strip">
-            <div className="add-wizard__summary-strip-row">
-              <div className="add-wizard__summary-strip-item">
-                <span className="add-wizard__summary-strip-lbl">{t("sectionLabel")}</span>
-                <span className="add-wizard__summary-strip-val">{section || "—"}</span>
-              </div>
-              <div className="add-wizard__summary-strip-item">
-                <span className="add-wizard__summary-strip-lbl">{t("subsectionLabel")}</span>
-                <span className="add-wizard__summary-strip-val">{subsection || "—"}</span>
-              </div>
-              <div className="add-wizard__summary-strip-item add-wizard__summary-strip-item--wide">
-                <span className="add-wizard__summary-strip-lbl">{t("kpiType")}</span>
-                <span className="add-wizard__summary-strip-val" title={type?.name || ""}>{type?.name || "—"}</span>
-              </div>
-              {!goalMode && (
-                <div className="add-wizard__summary-strip-item">
-                  <span className="add-wizard__summary-strip-lbl">{t("dateLabel") || "Дата"}</span>
-                  <span className="add-wizard__summary-strip-val">{eventDate || "—"}</span>
-                </div>
-              )}
-              <div className="add-wizard__summary-strip-pts">
-                <span className="add-wizard__summary-strip-pts-val">{type?.defaultPoints ?? 0}</span>
-                <span className="add-wizard__summary-strip-pts-lbl">{t("ptsShort") || "балл"}</span>
-              </div>
+          <section className="add-form__group">
+            <div className="add-form__group-head">
+              <span className="add-form__group-num">1</span>
+              <span className="add-form__group-title">{t("addStepCategory") || "Категория"}</span>
             </div>
-          </div>
-
-          <div className="add-wizard__slides">
-
-          {/* STEP 0: Section only */}
-          <section className="add-wizard__slide" hidden={step !== 0}>
-            <div className="add-wizard__card glass" key={`s0-${step}`}>
-              <h3 className="add-wizard__h">{t("addPickCategory") || "Выберите категорию"}</h3>
-              <p className="add-wizard__sub">{t("addPickCategoryHint") || "Раздел задаёт направление KPI. На следующем шаге выберете подраздел и конкретный тип."}</p>
-
-              <div className="add-wizard__section-grid">
-                {sections.map((s, i) => {
-                  const count = types.filter(x => x.section === s).length;
-                  return (
-                    <button
-                      type="button"
-                      key={s}
-                      className={`add-wizard__section-card${s === section ? " is-active" : ""}`}
-                      onClick={() => setSection(s)}
-                      onMouseMove={onCardMouseMove}
-                      style={{ "--di": i }}
-                    >
-                      <span className="add-wizard__section-glyph">{s.includes("Жеке") ? "🌱" : s.includes("Кәсіби") ? "🎓" : "📌"}</span>
-                      <span className="add-wizard__section-name">{s}</span>
-                      <span className="add-wizard__section-meta">{count} {t("typesShort") || "түрі"}</span>
-                    </button>
-                  );
-                })}
-                {!sections.length && <div className="muted tiny" style={{ padding: 10 }}>—</div>}
-              </div>
+            <div className="add-form__row add-form__row--two">
+              <label className="add-form__field">
+                <span className="add-form__label">{t("sectionLabel")}</span>
+                <Select value={section} onChange={e => setSection(e.target.value)}>
+                  {!sections.length && <option value="">—</option>}
+                  {sections.map(s => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </label>
+              <label className="add-form__field">
+                <span className="add-form__label">{t("subsectionLabel")}</span>
+                <Select value={subsection} onChange={e => setSubsection(e.target.value)} disabled={!subs.length}>
+                  {!subs.length && <option value="">—</option>}
+                  {subs.map(s => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </label>
             </div>
           </section>
 
-          {/* STEP 1: Subsection + Type + Date */}
-          <section className="add-wizard__slide" hidden={step !== 1}>
-            <div className="add-wizard__card glass" key={`s1-${step}`}>
-              <h3 className="add-wizard__h">{t("addPickType") || "Подраздел и тип"}</h3>
-              <p className="add-wizard__sub">{section ? <>«{section}» → {t("ptsAutoHelp")}</> : t("ptsAutoHelp")}</p>
+          <section className="add-form__group">
+            <div className="add-form__group-head">
+              <span className="add-form__group-num">2</span>
+              <span className="add-form__group-title">{t("kpiType")}</span>
+              {type && (
+                <span className="add-form__group-meta">+{type.defaultPoints} {t("ptsShort") || "балл"}</span>
+              )}
+            </div>
 
-              <div className="add-wizard__group-title">{t("subsectionLabel")}</div>
-              <div className="add-wizard__pills">
-                {subs.map((s, i) => (
-                  <button
-                    type="button"
-                    key={s}
-                    className={`add-wizard__pill${s === subsection ? " is-active" : ""}`}
-                    onClick={() => setSubsection(s)}
-                    style={{ "--di": i }}
-                  >
-                    {s}
-                  </button>
-                ))}
-                {!subs.length && <span className="muted tiny">—</span>}
-              </div>
+            <div className="add-form__type-list" role="radiogroup">
+              {opts.map(tp => (
+                <button
+                  key={tp.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={tp.id === typeId}
+                  className={`add-form__type${tp.id === typeId ? " is-active" : ""}`}
+                  onClick={() => setTypeId(tp.id)}
+                >
+                  <span className="add-form__type-radio" aria-hidden="true" />
+                  <span className="add-form__type-name">{tp.name}</span>
+                  <span className="add-form__type-pts">+{tp.defaultPoints}</span>
+                </button>
+              ))}
+              {!opts.length && (
+                <div className="add-form__empty">
+                  {subsection ? (t("noTypesForSub") || "Для этого подраздела ещё нет типов") : (t("pickSubFirst") || "Сначала выберите подраздел")}
+                </div>
+              )}
+            </div>
 
-              <div className="add-wizard__group-title" style={{ marginTop: 18 }}>{t("kpiType")}</div>
-              <div className="add-wizard__types">
-                {opts.map((tp, i) => (
-                  <button
-                    type="button"
-                    key={tp.id}
-                    className={`add-wizard__type${tp.id === typeId ? " is-active" : ""}`}
-                    onClick={() => setTypeId(tp.id)}
-                    onMouseMove={onCardMouseMove}
-                    style={{ "--di": i }}
-                  >
-                    <span className="add-wizard__type-name">{tp.name}</span>
-                    <span className="add-wizard__type-pts">{tp.defaultPoints} <span className="add-wizard__type-pts-lbl">{t("ptsShort") || "балл"}</span></span>
-                  </button>
-                ))}
-                {!opts.length && (
-                  <div className="add-wizard__empty">
-                    <span className="add-wizard__empty-glyph">🔍</span>
-                    <span>{subsection ? (t("noTypesForSub") || "Для этого подраздела ещё нет типов") : (t("pickSubFirst") || "Сначала выберите подраздел выше")}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="add-wizard__row">
-                <label className="add-wizard__inline-toggle">
-                  <input type="checkbox" checked={goalMode} onChange={e => setGoalMode(e.target.checked)} />
-                  <span>{t("goalsAndDeadlines")}</span>
-                </label>
-              </div>
+            <div className="add-form__inline">
+              <label className="add-form__check">
+                <input type="checkbox" checked={goalMode} onChange={e => setGoalMode(e.target.checked)} />
+                <span>{t("goalsAndDeadlines")}</span>
+              </label>
 
               {!goalMode ? (
-                <div className="add-wizard__row">
-                  <div className="add-wizard__field" style={{ flex: 1 }}>
-                    <div className="add-label">{t("dateLabel") || "Дата"}</div>
-                    <Input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
-                  </div>
-                </div>
+                <label className="add-form__field add-form__field--inline">
+                  <span className="add-form__label">{t("dateLabel") || "Дата"}</span>
+                  <Input type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} />
+                </label>
               ) : (
-                <div className="add-wizard__row add-wizard__row--two">
-                  <div className="add-wizard__field">
-                    <div className="add-label">{t("dateFrom")}</div>
+                <div className="add-form__date-pair">
+                  <label className="add-form__field">
+                    <span className="add-form__label">{t("dateFrom")}</span>
                     <Input type="date" value={goalDateFrom} onChange={e => setGoalDateFrom(e.target.value)} />
-                  </div>
-                  <div className="add-wizard__field">
-                    <div className="add-label">{t("dateTo")}</div>
+                  </label>
+                  <label className="add-form__field">
+                    <span className="add-form__label">{t("dateTo")}</span>
                     <Input type="date" value={goalDateTo} onChange={e => setGoalDateTo(e.target.value)} />
-                  </div>
+                  </label>
                 </div>
               )}
             </div>
           </section>
 
-          {/* STEP 2: Details */}
-          <section className="add-wizard__slide" hidden={step !== 2}>
-            <div className="add-wizard__card glass" key={`s2-${step}`}>
-              <h3 className="add-wizard__h">{t("addDetails") || "Детали"}</h3>
-              <p className="add-wizard__sub">{t("addDetailsHint") || "Опишите что сделано и приложите доказательство."}</p>
-
-              <div className="add-wizard__field">
-                <div className="add-label">{t("titleLabel") || "Название"}</div>
-                <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={t("titlePlaceholder") || "Что произошло, кто, где..."} required />
-              </div>
-
-              {hint && !hintDismissed && (
-                <div className="add-wizard__hint" role="alert">
-                  <span className="add-wizard__hint-icon">💡</span>
-                  <div className="add-wizard__hint-body">
-                    <strong>{t("smartHint") || "Подсказка"}:</strong> {t("smartHintSuggest") || "похоже на"} <em>«{hint.section} → {hint.subsection}»</em>.
-                  </div>
-                  <button type="button" className="add-wizard__hint-btn" onClick={applyHint}>{t("applyHint") || "Применить"}</button>
-                  <button type="button" className="add-wizard__hint-x" onClick={dismissHint} aria-label="×">×</button>
-                </div>
-              )}
-
-              <div className="add-wizard__field">
-                <div className="add-label">{t("descLabel") || "Описание"}</div>
-                <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={t("descPlaceholder")} />
-              </div>
-
-              <div className="add-wizard__row add-wizard__row--two">
-                <div className="add-wizard__field">
-                  <div className="add-label">{t("linkOptional")}</div>
-                  <Input value={evidenceLink} onChange={e => setEvidenceLink(e.target.value)} placeholder="https://..." />
-                </div>
-                <div className="add-wizard__field">
-                  <div className="add-label">{t("fileOptional")}</div>
-                  <FileDrop accept=".pdf,image/png,image/jpeg" value={file} onChange={e => setFile(e.target.files?.[0] || null)} />
-                </div>
-              </div>
-
-              <div className="add-wizard__field">
-                <TeammatesPicker
-                  value={teammates}
-                  onChange={setTeammates}
-                  excludeUid={u.uid}
-                  label={goalMode ? t("teamGoalMembers") : t("sharedWithTeammates")}
-                />
-                <div className="help">{goalMode ? t("teamGoalHint") : t("teammatesHint")}</div>
-              </div>
+          <section className="add-form__group">
+            <div className="add-form__group-head">
+              <span className="add-form__group-num">3</span>
+              <span className="add-form__group-title">{t("addDetails") || "Детали"}</span>
             </div>
-          </section>
-          </div>
 
-          {/* Navigation (inside shell) */}
-          <div className="add-wizard__nav">
-            <Btn type="button" onClick={() => { if (step > 0) setStep(step - 1); else navigate("dashboard"); }}>
-              {step > 0 ? (t("back") || "Назад") : (t("cancel") || "Отмена")}
-            </Btn>
-            {step < 2 ? (
-              <Btn kind="primary" type="button" onClick={() => setStep(step + 1)} disabled={!canGoNext()}>
-                {t("next") || "Далее"} →
-              </Btn>
-            ) : (
-              <Btn kind="primary" type="button" onClick={submit} disabled={st.loading}>
-                {goalMode ? t("setGoal") : (t("submit") || "Отправить")}
-              </Btn>
+            <label className="add-form__field">
+              <span className="add-form__label">{t("titleLabel") || "Название"}</span>
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={t("titlePlaceholder") || "Что произошло, кто, где..."} required />
+            </label>
+
+            {hint && !hintDismissed && (
+              <div className="add-form__hint" role="alert">
+                <span className="add-form__hint-text">
+                  {t("smartHint") || "Подсказка"}: {t("smartHintSuggest") || "похоже на"} <em>«{hint.section} → {hint.subsection}»</em>.
+                </span>
+                <div className="add-form__hint-actions">
+                  <button type="button" className="add-form__hint-apply" onClick={applyHint}>{t("applyHint") || "Применить"}</button>
+                  <button type="button" className="add-form__hint-x" onClick={dismissHint} aria-label="×">×</button>
+                </div>
+              </div>
             )}
+
+            <label className="add-form__field">
+              <span className="add-form__label">{t("descLabel") || "Описание"}</span>
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={t("descPlaceholder")} />
+            </label>
+
+            <div className="add-form__row add-form__row--two">
+              <label className="add-form__field">
+                <span className="add-form__label">{t("linkOptional")}</span>
+                <Input value={evidenceLink} onChange={e => setEvidenceLink(e.target.value)} placeholder="https://..." />
+              </label>
+              <div className="add-form__field">
+                <span className="add-form__label">{t("fileOptional")}</span>
+                <FileDrop accept=".pdf,image/png,image/jpeg" value={file} onChange={e => setFile(e.target.files?.[0] || null)} />
+              </div>
+            </div>
+
+            <div className="add-form__field">
+              <TeammatesPicker
+                value={teammates}
+                onChange={setTeammates}
+                excludeUid={u.uid}
+                label={goalMode ? t("teamGoalMembers") : t("sharedWithTeammates")}
+              />
+              <div className="help">{goalMode ? t("teamGoalHint") : t("teammatesHint")}</div>
+            </div>
+          </section>
+
+          <div className="add-form__actions">
+            <Btn type="button" onClick={() => navigate("dashboard")}>{t("cancel") || "Отмена"}</Btn>
+            <Btn kind="primary" type="button" onClick={submit} disabled={st.loading}>
+              {goalMode ? t("setGoal") : (t("submit") || "Отправить")}
+            </Btn>
           </div>
         </div>
-
-        {/* Right column: Goals/History + Books shortcut */}
-        <aside className="add-wizard__aside">
-          <div className="add-wizard__aside-card glass">
-            <GoalsWidget compact />
-          </div>
-          <button type="button" className="add-wizard__books-card glass" onClick={() => navigate("books")}>
-            <span className="add-wizard__books-card-glow" aria-hidden="true" />
-            <div className="add-wizard__books-card-head">
-              <span className="add-wizard__books-card-icon">📚</span>
-              <div className="add-wizard__books-card-titles">
-                <div className="add-wizard__books-card-title">{t("navBooks")}</div>
-                <div className="add-wizard__books-card-sub">
-                  +{BOOK_QUIZ_LIBRARY.reduce((s, b) => s + (b.points || 0), 0)} {t("ptsShort") || "балл"} · {BOOK_QUIZ_LIBRARY.length} {t("monthShort") || "ай"}
-                </div>
-              </div>
-              <span className="add-wizard__books-card-arrow">→</span>
-            </div>
-
-            <div className="add-wizard__books-card-tiles">
-              {BOOK_QUIZ_LIBRARY.slice(0, 3).map((book, i) => (
-                <span key={book.id} className="add-wizard__books-tile" style={{ "--di": i }}>
-                  <span className="add-wizard__books-tile-spine" aria-hidden="true" />
-                  <span className="add-wizard__books-tile-month">{book.month}</span>
-                  <span className="add-wizard__books-tile-pts">+{book.points}</span>
-                </span>
-              ))}
-              {BOOK_QUIZ_LIBRARY.length > 3 && (
-                <span className="add-wizard__books-tile add-wizard__books-tile--more">
-                  +{BOOK_QUIZ_LIBRARY.length - 3}
-                </span>
-              )}
-            </div>
-
-            {BOOK_QUIZ_LIBRARY[0] && (
-              <div className="add-wizard__books-card-featured">
-                <span className="add-wizard__books-card-featured-lbl">
-                  ★ {BOOK_QUIZ_LIBRARY[0].month}
-                </span>
-                <span className="add-wizard__books-card-featured-title" title={BOOK_QUIZ_LIBRARY[0].shortTitle}>
-                  {BOOK_QUIZ_LIBRARY[0].shortTitle}
-                </span>
-                <span className="add-wizard__books-card-featured-author">{BOOK_QUIZ_LIBRARY[0].author}</span>
-              </div>
-            )}
-          </button>
-        </aside>
       </div>
+
+      <aside className="add-form__aside">
+        <div className="add-form__aside-card">
+          <GoalsWidget compact />
+        </div>
+        <button type="button" className="add-form__books" onClick={() => navigate("books")}>
+          <div className="add-form__books-head">
+            <span className="add-form__books-icon">📚</span>
+            <div className="add-form__books-titles">
+              <div className="add-form__books-title">{t("navBooks")}</div>
+              <div className="add-form__books-sub">
+                +{BOOK_QUIZ_LIBRARY.reduce((s, b) => s + (b.points || 0), 0)} {t("ptsShort") || "балл"} · {BOOK_QUIZ_LIBRARY.length} {t("monthShort") || "ай"}
+              </div>
+            </div>
+            <span className="add-form__books-arrow">→</span>
+          </div>
+          {BOOK_QUIZ_LIBRARY[0] && (
+            <div className="add-form__books-feat">
+              <span className="add-form__books-feat-lbl">★ {BOOK_QUIZ_LIBRARY[0].month}</span>
+              <span className="add-form__books-feat-title" title={BOOK_QUIZ_LIBRARY[0].shortTitle}>
+                {BOOK_QUIZ_LIBRARY[0].shortTitle}
+              </span>
+              <span className="add-form__books-feat-author">{BOOK_QUIZ_LIBRARY[0].author}</span>
+            </div>
+          )}
+        </button>
+      </aside>
     </div>
   );
 }
@@ -2689,7 +2573,7 @@ export function PageStats() {
     const shown = insights.slice(0, 6);
 
     return (
-      <div className="stats-wrap">
+      <div className="stats-wrap stats-wrap--glass">
         <Controls />
 
         <div className="stats-hero-grid">
@@ -2714,7 +2598,7 @@ export function PageStats() {
             sub={t("approved")}
             value={fmtPoints(totalPts)}
             title={t("thisYear")}
-            trail={olderPts > 0 ? `${trendPct365 >= 0 ? "▲" : "▼"} ${Math.abs(trendPct365)}%` : null}
+            trail={olderPts > 0 ? `${trendPct365 >= 0 ? "+" : "−"}${Math.abs(trendPct365)}% ${t("vsPrev")}` : null}
             accent="#22c55e"
           />
         </div>
@@ -2741,12 +2625,36 @@ export function PageStats() {
         </div>
 
         <div className="grid2 stats-grid">
-          <div className="glass card stats-block stats-block--wide">
+          <div className="glass card stats-block">
             <div className="stats-block__head">
               <div className="h2">{t("pointsDynamic")}</div>
               <span className="tiny muted">{t("pdynHint")}</span>
             </div>
-            <PointsDynamicsChart values={bySeries} labels={bins.map(x => x.label)} accent="#87bc2e" />
+            <PointsDynamicsChart values={bySeries} labels={bins.map(x => x.label)} />
+          </div>
+
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("byCategories")}</div>
+            </div>
+            {topSections.length ? (
+              <div className="stats-sections">
+                {topSections.map(([sec, pts]) => {
+                  const pct = Math.round((pts / totalForPie) * 100);
+                  return (
+                    <div key={sec} className="stats-section">
+                      <div className="stats-section__row">
+                        <span className="stats-section__name">{sec}</span>
+                        <span className="stats-section__pts">{fmtPoints(pts)} · {pct}%</span>
+                      </div>
+                      <div className="stats-section__bar">
+                        <div className="stats-section__fill" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <p className="p muted">{t("noData")}</p>}
           </div>
 
           <div className="glass card stats-block stats-block--center">
@@ -2772,30 +2680,6 @@ export function PageStats() {
               ]}
               centerLabel={subs.length}
             />
-          </div>
-
-          <div className="glass card stats-block">
-            <div className="stats-block__head">
-              <div className="h2">{t("byCategories")}</div>
-            </div>
-            {topSections.length ? (
-              <div className="stats-sections">
-                {topSections.map(([sec, pts]) => {
-                  const pct = Math.round((pts / totalForPie) * 100);
-                  return (
-                    <div key={sec} className="stats-section">
-                      <div className="stats-section__row">
-                        <span className="stats-section__name">{sec}</span>
-                        <span className="stats-section__pts">{fmtPoints(pts)} · {pct}%</span>
-                      </div>
-                      <div className="stats-section__bar">
-                        <div className="stats-section__fill" style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : <p className="p muted">{t("noData")}</p>}
           </div>
         </div>
 
@@ -2834,7 +2718,122 @@ export function PageStats() {
           </div>
         </div>
 
-        <GoalsWidget />
+        {/* ══ Glassmorphism visual gallery ══ */}
+        <div className="visgal">
+          <div className="visgal__head">
+            <span className="visgal__title">{t("visualGalleryTitle")}</span>
+            <span className="visgal__hint tiny muted">{t("visualGalleryHint")}</span>
+          </div>
+
+          <div className="visgal__grid">
+            <div className="glass card stats-block visgal__cell visgal__cell--wide">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartLevel")}</div>
+                <span className="tiny muted">{t("chartLevelHint")}</span>
+              </div>
+              <LevelChart
+                value={allTimeTotal}
+                current={`${lvl.icon}  ${lvl.name}`}
+                next={lvl.next ? `${fmtPoints(ptsToNext)} ${t("toNextLevel")}` : "MAX"}
+                milestones={RANK_TABLE.map(r => ({ label: t(r.key), value: r.min }))}
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartVerticalBar")}</div>
+                <span className="tiny muted">{t("chartVerticalBarHint")}</span>
+              </div>
+              <VerticalBarChart
+                values={bySeries}
+                labels={bins.map(x => x.label)}
+                color="#a5b4fc"
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartIntensity")}</div>
+                <span className="tiny muted">{t("chartIntensityHint")}</span>
+              </div>
+              <IntensityChart
+                values={bySeries}
+                labels={bins.map(x => x.label)}
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell visgal__cell--wide">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartStackedColumn")}</div>
+                <span className="tiny muted">{t("chartStackedColumnHint")}</span>
+              </div>
+              <StackedColumnChart
+                data={bins.map(b => {
+                  const bKey = b.key;
+                  const inBin = subs.filter(s => (s.eventDate || "").slice(0, 7) === bKey);
+                  return {
+                    label: b.label,
+                    segments: [
+                      { value: sum(inBin.filter(s => s.status === "approved"), s => s.points), color: "#a5b4fc" },
+                      { value: inBin.filter(s => s.status === "pending").length * 5, color: "#fcd34d" },
+                      { value: inBin.filter(s => s.status === "rejected").length * 3, color: "#fda4af" }
+                    ]
+                  };
+                })}
+                labels={bins.map(x => x.label)}
+                series={[
+                  { label: t("approved"), color: "#a5b4fc" },
+                  { label: t("pending"),  color: "#fcd34d" },
+                  { label: t("rejected"), color: "#fda4af" }
+                ]}
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartUserData")}</div>
+                <span className="tiny muted">{t("chartUserDataHint")}</span>
+              </div>
+              {topType.length ? (
+                <UserDataChart
+                  rows={topType.slice(0, 6).map(([name, pts]) => ({
+                    label: name,
+                    value: pts,
+                    display: `${fmtPoints(pts)} ${t("pts")}`
+                  }))}
+                />
+              ) : <p className="p muted">{t("noData")}</p>}
+            </div>
+
+            <div className="glass card stats-block visgal__cell visgal__cell--wide">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartMonthlyAvg")}</div>
+                <span className="tiny muted">{t("chartMonthlyAvgHint")}</span>
+              </div>
+              <MonthlyAverageChart
+                values={bySeries}
+                labels={bins.map(x => x.label)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid2 stats-grid">
+          <div className="glass card stats-block">
+            <div className="stats-block__head">
+              <div className="h2">{t("chartWorldwide")}</div>
+              <span className="tiny muted">{t("chartWorldwideHint")}</span>
+            </div>
+            <WorldwidePopulationChart
+              value={teachersN}
+              label={t("teachers")}
+              sublabel={t("platform")}
+              trendPct={trendPct365}
+              series={bySeries}
+            />
+          </div>
+          <GoalsWidget dense />
+        </div>
       </div>
     );
   }
@@ -2895,12 +2894,12 @@ export function PageStats() {
       return sum(approved.filter(s => s.uid === t.uid && (s.eventDate || "").slice(0, 7) === b.key), s => s.points);
     }))));
 
-    const cellStyle = (v) => {
-      if (!v) return { background: "rgba(255,255,255,0.06)" };
+    const cellClass = (v) => {
+      if (!v) return "hm-cell hm-cell--empty";
       const t = Math.min(1, v / maxCell);
-      if (t < 0.34) return { background: "rgba(255, 99, 132, 0.42)" };
-      if (t < 0.67) return { background: "rgba(255, 200, 87, 0.48)" };
-      return { background: "rgba(135, 188, 46, 0.45)" };
+      if (t < 0.34) return "hm-cell hm-cell--low";
+      if (t < 0.67) return "hm-cell hm-cell--mid";
+      return "hm-cell hm-cell--high";
     };
 
     const hasAny = (st.users || []).length || (st.adminRecentSubs || []).length;
@@ -2950,7 +2949,7 @@ export function PageStats() {
     const shown = insights.slice(0, 6);
 
     return (
-      <div className="stats-wrap">
+      <div className="stats-wrap stats-wrap--glass">
         <Controls />
 
         <div className="stats-hero-grid">
@@ -2966,7 +2965,7 @@ export function PageStats() {
             sub={t("approved")}
             value={fmtPoints(totalApprovedPts)}
             title={t("thisYear")}
-            trail={olderPts > 0 ? `${trendPctP >= 0 ? "▲" : "▼"} ${Math.abs(trendPctP)}%` : null}
+            trail={olderPts > 0 ? `${trendPctP >= 0 ? "+" : "−"}${Math.abs(trendPctP)}% ${t("vsPrev")}` : null}
             accent="#22c55e"
           />
           <StatsHero
@@ -3005,7 +3004,7 @@ export function PageStats() {
               <div className="h2">{t("pointsDynamic")}</div>
               <span className="tiny muted">{t("pdynHint")}</span>
             </div>
-            <PointsDynamicsChart values={bySeries} labels={bins.map(x => x.label)} accent="#38bdf8" />
+            <PointsDynamicsChart values={bySeries} labels={bins.map(x => x.label)} />
           </div>
 
           <div className="glass card stats-block">
@@ -3079,7 +3078,7 @@ export function PageStats() {
                           {bins.map(b => {
                             const v = sum(approved.filter(s => s.uid === tc.uid && (s.eventDate || "").slice(0, 7) === b.key), s => s.points);
                             return (
-                              <td key={b.key} className="tiny" style={{ ...cellStyle(v), textAlign: "center", padding: "6px 4px", fontSize: 11 }} title={`${b.label}: ${v}`}>
+                              <td key={b.key} className={`tiny ${cellClass(v)}`} title={`${b.label}: ${v}`}>
                                 {v ? fmtPoints(v) : ""}
                               </td>
                             );
@@ -3089,10 +3088,130 @@ export function PageStats() {
                     </tbody>
                   </table>
                 </div>
-                <p className="help" style={{ marginTop: 8 }}>← {t("scrollH")}</p>
+                <div className="heatmap-legend">
+                  <span className="heatmap-legend__mark">0</span>
+                  <span className="heatmap-legend__bar" />
+                  <span className="heatmap-legend__mark">{fmtPoints(Math.round(maxCell))}</span>
+                  <span className="tiny muted" style={{ marginLeft: 6 }}>← {t("scrollH")}</span>
+                </div>
               </div>
             )
           }
+        </div>
+
+        {/* ══ Glassmorphism visual gallery — platform ══ */}
+        <div className="visgal">
+          <div className="visgal__head">
+            <span className="visgal__title">{t("visualGalleryTitle")}</span>
+            <span className="visgal__hint tiny muted">{t("visualGalleryHint")}</span>
+          </div>
+
+          <div className="visgal__grid">
+            <div className="glass card stats-block visgal__cell visgal__cell--wide">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartLevel")}</div>
+                <span className="tiny muted">{t("chartLevelHint")}</span>
+              </div>
+              <LevelChart
+                value={avgPts}
+                current={t("avgMonth")}
+                next={`${t("teachers")}: ${teachers.length}`}
+                milestones={[
+                  { label: "50",  value: 50 },
+                  { label: "150", value: 150 },
+                  { label: "300", value: 300 },
+                  { label: "500", value: 500 },
+                  { label: "900", value: 900 }
+                ]}
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartVerticalBar")}</div>
+                <span className="tiny muted">{t("chartVerticalBarHint")}</span>
+              </div>
+              <VerticalBarChart
+                values={bySeries}
+                labels={bins.map(x => x.label)}
+                color="#a5b4fc"
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartIntensity")}</div>
+                <span className="tiny muted">{t("chartIntensityHint")}</span>
+              </div>
+              <IntensityChart
+                values={bySeries}
+                labels={bins.map(x => x.label)}
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell visgal__cell--wide">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartStackedColumn")}</div>
+                <span className="tiny muted">{t("chartStackedColumnHint")}</span>
+              </div>
+              <StackedColumnChart
+                data={stackedData.map(d => ({
+                  ...d,
+                  segments: d.segments.map((s, idx) => ({
+                    ...s,
+                    color: ["#a5b4fc", "#fcd34d", "#fda4af"][idx] || s.color
+                  }))
+                }))}
+                labels={bins.map(x => x.label)}
+                series={[
+                  { label: t("approved"), color: "#a5b4fc" },
+                  { label: t("pending"),  color: "#fcd34d" },
+                  { label: t("rejected"), color: "#fda4af" }
+                ]}
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartUserData")}</div>
+                <span className="tiny muted">{t("chartUserDataHint")}</span>
+              </div>
+              {topTeachers.length ? (
+                <UserDataChart
+                  rows={topTeachers.slice(0, 6).map(x => ({
+                    label: (x.user?.displayName || x.user?.email || "—").slice(0, 22),
+                    value: x.pts,
+                    display: `${fmtPoints(x.pts)} ${t("pts")}`
+                  }))}
+                />
+              ) : <p className="p muted">{t("noData")}</p>}
+            </div>
+
+            <div className="glass card stats-block visgal__cell visgal__cell--wide">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartMonthlyAvg")}</div>
+                <span className="tiny muted">{t("chartMonthlyAvgHint")}</span>
+              </div>
+              <MonthlyAverageChart
+                values={bySeries}
+                labels={bins.map(x => x.label)}
+              />
+            </div>
+
+            <div className="glass card stats-block visgal__cell">
+              <div className="stats-block__head">
+                <div className="h2">{t("chartWorldwide")}</div>
+                <span className="tiny muted">{t("chartWorldwideHint")}</span>
+              </div>
+              <WorldwidePopulationChart
+                value={teachers.length}
+                label={t("teachers")}
+                sublabel={activeTeachersN ? `${activeTeachersN} active` : ""}
+                trendPct={trendPctP}
+                series={bySeries}
+              />
+            </div>
+          </div>
         </div>
       </div>
     );

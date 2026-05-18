@@ -44,7 +44,7 @@ export const store = {
     font: (function () { try { return localStorage.getItem("kpi_font") || "default"; } catch (e) { return "default"; } })(),
     accessibility: { reduceMotion: false, largeText: false, highContrast: false },
     showAccessibilityModal: false,
-    siteSettings: { showClock: true, showWeather: true },
+    siteSettings: { showClock: true, showWeather: true, showAi: true, showOnline: true },
     myTickets: [],
     allTickets: [],
     events: []
@@ -115,7 +115,7 @@ export async function saveAccessibilityToFirestore(uid, acc) {
 }
 
 export function getDefaultSiteSettings() {
-  return { showClock: true, showWeather: true };
+  return { showClock: true, showWeather: true, showAi: true, showOnline: true };
 }
 
 export function applySiteSettings(s) {

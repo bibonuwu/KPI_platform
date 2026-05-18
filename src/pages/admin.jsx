@@ -1145,14 +1145,6 @@ export function PageDocuments() {
       )}
 
       <div className="tdoc">
-        {/* Stat cards */}
-        <div className="treq-stats">
-          <TDocStat kind="pending" icon="clock" num={unsignedCount} label={t("tabToSign")} di={0} />
-          <TDocStat kind="balance" icon="file" num={docs.length} label={t("navDocuments")} di={1} />
-          <TDocStat kind="approved" icon="check" num={signedCount} label={t("statusSigned")} di={2} />
-          <TDocStat kind="total" icon="plus" num={myTDocs.length} label={t("tabMyDocs")} di={3} />
-        </div>
-
         {/* Tabs */}
         <div className="treq-tabs">
           <button className={`treq-tab${activeTab === "sign" ? " treq-tab--active" : ""}`} onClick={() => setActiveTab("sign")}>
@@ -3653,7 +3645,7 @@ export function PageAdminEvents() {
 }
 
 /** ---------- PageAdminSkud ---------- */
-const SKUD_URL_KEY = "kpi_skud_url_v2";
+const SKUD_URL_KEY = "kpi_skud_url_v3";
 const SKUD_DEFAULT_URL = "http://10.15.2.16/";
 
 export function PageAdminSkud() {

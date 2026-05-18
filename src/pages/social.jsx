@@ -737,6 +737,8 @@ export function PageSettings() {
   const displayRows = [
     { key: "showClock", label: t("settShowClock"), desc: t("settShowClockDesc") },
     { key: "showWeather", label: t("settShowWeather"), desc: t("settShowWeatherDesc") },
+    { key: "showAi", label: t("settShowAi"), desc: t("settShowAiDesc") },
+    { key: "showOnline", label: t("settShowOnline"), desc: t("settShowOnlineDesc") },
   ];
 
   const accRows = [

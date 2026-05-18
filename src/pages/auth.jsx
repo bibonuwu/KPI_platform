@@ -366,21 +366,32 @@ export function PageLogin() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [slide, setSlide] = useState(0);
   const [focused, setFocused] = useState(null);
+  const cardRef = useRef(null);
 
   useEffect(() => { if (st.userDoc) navigate("dashboard"); }, [st.userDoc]);
 
   useEffect(() => {
-    const id = setInterval(() => setSlide(s => (s + 1) % 3), 4500);
-    return () => clearInterval(id);
+    const el = cardRef.current;
+    if (!el) return;
+    const onMove = (e) => {
+      const r = el.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width) * 100;
+      const y = ((e.clientY - r.top) / r.height) * 100;
+      el.style.setProperty("--mx", `${x}%`);
+      el.style.setProperty("--my", `${y}%`);
+    };
+    const onLeave = () => {
+      el.style.setProperty("--mx", `50%`);
+      el.style.setProperty("--my", `50%`);
+    };
+    window.addEventListener("mousemove", onMove);
+    el.addEventListener("mouseleave", onLeave);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      el.removeEventListener("mouseleave", onLeave);
+    };
   }, []);
-
-  const slides = [
-    { icon: "📊", tTitle: "loginTitle1", tDesc: "loginDesc", accent: "#7dd3fc" },
-    { icon: "🏆", tTitle: "loginSlide1Title", tDesc: "loginSlide1Desc", accent: "#818cf8" },
-    { icon: "✨", tTitle: "loginSlide2Title", tDesc: "loginSlide2Desc", accent: "#a78bfa" },
-  ];
 
   async function submit(e) {
     e.preventDefault();
@@ -410,94 +421,74 @@ export function PageLogin() {
     } finally { setState({ loading: false }); }
   }
 
-  const s = slides[slide];
-
   return (
-    <div className="login-page">
-
-      {/* ═══ LEFT: Slideshow ═══ */}
-      <div className="login-slider">
-        {/* Animated bg blobs */}
-        <div className="login-slider__blobs" aria-hidden="true">
-          <div className="login-blob login-blob--1" />
-          <div className="login-blob login-blob--2" />
-          <div className="login-blob login-blob--3" />
+    <div className="login-page login-page--vision">
+      {/* Ambient Vision Pro background */}
+      <div className="login-aurora" aria-hidden="true">
+        <div className="login-aurora__orb login-aurora__orb--1" />
+        <div className="login-aurora__orb login-aurora__orb--2" />
+        <div className="login-aurora__orb login-aurora__orb--3" />
+        <div className="login-aurora__mesh" />
+        <div className="login-aurora__stars">
+          {Array.from({ length: 28 }).map((_, i) => (
+            <span key={i} className="login-star" style={{
+              "--x": `${(i * 37) % 100}%`,
+              "--y": `${(i * 71) % 100}%`,
+              "--d": `${(i % 5) * 0.6 + 1.4}s`,
+              "--dl": `${(i % 7) * 0.4}s`,
+            }} />
+          ))}
         </div>
-
-        <div className="login-slider__inner">
-          {/* Brand */}
-          <div className="login-slider__brand">
-            <img src="/logo-nis.png" alt="NIS" className="login-slider__logo" />
-            <div>
-              <div className="login-slider__brandname">{t("appName")}</div>
-              <div className="login-slider__brandsub">{t("loginNisName")}</div>
-            </div>
-          </div>
-
-          {/* Slide */}
-          <div className="login-slide" key={slide}>
-            <div className="login-slide__icon" style={{ "--accent": s.accent }}>{s.icon}</div>
-            <div className="login-slide__title">{t(s.tTitle)}</div>
-            <div className="login-slide__desc">{t(s.tDesc)}</div>
-          </div>
-
-          {/* Dots */}
-          <div className="login-dots">
-            {slides.map((sl, i) => (
-              <button
-                key={i}
-                className={`login-dot${i === slide ? " login-dot--active" : ""}`}
-                onClick={() => setSlide(i)}
-                aria-label={`Слайд ${i + 1}`}
-                style={{ "--acc": sl.accent }}
-              />
-            ))}
-          </div>
-
-          {/* Bottom strip */}
-          <div className="login-slider__footer">
-            <div className="login-slider__stat"><span>📈</span> {t("loginMotivation1")}</div>
-            <div className="login-slider__stat"><span>🎯</span> {t("loginMotivation2")}</div>
-            <div className="login-slider__stat"><span>🏅</span> {t("loginMotivation3")}</div>
-          </div>
-        </div>
+        <div className="login-aurora__grain" />
       </div>
 
-      {/* ═══ RIGHT: Form ═══ */}
-      <div className="login-form-panel">
-        <div className="login-form-wrap">
-          <div className="login-form-header">
-            <div className="login-form-logo">
+      {/* Centered glass card */}
+      <main className="login-card" ref={cardRef}>
+        <div className="login-card__halo" aria-hidden="true" />
+        <div className="login-card__sheen" aria-hidden="true" />
+
+        <div className="login-card__inner">
+          <div className="login-card__brand">
+            <div className="login-card__logo">
+              <span className="login-card__logo-ring" aria-hidden="true" />
+              <span className="login-card__logo-ring login-card__logo-ring--2" aria-hidden="true" />
               <img src="/logo-nis.png" alt="NIS" />
             </div>
-            <div className="login-form-title">{t("loginHeading")}</div>
-            <div className="login-form-sub">{t("loginSubtext")}</div>
+            <div className="login-card__appname">{t("appName")}</div>
           </div>
 
-          {/* Microsoft btn — primary CTA */}
+          <h1 className="login-card__title">{t("loginHeading")}</h1>
+          <p className="login-card__sub">{t("loginSubtext")}</p>
+
           <button
             className="login-ms-btn"
             onClick={signInMicrosoft}
             disabled={st.loading}
             type="button"
           >
-            <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
+            <svg width="18" height="18" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
               <path d="M1 1h9v9H1z" fill="#f25022" />
               <path d="M11 1h9v9h-9z" fill="#7fba00" />
               <path d="M1 11h9v9H1z" fill="#00a4ef" />
               <path d="M11 11h9v9h-9z" fill="#ffb900" />
             </svg>
-            {st.loading ? t("loading") : t("msSignIn")}
+            <span>{st.loading ? t("loading") : t("msSignIn")}</span>
           </button>
 
           <div className="login-divider"><span>{t("or")}</span></div>
 
-          <form onSubmit={submit}>
-            <div className={`login-field login-field--big${focused === "email" ? " login-field--focused" : ""}`}>
+          <form onSubmit={submit} className="login-form">
+            <div className={`login-field${focused === "email" ? " login-field--focused" : ""}`}>
               <label className="login-label">{t("email")}</label>
               <div className="login-input-suffix-wrap">
+                <span className="login-input-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
+                </span>
                 <input
-                  className="login-input"
+                  className="login-input login-input--iconed"
                   value={email}
                   onChange={e => setEmail(e.target.value.replace(/@.*$/, ""))}
                   onFocus={() => setFocused("email")}
@@ -510,11 +501,18 @@ export function PageLogin() {
                 <span className="login-input-suffix">@kzl.nis.edu.kz</span>
               </div>
             </div>
-            <div className={`login-field login-field--big${focused === "pass" ? " login-field--focused" : ""}`} style={{ marginTop: 14 }}>
+
+            <div className={`login-field${focused === "pass" ? " login-field--focused" : ""}`}>
               <label className="login-label">{t("password")}</label>
               <div className="login-pass-wrap">
+                <span className="login-input-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" />
+                  </svg>
+                </span>
                 <input
-                  className="login-input login-input--pass"
+                  className="login-input login-input--iconed login-input--pass"
                   value={pass}
                   onChange={e => setPass(e.target.value)}
                   onFocus={() => setFocused("pass")}
@@ -532,13 +530,13 @@ export function PageLogin() {
                   aria-label={showPass ? "Hide password" : "Show password"}
                 >
                   {showPass ? (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/>
                       <path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/>
                       <line x1="1" y1="1" x2="23" y2="23"/>
                     </svg>
                   ) : (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                       <circle cx="12" cy="12" r="3"/>
                     </svg>
@@ -546,21 +544,26 @@ export function PageLogin() {
                 </button>
               </div>
             </div>
+
             <button
               type="submit"
               className="login-submit-btn"
               disabled={st.loading}
             >
+              <span className="login-submit-btn__shine" aria-hidden="true" />
               <span className="login-submit-btn__text">
                 {st.loading ? t("signingIn") : t("signIn")}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 8 }}>
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
               </span>
-              <span className="login-submit-btn__shine" />
             </button>
           </form>
 
-          <div className="login-form-footer">{t("copyright")}</div>
+          <div className="login-card__footer">{t("copyright")}</div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
