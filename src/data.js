@@ -360,6 +360,98 @@ export async function uploadTeacherDocFile(uid, file) {
   return uploadFile(`teacher_documents/${uid}/${ts}_${safeName}`, file);
 }
 
+/* -------- Certificates (CEFR language test pass) -------- */
+// status: "pending" (waiting for admin signature) → "signed" (signed by admin)
+export async function createCertificate({ uid, userName, userEmail, lang, langLabel, level, score, total, percent }) {
+  const ref = await addDoc(collection(db, "certificates"), {
+    uid,
+    userName: safeText(userName),
+    userEmail: safeText(userEmail),
+    lang: safeText(lang),
+    langLabel: safeText(langLabel),
+    level: safeText(level),
+    score: Number(score) || 0,
+    total: Number(total) || 0,
+    percent: Number(percent) || 0,
+    status: "pending",
+    adminUid: "",
+    adminName: "",
+    adminSignatureUrl: "",
+    signedAt: null,
+    createdAt: serverTimestamp()
+  });
+  return ref.id;
+}
+export async function fetchMyCertificates(uid) {
+  const qy = query(collection(db, "certificates"), where("uid", "==", uid));
+  const res = await getDocs(qy);
+  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
+  arr.sort((a, b) => tsKey(b) - tsKey(a));
+  return arr;
+}
+export async function fetchPendingCertificates() {
+  const qy = query(collection(db, "certificates"), where("status", "==", "pending"));
+  const res = await getDocs(qy);
+  const arr = res.docs.map(d => ({ id: d.id, ...d.data() }));
+  arr.sort((a, b) => tsKey(b) - tsKey(a));
+  return arr;
+}
+export async function fetchAllCertificates() {
+  const qy = query(collection(db, "certificates"), orderBy("createdAt", "desc"), limit(5000));
+  const res = await getDocs(qy);
+  return res.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+// Sign a certificate AND bestow the CEFR badge on the teacher (atomically).
+// The badge only appears once admin signs.
+const CEFR_ORDER = { A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6 };
+function higherCefr(a, b) {
+  return (CEFR_ORDER[a] || 0) >= (CEFR_ORDER[b] || 0) ? a : b;
+}
+export async function signCertificate(certId, adminUid, adminName, adminSignatureUrl) {
+  const cRef = doc(db, "certificates", certId);
+  await runTransaction(db, async (tx) => {
+    const cSnap = await tx.get(cRef);
+    if (!cSnap.exists()) throw new Error("Certificate not found");
+    const c = cSnap.data() || {};
+    if (c.status === "signed") return;
+
+    const uRef = doc(db, "users", c.uid);
+    const uSnap = await tx.get(uRef);
+
+    tx.update(cRef, {
+      status: "signed",
+      adminUid,
+      adminName: safeText(adminName),
+      adminSignatureUrl: safeText(adminSignatureUrl),
+      signedAt: serverTimestamp()
+    });
+
+    // Award the public CEFR badge — only now does the teacher's profile light up.
+    if (uSnap.exists() && c.lang && c.level) {
+      const userData = uSnap.data() || {};
+      const currentBadges = userData.cefrBadges || {};
+      const prev = currentBadges[c.lang] || "";
+      const best = prev ? higherCefr(prev, c.level) : c.level;
+      if (best && best !== prev) {
+        tx.update(uRef, { cefrBadges: { ...currentBadges, [c.lang]: best } });
+      }
+    }
+  });
+}
+// Look up an existing certificate for (uid, lang, level) — prevents duplicates per pass.
+export async function findCertificate(uid, lang, level) {
+  const qy = query(
+    collection(db, "certificates"),
+    where("uid", "==", uid),
+    where("lang", "==", lang),
+    where("level", "==", level)
+  );
+  const res = await getDocs(qy);
+  if (res.empty) return null;
+  const d = res.docs[0];
+  return { id: d.id, ...d.data() };
+}
+
 export async function decideTeacherRequest(reqId, adminUid, action, pointsDelta) {
   const rRef = doc(db, "requests", reqId);
   await runTransaction(db, async (tx) => {

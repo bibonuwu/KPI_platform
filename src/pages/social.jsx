@@ -26,7 +26,7 @@ import {
   fetchEvents
 } from "../data.js";
 import {
-  Icon, Btn, Input, Select, Textarea, Pill, DataCards, LoadingScreen, FileDrop, ErrorBoundary, Guard
+  Icon, Btn, Input, Select, Textarea, Pill, DataCards, LoadingScreen, FileDrop, ErrorBoundary, Guard, VerifiedBadge
 } from "../components.jsx";
 
 export function NewsCard({ item, user, index }) {
@@ -132,7 +132,7 @@ export function NewsCard({ item, user, index }) {
               e.stopPropagation();
               const teacher = (st.users || []).find(u => u.uid === item.uid);
               if (teacher) setState({ modal: { kind: "teacherProfile", teacher } });
-            }}>{item.authorName || t("anonymous")}</div>
+            }}>{item.authorName || t("anonymous")}<VerifiedBadge user={(st.users || []).find(u => u.uid === item.uid)} size={12} /></div>
             <div className="tiny muted">{timeAgo}</div>
           </div>
           <span className={`news-pill news-pill--${item.category}`}>{catLabel}</span>
@@ -219,7 +219,7 @@ export function NewsCard({ item, user, index }) {
                       : <div className="news-comment__av news-comment__av--ph">{(c.authorName || "A")[0].toUpperCase()}</div>
                     }
                     <div className="news-comment__bubble">
-                      <div className="news-comment__author">{c.authorName}</div>
+                      <div className="news-comment__author">{c.authorName}<VerifiedBadge user={(st.users || []).find(u => u.uid === c.uid)} size={11} /></div>
                       <div className="news-comment__text">{c.text}</div>
                     </div>
                   </div>
@@ -631,7 +631,7 @@ export function PageNews() {
                   <div className="news-popular-rank">{i + 1}</div>
                   <div className="news-popular-info">
                     <div className="news-popular-title">{n.title}</div>
-                    <div className="news-popular-meta">{(n.likes || []).length} {t("likes")} · {n.authorName || t("anonymous")}</div>
+                    <div className="news-popular-meta">{(n.likes || []).length} {t("likes")} · {n.authorName || t("anonymous")}<VerifiedBadge user={(st.users || []).find(uu => uu.uid === n.uid)} size={10} /></div>
                   </div>
                 </div>
               ))}
@@ -654,7 +654,7 @@ export function PageNews() {
                     ? <img className="news-author-av" src={a.avatarUrl} alt="" />
                     : <div className="news-author-av news-author-av--ph">{a.name[0].toUpperCase()}</div>
                   }
-                  <div className="news-author-name">{a.name}</div>
+                  <div className="news-author-name">{a.name}<VerifiedBadge user={(st.users || []).find(uu => uu.uid === a.uid)} size={11} /></div>
                   <div className="news-author-count">{a.count} {t("posts")}</div>
                 </div>
               ))}
@@ -782,7 +782,7 @@ export function PageSettings() {
           </div>
           <div className="sett-banner__text">
             <div className="sett-banner__greeting">{greeting}</div>
-            <div className="sett-banner__name">{u?.displayName || t("unnamed")}</div>
+            <div className="sett-banner__name">{u?.displayName || t("unnamed")}<VerifiedBadge user={u} size={16} /></div>
             <div className="sett-banner__sub">{t("settingsDesc")}</div>
           </div>
           <div className="sett-banner__gear"><Icon name="settings" /></div>

@@ -17,7 +17,8 @@ import {
   fetchMyRequests, fetchPendingRequests, fetchAdminRecentRequests,
   fetchAllDocuments, fetchDocumentsForTeacher, fetchMyTeacherDocs,
   fetchNewsAll, fetchMyTickets, fetchAllTickets, fetchAnnouncements,
-  fetchGoals, setUserOnline, fetchEvents
+  fetchGoals, setUserOnline, fetchEvents,
+  fetchMyCertificates, fetchAllCertificates
 } from "./data.js";
 import {
   ErrorBoundary, LoadingScreen, SidebarNav, TopbarTitle, TopbarRight,
@@ -72,6 +73,40 @@ function mount(id, el) {
   root.render(el);
 }
 
+// path → [slotId, Component, checkBooting]
+const ROUTE_TO_SLOT = {
+  "login":               ["mount-login", PageLogin, false],
+  "onboarding":          ["mount-onboarding", PageOnboarding, true],
+  "dashboard":           ["mount-dashboard", PageDashboard, true],
+  "profile":             ["mount-profile", PageProfile, true],
+  "rating":              ["mount-rating", PageRating, true],
+  "stats":               ["mount-stats", PageStats, true],
+  "add":                 ["mount-add", PageAdd, true],
+  "books":               ["mount-books", PageBooks, true],
+  "requests":            ["mount-requests", PageRequests, true],
+  "documents":           ["mount-documents", PageDocuments, true],
+  "news":                ["mount-news", PageNews, true],
+  "support":             ["mount-support", PageSupport, true],
+  "settings":            ["mount-settings", PageSettings, true],
+  "classroomtools":      ["mount-classroomtools", PageClassroomTools, true],
+  "calendar":            ["mount-calendar", PageCalendar, true],
+  "about":               ["mount-about", PageAbout, false],
+  "admin/approvals":     ["mount-admin-approvals", PageAdminApprovals, true],
+  "admin/requests":      ["mount-admin-requests", PageAdminRequests, true],
+  "admin/documents":     ["mount-admin-documents", PageAdminDocuments, true],
+  "admin/types":         ["mount-admin-types", PageAdminTypes, true],
+  "admin/users":         ["mount-admin-users", PageAdminUsers, true],
+  "admin/teacher":       ["mount-admin-teacher", PageAdminTeacher, true],
+  "admin/support":       ["mount-admin-support", PageAdminSupport, true],
+  "admin/announcements": ["mount-admin-announcements", PageAdminAnnouncements, true],
+  "admin/events":        ["mount-admin-events", PageAdminEvents, true],
+  "admin/director":      ["mount-admin-director", PageAdminDirector, true],
+  "admin/skud":          ["mount-admin-skud", PageAdminSkud, true],
+};
+
+let __layoutMounted = false;
+let __activeSlot = null;
+
 async function render() {
   const route = parseRoute();
   const prev = store.state.route;
@@ -88,55 +123,35 @@ async function render() {
   }
   updateRouteVisibility(path);
 
-  // Layout (always)
-  mount("mount-topbar-title", <ErrorBoundary name="topbar-title"><TopbarTitle /></ErrorBoundary>);
-  mount("mount-sidebar", <ErrorBoundary name="sidebar"><SidebarNav /></ErrorBoundary>);
-  mount("mount-drawer", <ErrorBoundary name="drawer"><SidebarNav /></ErrorBoundary>);
-  mount("mount-topbar", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
-  mount("mount-topbar-right", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
-  mount("mount-bottomnav", <ErrorBoundary name="bottomnav"><BottomNav /></ErrorBoundary>);
-  mount("mount-overlays", <ErrorBoundary name="overlays"><Overlays /></ErrorBoundary>);
-  mount("mount-announcements", <ErrorBoundary name="announcements"><AnnouncementBanner /></ErrorBoundary>);
+  // Layout — mounted once; subscribers (useStore) update themselves
+  if (!__layoutMounted) {
+    mount("mount-topbar-title", <ErrorBoundary name="topbar-title"><TopbarTitle /></ErrorBoundary>);
+    mount("mount-sidebar", <ErrorBoundary name="sidebar"><SidebarNav /></ErrorBoundary>);
+    mount("mount-drawer", <ErrorBoundary name="drawer"><SidebarNav /></ErrorBoundary>);
+    mount("mount-topbar", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
+    mount("mount-topbar-right", <ErrorBoundary name="topbar"><TopbarRight /></ErrorBoundary>);
+    mount("mount-bottomnav", <ErrorBoundary name="bottomnav"><BottomNav /></ErrorBoundary>);
+    mount("mount-overlays", <ErrorBoundary name="overlays"><Overlays /></ErrorBoundary>);
+    mount("mount-announcements", <ErrorBoundary name="announcements"><AnnouncementBanner /></ErrorBoundary>);
+    __layoutMounted = true;
+  }
 
-  const show = (p) => p === path;
+  const entry = ROUTE_TO_SLOT[path];
+  if (!entry) return;
+  const [slot, Comp, checkBooting] = entry;
   const booting = store.state.booting;
 
-  const pageMount = (slot, routePath, Comp, checkBooting = true) => {
-    if (!show(routePath)) { mount(slot, null); return; }
-    const content = (checkBooting && booting)
-      ? <LoadingScreen />
-      : <Suspense fallback={<LoadingScreen />}><Comp /></Suspense>;
-    mount(slot, <ErrorBoundary name={routePath}>{content}</ErrorBoundary>);
-  };
+  // Unmount the previously active page (only one slot, not all 27)
+  if (__activeSlot && __activeSlot !== slot) {
+    mount(__activeSlot, null);
+  }
 
-  pageMount("mount-login", "login", PageLogin, false);
-  pageMount("mount-onboarding", "onboarding", PageOnboarding);
-  pageMount("mount-dashboard", "dashboard", PageDashboard);
-  pageMount("mount-profile", "profile", PageProfile);
-  pageMount("mount-rating", "rating", PageRating);
-  pageMount("mount-stats", "stats", PageStats);
-  pageMount("mount-add", "add", PageAdd);
-  pageMount("mount-books", "books", PageBooks);
-  pageMount("mount-requests", "requests", PageRequests);
-  pageMount("mount-documents", "documents", PageDocuments);
-  pageMount("mount-news", "news", PageNews);
-  pageMount("mount-support", "support", PageSupport);
-  pageMount("mount-settings", "settings", PageSettings);
-  pageMount("mount-classroomtools", "classroomtools", PageClassroomTools);
-  pageMount("mount-calendar", "calendar", PageCalendar);
-  pageMount("mount-about", "about", PageAbout, false);
+  const content = (checkBooting && booting)
+    ? <LoadingScreen />
+    : <Suspense fallback={<LoadingScreen />}><Comp /></Suspense>;
+  mount(slot, <ErrorBoundary name={path}>{content}</ErrorBoundary>);
 
-  pageMount("mount-admin-approvals", "admin/approvals", PageAdminApprovals);
-  pageMount("mount-admin-requests", "admin/requests", PageAdminRequests);
-  pageMount("mount-admin-documents", "admin/documents", PageAdminDocuments);
-  pageMount("mount-admin-types", "admin/types", PageAdminTypes);
-  pageMount("mount-admin-users", "admin/users", PageAdminUsers);
-  pageMount("mount-admin-teacher", "admin/teacher", PageAdminTeacher);
-  pageMount("mount-admin-support", "admin/support", PageAdminSupport);
-  pageMount("mount-admin-announcements", "admin/announcements", PageAdminAnnouncements);
-  pageMount("mount-admin-events", "admin/events", PageAdminEvents);
-  pageMount("mount-admin-director", "admin/director", PageAdminDirector);
-  pageMount("mount-admin-skud", "admin/skud", PageAdminSkud);
+  __activeSlot = slot;
 }
 
 function setupMobileDrawer() {
@@ -170,7 +185,7 @@ async function hydrateForUser(userDoc) {
   if (!userDoc) return;
   try {
     if (userDoc.role === "admin") {
-      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData, ticketsData, announcementsData, eventsData] = await Promise.all([
+      const [types, users, pend, recent, pendReq, recentReq, allDocs, newsData, ticketsData, announcementsData, eventsData, myCerts, allCerts] = await Promise.all([
         fetchTypesAll(),
         fetchUsersAll(),
         fetchPendingSubmissions(),
@@ -181,7 +196,9 @@ async function hydrateForUser(userDoc) {
         fetchNewsAll(),
         fetchAllTickets(),
         fetchAnnouncements(),
-        fetchEvents()
+        fetchEvents(),
+        fetchMyCertificates(userDoc.uid),
+        fetchAllCertificates()
       ]);
       setState({
         types, users,
@@ -190,10 +207,11 @@ async function hydrateForUser(userDoc) {
         allDocuments: allDocs, news: newsData,
         allTickets: ticketsData, announcements: announcementsData,
         events: eventsData,
+        myCertificates: myCerts, allCertificates: allCerts,
         mySubmissions: [], myRequests: [], myDocuments: [], myTickets: [], myGoals: []
       });
     } else {
-      const [types, my, myReq, myDocs, myTDocs, users, recent, newsData, myTix, announcementsData, myGoalsData, eventsData] = await Promise.all([
+      const [types, my, myReq, myDocs, myTDocs, users, recent, newsData, myTix, announcementsData, myGoalsData, eventsData, myCerts] = await Promise.all([
         fetchTypesActive(),
         fetchMySubmissions(userDoc.uid),
         fetchMyRequests(userDoc.uid),
@@ -205,15 +223,18 @@ async function hydrateForUser(userDoc) {
         fetchMyTickets(userDoc.uid),
         fetchAnnouncements(),
         fetchGoals(userDoc.uid),
-        fetchEvents()
+        fetchEvents(),
+        fetchMyCertificates(userDoc.uid)
       ]);
       setState({
         types, mySubmissions: my, myRequests: myReq, myDocuments: myDocs,
         myTeacherDocs: myTDocs, users, adminRecentSubs: recent,
         news: newsData, myTickets: myTix, announcements: announcementsData,
         myGoals: myGoalsData, events: eventsData,
+        myCertificates: myCerts,
         pendingSubmissions: [], pendingRequests: [],
-        adminRecentRequests: [], allDocuments: [], allTickets: []
+        adminRecentRequests: [], allDocuments: [], allTickets: [],
+        allCertificates: []
       });
     }
   } catch (e) {

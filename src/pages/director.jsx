@@ -7,7 +7,7 @@ import {
   filterByQuarter, getQuarterForDate, getAcademicYearLabel
 } from "../utils.js";
 import {
-  Icon, Btn, Input, Select, BarChart, AreaLineChart, DonutChart, Guard
+  Icon, Btn, Input, Select, BarChart, AreaLineChart, DonutChart, Guard, VerifiedBadge
 } from "../components.jsx";
 
 const RANGE_OPTIONS = [
@@ -646,7 +646,7 @@ export function PageAdminDirector() {
         <div className="dir-award__hint">{hint}</div>
         {winner ? (
           <>
-            <div className="dir-award__name">{winner.name}</div>
+            <div className="dir-award__name">{winner.name}<VerifiedBadge user={usersMap.get(winner.uid)} size={13} /></div>
             <div className="dir-award__sub">{winner.position || winner.subject || "—"}</div>
             <div className="dir-award__foot">
               <div className="dir-award__metric">{metricText}</div>
@@ -912,7 +912,7 @@ export function PageAdminDirector() {
                         role="button" tabIndex={0}
                         title={`${p.name} · ${fmtPoints(p.pts)}`}
                       >
-                        <div className="dir-level-chip__name">{p.name}</div>
+                        <div className="dir-level-chip__name">{p.name}<VerifiedBadge user={usersMap.get(p.uid)} size={11} /></div>
                         <div className="dir-level-chip__pts">{fmtPoints(p.pts)}</div>
                       </div>
                     ))}
@@ -954,7 +954,7 @@ export function PageAdminDirector() {
                     <div className="dir-cat__meta">{c.teacherCount} · {fmtPoints(c.totalPts)}</div>
                   </div>
                   <div className="dir-cat__row">
-                    <div className="dir-cat__winner">{c.winnerName}</div>
+                    <div className="dir-cat__winner">{c.winnerName}<VerifiedBadge user={usersMap.get(c.winnerUid)} size={11} /></div>
                     <div className="dir-cat__pts">{fmtPoints(c.winnerPts)} ({pct}%)</div>
                   </div>
                   <div className="dir-cat__bar">
@@ -987,7 +987,7 @@ export function PageAdminDirector() {
                 role="button" tabIndex={0}
                 className="dir-inactive-chip">
                 <div className="dir-inactive-chip__body">
-                  <div className="dir-inactive-chip__name">{r.name}</div>
+                  <div className="dir-inactive-chip__name">{r.name}<VerifiedBadge user={usersMap.get(r.uid)} size={11} /></div>
                   <div className="dir-inactive-chip__sub">{r.position || r.subject || "—"}</div>
                 </div>
                 <div className="dir-inactive-chip__pts">{fmtPoints(r.total)}</div>
@@ -1018,7 +1018,7 @@ export function PageAdminDirector() {
               role="button" tabIndex={0}>
               <div className={`dir-top-item__rank dir-top-item__rank--${i === 0 ? "gold" : i === 1 ? "silver" : i === 2 ? "bronze" : "plain"}`}>{i + 1}</div>
               <div className="dir-top-item__body">
-                <div className="dir-top-item__name">{r.name}</div>
+                <div className="dir-top-item__name">{r.name}<VerifiedBadge user={usersMap.get(r.uid)} size={12} /></div>
                 <div className="dir-top-item__sub">{r.position || r.subject || "—"}</div>
               </div>
               <div className="dir-top-item__meta">
@@ -1089,7 +1089,7 @@ export function PageAdminDirector() {
               {teacherRows.map((r, i) => (
                 <tr key={r.uid}>
                   <td style={{ opacity: .6 }}>{i + 1}</td>
-                  <td className="dir-col-name" style={{ fontWeight: 600 }}>{r.name}</td>
+                  <td className="dir-col-name" style={{ fontWeight: 600 }}>{r.name}<VerifiedBadge user={usersMap.get(r.uid)} size={11} /></td>
                   <td className="dir-col-pos">{r.position || "—"}</td>
                   <td className="dir-col-sub">{r.subject || "—"}</td>
                   <td className="dir-col-num dir-col-score">{r.score}</td>

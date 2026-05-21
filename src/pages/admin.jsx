@@ -28,14 +28,16 @@ import {
   fetchMyTeacherDocs, createMyTeacherDoc, uploadTeacherDocFile,
   deleteUserAndData, fetchCustomPositions, saveCustomPositions,
   fetchGoals, fetchNewsAll, renderRichDesc,
-  fetchEvents, createEvent, updateEvent, deleteEvent
+  fetchEvents, createEvent, updateEvent, deleteEvent,
+  fetchMyCertificates, fetchPendingCertificates, fetchAllCertificates, signCertificate
 } from "../data.js";
 import {
   Icon, Btn, Input, Select, Textarea, Pill, DataCards, QuarterFilter,
   GoalsWidget, LoadingScreen, BarChart, LineChart, AreaLineChart,
   DonutChart, RadarChart, GaugeChart, StackedBarChart, HistogramChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
-  FileDrop, ErrorBoundary, Guard
+  CertificatePreview, downloadCertificateAsPng, downloadCertificateAsPdf,
+  FileDrop, ErrorBoundary, Guard, VerifiedBadge
 } from "../components.jsx";
 
 function useWowTilt(maxTilt = 6) {
@@ -111,9 +113,22 @@ export function PageAdminApprovals() {
   const [groupByTeacher, setGroupByTeacher] = useState(false);
   const [confirmBulk, setConfirmBulk] = useState(null);
 
-  if (!u) return <Guard />;
-  if (u.role !== "admin") return <Guard />;
+  // Pending certificates count — used to surface a banner that takes the
+  // admin straight to admin/documents → "Сертификаты".
+  const [pendingCertsCount, setPendingCertsCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const list = await fetchPendingCertificates();
+        if (alive) setPendingCertsCount(list.length);
+      } catch (e) { console.error(e); }
+    })();
+    return () => { alive = false; };
+  }, [st.allDocuments?.length]);
 
+  // Compute values used by hooks regardless of auth state — keeps hook
+  // order stable across re-renders (React's rules-of-hooks).
   const pending = st.pendingSubmissions || [];
   const allSubs = st.adminRecentSubs || [];
   const usersMap = new Map((st.users || []).map(x => [x.uid, x]));
@@ -173,6 +188,10 @@ export function PageAdminApprovals() {
         return tb - ta;
       }).slice(0, 50);
   }, [allSubs]);
+
+  // Auth-gated returns AFTER all hooks have been registered.
+  if (!u) return <Guard />;
+  if (u.role !== "admin") return <Guard />;
 
   /* ---------- toggle helpers ---------- */
   const toggleSelect = (id) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -240,7 +259,7 @@ export function PageAdminApprovals() {
         <div className="appr-card__header">
           <div className="appr-card__avatar" title={tu?.displayName || ""}>{initials}</div>
           <div className="appr-card__teacher">
-            <b>{tu?.displayName || "—"}</b>
+            <b>{tu?.displayName || "—"}<VerifiedBadge user={tu} size={12} /></b>
             <span className="muted tiny">{tu?.email || s.uid}</span>
           </div>
           <div className="appr-card__pts">
@@ -271,7 +290,7 @@ export function PageAdminApprovals() {
               <span className="tiny muted">{t("sharedWithTeammates")}:</span>
               {mates.map(m => (
                 <span key={m.uid} className="pill approved" style={{ fontSize: 11, padding: "2px 8px" }}>
-                  {m.displayName || m.email}
+                  {m.displayName || m.email}<VerifiedBadge user={m} size={10} />
                 </span>
               ))}
               <span className="tiny muted">· {t("teammatesApprovalNote")} (+{fmtPoints(s.points)} × {mates.length + 1})</span>
@@ -332,6 +351,34 @@ export function PageAdminApprovals() {
           </div>
         </div>
       </div>
+
+      {/* ── Pending certificates banner — surfaces signing on the page admins use most ── */}
+      {pendingCertsCount > 0 && (
+        <div
+          className="glass card"
+          style={{
+            marginBottom: 16, padding: 16,
+            background: "linear-gradient(135deg, rgba(251,191,36,.18), rgba(251,146,60,.12))",
+            borderLeft: "5px solid #f59e0b",
+            cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap"
+          }}
+          onClick={() => navigate("admin/documents")}
+        >
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: "#f59e0b", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Icon name="shield" />
+          </div>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>
+              {pendingCertsCount} · {t("certPendingForAdmin")}
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+              {t("certPendingHint")}
+            </div>
+          </div>
+          <Btn kind="primary"><Icon name="check" /> {t("certSignNow")}</Btn>
+        </div>
+      )}
 
       {/* ── tabs ── */}
       <div className="appr-tabs">
@@ -421,7 +468,7 @@ export function PageAdminApprovals() {
                   <div className="appr-group__header glass">
                     <div className="appr-card__avatar">{(g.teacher?.displayName || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}</div>
                     <div>
-                      <b>{g.teacher?.displayName || "—"}</b>
+                      <b>{g.teacher?.displayName || "—"}<VerifiedBadge user={g.teacher} size={12} /></b>
                       <div className="muted tiny">{g.teacher?.email || g.uid} · {g.subs.length} {t("tabPending").toLowerCase()}</div>
                     </div>
                   </div>
@@ -443,12 +490,12 @@ export function PageAdminApprovals() {
           <DataCards
             emptyText={t("noHistory")}
             columns={[
-              { key: "teacher", label: t("teacher"), render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
+              { key: "teacher", label: t("teacher"), render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}<VerifiedBadge user={tu} size={11} /></b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
               { key: "type", label: t("typeAndTitle"), render: r => <><b>{r.typeName}</b><div className="muted tiny">{r.title}</div></> },
               { key: "date", label: t("date"), render: r => r.eventDate },
               { key: "pts", label: t("points"), render: r => <b>{fmtPoints(r.points)}</b> },
               { key: "status", label: t("status"), render: r => <Pill kind={r.status}>{r.status}</Pill> },
-              { key: "decidedBy", label: t("decidedBy"), render: r => { const a = usersMap.get(r.decidedBy); return a?.displayName || "—"; } }
+              { key: "decidedBy", label: t("decidedBy"), render: r => { const a = usersMap.get(r.decidedBy); return <>{a?.displayName || "—"}<VerifiedBadge user={a} size={11} /></>; } }
             ]}
             rows={history.map(r => ({ ...r, __key: r.id }))}
           />
@@ -790,7 +837,7 @@ export function PageAdminRequests() {
                       return (
                         <tr key={r.id}>
                           <td className="req-table__num">{idx + 1}</td>
-                          <td><b>{tu?.displayName || "—"}</b></td>
+                          <td><b>{tu?.displayName || "—"}<VerifiedBadge user={tu} size={11} /></b></td>
                           <td>
                             <span className={`req-table__kind req-table__kind--${r.kind}`}>
                               {r.kindLabel || requestKindLabel(r.kind)}
@@ -832,7 +879,7 @@ export function PageAdminRequests() {
                   return (
                     <div key={r.id} className="mobile-card glass">
                       <div className="mobile-card__row"><span className="mobile-card__label">№</span><span className="mobile-card__val">{idx + 1}</span></div>
-                      <div className="mobile-card__row"><span className="mobile-card__label">{t("teacher")}</span><span className="mobile-card__val"><b>{tu?.displayName || "—"}</b></span></div>
+                      <div className="mobile-card__row"><span className="mobile-card__label">{t("teacher")}</span><span className="mobile-card__val"><b>{tu?.displayName || "—"}<VerifiedBadge user={tu} size={11} /></b></span></div>
                       <div className="mobile-card__row"><span className="mobile-card__label">{t("type")}</span><span className="mobile-card__val">{r.kindLabel || requestKindLabel(r.kind)}</span></div>
                       <div className="mobile-card__row"><span className="mobile-card__label">{t("period")}</span><span className="mobile-card__val">{r.dateFrom}{r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}</span></div>
                       <div className="mobile-card__row"><span className="mobile-card__label">{t("daysCount")}</span><span className="mobile-card__val">{r.timeFrom && r.timeTo ? `${fmtHours(r.timeFrom, r.timeTo)}${t("hours")}  ${r.timeFrom} → ${r.timeTo}` : days}</span></div>
@@ -869,7 +916,7 @@ export function PageAdminRequests() {
           <DataCards
             emptyText={t("noHistory")}
             columns={[
-              { key: "teacher", label: t("teacher"), render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}</b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
+              { key: "teacher", label: t("teacher"), render: r => { const tu = usersMap.get(r.uid); return <><b>{tu?.displayName || "—"}<VerifiedBadge user={tu} size={11} /></b><div className="muted tiny">{tu?.email || r.uid}</div></>; } },
               { key: "kind", label: t("type"), render: r => r.kindLabel || requestKindLabel(r.kind) },
               { key: "period", label: t("period"), render: r => <>{r.dateFrom}{r.dateTo && r.dateTo !== r.dateFrom ? ` → ${r.dateTo}` : ""}{r.timeFrom && r.timeTo && <div className="req-table__time"><Icon name="clock" /> {fmtHours(r.timeFrom, r.timeTo)}{t("hours")} ({r.timeFrom} → {r.timeTo})</div>}</> },
               { key: "status", label: t("status"), render: r => <Pill kind={r.status}>{r.status}</Pill> },
@@ -905,7 +952,7 @@ export function PageAdminRequests() {
   );
 }
 
-/** ---------- PageDocuments (teacher inbox + my documents) ---------- */
+/** ---------- PageDocuments (teacher inbox + my documents + certificates) ---------- */
 export function PageDocuments() {
   const st = useStore();
   // All hooks before any conditional returns
@@ -915,12 +962,15 @@ export function PageDocuments() {
   const [signingDoc, setSigningDoc] = useState(null);
   const [viewDoc, setViewDoc] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState("sign"); // "sign" | "my"
+  const [activeTab, setActiveTab] = useState("sign"); // "sign" | "my" | "certs"
 
   // My documents upload form state
   const [docTitle, setDocTitle] = useState("");
   const [docDesc, setDocDesc] = useState("");
   const [docFile, setDocFile] = useState(null);
+
+  // Certificate preview modal state
+  const [previewCert, setPreviewCert] = useState(null);
 
   const u = st.userDoc;
   if (!u) return <Guard />;
@@ -928,8 +978,10 @@ export function PageDocuments() {
 
   const docs = st.myDocuments || [];
   const myTDocs = st.myTeacherDocs || [];
+  const myCerts = st.myCertificates || [];
   const unsignedCount = docs.filter(d => d.status !== "signed").length;
   const signedCount = docs.filter(d => d.status === "signed").length;
+  const pendingCertCount = myCerts.filter(c => c.status === "pending").length;
 
   const getPos = (e) => {
     const c = canvasRef.current;
@@ -1021,6 +1073,17 @@ export function PageDocuments() {
       setState({ loading: true });
       const fresh = await fetchMyTeacherDocs(u.uid);
       setState({ myTeacherDocs: fresh });
+      toast(t("updated"), "ok");
+    } catch (e) {
+      toast(e?.message || t("error"), "error");
+    } finally { setState({ loading: false }); }
+  };
+
+  const refreshMyCerts = async () => {
+    try {
+      setState({ loading: true });
+      const fresh = await fetchMyCertificates(u.uid);
+      setState({ myCertificates: fresh });
       toast(t("updated"), "ok");
     } catch (e) {
       toast(e?.message || t("error"), "error");
@@ -1155,8 +1218,14 @@ export function PageDocuments() {
             <Icon name="plus" /> {t("tabMyDocs")}
             {myTDocs.length > 0 && <span className="treq-tab__badge">{myTDocs.length}</span>}
           </button>
+          <button className={`treq-tab${activeTab === "certs" ? " treq-tab--active" : ""}`} onClick={() => setActiveTab("certs")}>
+            <Icon name="shield" /> {t("tabCertificates")}
+            {myCerts.filter(c => c.status === "signed").length > 0 && (
+              <span className="treq-tab__badge">{myCerts.filter(c => c.status === "signed").length}</span>
+            )}
+          </button>
           <div className="treq-tabs__actions">
-            <Btn kind="ghost" onClick={refreshMyDocs} disabled={st.loading}><Icon name="refresh" /></Btn>
+            <Btn kind="ghost" onClick={activeTab === "certs" ? refreshMyCerts : refreshMyDocs} disabled={st.loading}><Icon name="refresh" /></Btn>
           </div>
         </div>
 
@@ -1288,6 +1357,93 @@ export function PageDocuments() {
             </div>
           </div>
         )}
+
+        {/* Tab: Certificates (CEFR passes) — only SIGNED ones are listed.
+            Pending certificates are hidden until admin signs (only a small notice). */}
+        {activeTab === "certs" && (() => {
+          const signedCerts = myCerts.filter(c => c.status === "signed");
+          return (
+          <div className="tdoc-my" style={{ "--di": 0 }}>
+            {pendingCertCount > 0 && (
+              <div className="glass card" style={{ padding: 14, marginBottom: 10, borderLeft: "4px solid #f59e0b" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Icon name="clock" />
+                  <span style={{ fontSize: 13 }}>
+                    {pendingCertCount} {pendingCertCount === 1 ? t("certificate") : t("certificates")} · {t("certPendingHint")}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="cert-list">
+              {signedCerts.length === 0 ? (
+                <div className="treq-empty glass card">
+                  <div className="treq-empty__icon"><Icon name="shield" /></div>
+                  <p>{t("certNoCerts")}</p>
+                </div>
+              ) : (
+                signedCerts.map(c => {
+                  const color = c.level && { A1: "#6ee7b7", A2: "#34d399", B1: "#38bdf8", B2: "#2563eb", C1: "#a855f7", C2: "#c026d3" }[c.level] || "#a855f7";
+                  const isSigned = c.status === "signed";
+                  const dateStr = c.createdAt ? new Date((c.createdAt.seconds || 0) * 1000).toLocaleDateString("ru-RU") : "—";
+                  return (
+                    <div key={c.id} className="cert-list-item" style={{ "--cert-color": color }}>
+                      <div className="cert-list-item__chip">
+                        <span>{(c.lang || "").toUpperCase()}</span>
+                        <span>{c.level}</span>
+                      </div>
+                      <div className="cert-list-item__body">
+                        <div className="cert-list-item__title">{c.langLabel} · CEFR {c.level}</div>
+                        <div className="cert-list-item__meta">
+                          {isSigned
+                            ? <span className="cert-pill-signed"><Icon name="check" /> {t("certSigned")}</span>
+                            : <span className="cert-pill-pending"><Icon name="clock" /> {t("certPending")}</span>}
+                          <span><Icon name="calendar" /> {dateStr}</span>
+                          <span>{t("certScoreLabel")}: <b>{c.score}/{c.total}</b> · {c.percent}%</span>
+                        </div>
+                      </div>
+                      <div className="cert-list-item__actions">
+                        <Btn onClick={() => setPreviewCert(c)}><Icon name="eye" /> {t("certPreview")}</Btn>
+                        {isSigned && (
+                          <>
+                            <Btn kind="primary" onClick={() => downloadCertificateAsPng(c)}><Icon name="file" /> PNG</Btn>
+                            <Btn onClick={() => downloadCertificateAsPdf(c)}><Icon name="file" /> PDF</Btn>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+          );
+        })()}
+
+        {/* Certificate preview modal */}
+        {previewCert && createPortal(
+          <div className="cert-modal-overlay" onClick={() => setPreviewCert(null)}>
+            <div className="cert-modal-card" onClick={e => e.stopPropagation()}>
+              <button className="tp-close" onClick={() => setPreviewCert(null)} style={{ position: "absolute", top: 12, right: 12 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              </button>
+              <div className="cert-host" style={{ width: "min(1100px, 92vw)" }}>
+                <CertificatePreview cert={previewCert} />
+              </div>
+              <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                {previewCert.status === "signed" ? (
+                  <>
+                    <Btn kind="primary" onClick={() => downloadCertificateAsPng(previewCert)}><Icon name="file" /> {t("certDownloadPng")}</Btn>
+                    <Btn onClick={() => downloadCertificateAsPdf(previewCert)}><Icon name="file" /> {t("certDownloadPdf")}</Btn>
+                  </>
+                ) : (
+                  <span className="muted">{t("certPendingHint")}</span>
+                )}
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     </>
   );
@@ -1399,9 +1555,108 @@ export function PageAdminDocuments() {
   const [recipientQ, setRecipientQ] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState({});
 
+  // ─── certificate signing state ─────────────────────────────
+  const [pendingCerts, setPendingCerts] = useState([]);
+  const [certLoading, setCertLoading] = useState(false);
+  const [signingCert, setSigningCert] = useState(null);
+  const [certSaving, setCertSaving] = useState(false);
+  const [certPreview, setCertPreview] = useState(null);
+  // signature pad for cert (uses admin saved sig if present, else a quick draw)
+  const sigCertCanvasRef = useRef(null);
+  const sigCertDrawingRef = useRef(false);
+  const [sigCertHasInk, setSigCertHasInk] = useState(false);
+
+  useEffect(() => {
+    if (tab !== "certs") return;
+    let cancel = false;
+    (async () => {
+      try {
+        setCertLoading(true);
+        const list = await fetchPendingCertificates();
+        if (!cancel) setPendingCerts(list);
+      } catch (e) { console.error(e); }
+      finally { if (!cancel) setCertLoading(false); }
+    })();
+    return () => { cancel = true; };
+  }, [tab]);
+
   const u = st.userDoc;
   if (!u) return <Guard />;
   if (u.role !== "admin") return <Guard />;
+
+  const sigCertPos = (e) => {
+    const c = sigCertCanvasRef.current;
+    if (!c) return [0, 0];
+    const rect = c.getBoundingClientRect();
+    const scaleX = c.width / rect.width;
+    const scaleY = c.height / rect.height;
+    const tch = e.touches ? e.touches[0] : e;
+    return [(tch.clientX - rect.left) * scaleX, (tch.clientY - rect.top) * scaleY];
+  };
+  const sigCertDown = (e) => {
+    e.preventDefault();
+    sigCertDrawingRef.current = true;
+    const ctx = sigCertCanvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#1a1d2e";
+    const [x, y] = sigCertPos(e);
+    ctx.beginPath(); ctx.moveTo(x, y);
+  };
+  const sigCertMove = (e) => {
+    if (!sigCertDrawingRef.current) return;
+    e.preventDefault();
+    const ctx = sigCertCanvasRef.current?.getContext("2d");
+    if (!ctx) return;
+    const [x, y] = sigCertPos(e);
+    ctx.lineTo(x, y); ctx.stroke();
+    if (!sigCertHasInk) setSigCertHasInk(true);
+  };
+  const sigCertUp = () => { sigCertDrawingRef.current = false; };
+  const sigCertClear = () => {
+    const c = sigCertCanvasRef.current;
+    if (!c) return;
+    c.getContext("2d").clearRect(0, 0, c.width, c.height);
+    setSigCertHasInk(false);
+  };
+
+  const submitCertSign = async () => {
+    if (!signingCert) return;
+    try {
+      setCertSaving(true);
+      let sigUrl = u.signatureUrl || "";
+      // If no saved signature, must draw one
+      if (!sigUrl) {
+        if (!sigCertHasInk) { toast(t("putSignature"), "error"); setCertSaving(false); return; }
+        const c = sigCertCanvasRef.current;
+        const blob = await new Promise(res => c.toBlob(res, "image/png"));
+        sigUrl = await uploadFile(
+          `signatures/${u.uid}/${Date.now()}_admin.png`,
+          new File([blob], "sig.png", { type: "image/png" })
+        );
+        await updateProfile(u.uid, { signatureUrl: sigUrl });
+        setState({ userDoc: { ...u, signatureUrl: sigUrl } });
+      }
+      await signCertificate(signingCert.id, u.uid, u.displayName || u.email || "", sigUrl);
+      // Refresh local + global state so the new CEFR badge appears immediately
+      // in the admin views (users list, recipients, etc.) and the sidebar
+      // notification badge updates.
+      const [fresh, usersFresh, allCerts] = await Promise.all([
+        fetchPendingCertificates(),
+        fetchUsersAll(),
+        fetchAllCertificates()
+      ]);
+      setPendingCerts(fresh);
+      setState({ users: usersFresh, allCertificates: allCerts });
+      toast(t("certSigned"), "ok");
+      setSigningCert(null);
+      sigCertClear();
+    } catch (e) {
+      console.error(e);
+      toast(e?.message || t("error"), "error");
+    } finally {
+      setCertSaving(false);
+    }
+  };
 
   const allUsers = (st.users || []).filter(x => x.uid !== u.uid);
   const users = roleFilter ? allUsers.filter(x => getStaffGroup(x.email, x.position) === roleFilter) : allUsers;
@@ -1450,10 +1705,45 @@ export function PageAdminDocuments() {
 
   return (
     <div className="page-wrap">
+      {/* Pending-certificates alert banner — shows whenever any teacher
+          has a passed test waiting for the admin signature. Click → certs tab. */}
+      {pendingCerts.length > 0 && tab !== "certs" && (
+        <div
+          className="glass card"
+          style={{
+            marginBottom: 12, padding: 14,
+            background: "linear-gradient(135deg, rgba(251,191,36,.18), rgba(251,146,60,.12))",
+            borderLeft: "5px solid #f59e0b",
+            cursor: "pointer",
+            display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap"
+          }}
+          onClick={() => setTab("certs")}
+        >
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "#f59e0b", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Icon name="shield" />
+          </div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>
+              {pendingCerts.length} {t("certPendingForAdmin")}
+            </div>
+            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+              {t("certNonePending")
+                ? t("certPendingHint")
+                : ""}
+            </div>
+          </div>
+          <Btn kind="primary"><Icon name="check" /> {t("certSignNow")}</Btn>
+        </div>
+      )}
+
       <div className="glass card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Btn kind={tab === "send" ? "primary" : "ghost"} onClick={() => setTab("send")}>{t("sendTab")}</Btn>
           <Btn kind={tab === "list" ? "primary" : "ghost"} onClick={() => setTab("list")}>{t("listTab")} ({docs.length})</Btn>
+          <Btn kind={tab === "certs" ? "primary" : "ghost"} onClick={() => setTab("certs")}>
+            <Icon name="shield" /> {t("certificates")}
+            {pendingCerts.length > 0 && <span style={{ marginLeft: 6, background: "#f59e0b", color: "#fff", borderRadius: 999, padding: "0 7px", fontSize: 11, fontWeight: 800 }}>{pendingCerts.length}</span>}
+          </Btn>
         </div>
       </div>
 
@@ -1700,6 +1990,102 @@ export function PageAdminDocuments() {
             </div>
           )}
         </div>
+      )}
+
+      {tab === "certs" && (
+        <div className="glass card">
+          <div className="h2" style={{ marginBottom: 12 }}>{t("certPendingForAdmin")}</div>
+          {certLoading ? (
+            <div style={{ textAlign: "center", color: "var(--muted)", padding: 24 }}>{t("loading") || "…"}</div>
+          ) : pendingCerts.length === 0 ? (
+            <div style={{ textAlign: "center", color: "var(--muted)", padding: 24 }}>{t("certNonePending")}</div>
+          ) : (
+            <div className="cert-list">
+              {pendingCerts.map(c => {
+                const color = { A1: "#6ee7b7", A2: "#34d399", B1: "#38bdf8", B2: "#2563eb", C1: "#a855f7", C2: "#c026d3" }[c.level] || "#a855f7";
+                const dateStr = c.createdAt ? new Date((c.createdAt.seconds || 0) * 1000).toLocaleDateString("ru-RU") : "—";
+                return (
+                  <div key={c.id} className="cert-list-item" style={{ "--cert-color": color }}>
+                    <div className="cert-list-item__chip">
+                      <span>{(c.lang || "").toUpperCase()}</span>
+                      <span>{c.level}</span>
+                    </div>
+                    <div className="cert-list-item__body">
+                      <div className="cert-list-item__title">{c.userName || c.userEmail}</div>
+                      <div className="cert-list-item__meta">
+                        <span className="cert-pill-pending"><Icon name="clock" /> {t("certPending")}</span>
+                        <span>{c.langLabel} · CEFR <b>{c.level}</b></span>
+                        <span>{t("certScoreLabel")}: <b>{c.score}/{c.total}</b> · {c.percent}%</span>
+                        <span><Icon name="calendar" /> {dateStr}</span>
+                      </div>
+                    </div>
+                    <div className="cert-list-item__actions">
+                      <Btn onClick={() => setCertPreview(c)}><Icon name="eye" /> {t("certPreview")}</Btn>
+                      <Btn kind="primary" onClick={() => { setSigningCert(c); setTimeout(sigCertClear, 0); }}>
+                        <Icon name="check" /> {t("certSignNow")}
+                      </Btn>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Certificate preview modal (admin) */}
+      {certPreview && createPortal(
+        <div className="cert-modal-overlay" onClick={() => setCertPreview(null)}>
+          <div className="cert-modal-card" onClick={e => e.stopPropagation()}>
+            <button className="tp-close" onClick={() => setCertPreview(null)} style={{ position: "absolute", top: 12, right: 12 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+            <div className="cert-host" style={{ width: "min(1100px, 92vw)" }}>
+              <CertificatePreview cert={certPreview} />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Sign certificate modal */}
+      {signingCert && createPortal(
+        <div className="cert-modal-overlay" onClick={() => { if (!certSaving) setSigningCert(null); }}>
+          <div className="cert-modal-card" onClick={e => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <button className="tp-close" onClick={() => !certSaving && setSigningCert(null)} style={{ position: "absolute", top: 12, right: 12 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+            <div className="cert-host" style={{ width: "min(1000px, 90vw)" }}>
+              <CertificatePreview cert={{ ...signingCert, adminSignatureUrl: u.signatureUrl || signingCert.adminSignatureUrl || "", adminName: u.displayName || u.email || "" }} />
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center", justifyContent: "center" }}>
+              {!u.signatureUrl && (
+                <div style={{ flex: "1 1 320px", maxWidth: 480 }}>
+                  <div className="label" style={{ marginBottom: 6 }}>{t("putSignature")}</div>
+                  <div style={{ background: "#f4f6fa", borderRadius: 12, padding: 8 }}>
+                    <canvas
+                      ref={sigCertCanvasRef}
+                      width={800} height={200}
+                      style={{ width: "100%", height: 140, display: "block", cursor: "crosshair", borderRadius: 8, border: "2px dashed #c0c8d8", background: "#fff" }}
+                      onMouseDown={sigCertDown} onMouseMove={sigCertMove} onMouseUp={sigCertUp} onMouseLeave={sigCertUp}
+                      onTouchStart={sigCertDown} onTouchMove={sigCertMove} onTouchEnd={sigCertUp}
+                    />
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Btn onClick={sigCertClear}>{t("clear")}</Btn>
+                  </div>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <Btn onClick={() => !certSaving && setSigningCert(null)} disabled={certSaving}>{t("cancel") || "Cancel"}</Btn>
+                <Btn kind="primary" onClick={submitCertSign} disabled={certSaving}>
+                  {certSaving ? (t("loading") || "…") : <><Icon name="check" /> {t("certSignNow")}</>}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -2221,7 +2607,7 @@ export function PageAdminUsers() {
           <div className="modal glass" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
             <div className="h2" style={{ marginBottom: 12 }}>{t("deleteAccount")}</div>
             <p className="p" style={{ marginBottom: 16 }}>
-              <b>{delUser?.displayName || delUser?.email || confirmDelete}</b> {t("deleteConfirm")}<br />
+              <b>{delUser?.displayName || delUser?.email || confirmDelete}<VerifiedBadge user={delUser} size={12} /></b> {t("deleteConfirm")}<br />
               <span className="muted" style={{ fontSize: 13 }}>{t("deleteWarning")}</span>
             </p>
             <div style={{ display: "flex", gap: 8 }}>
@@ -2244,7 +2630,7 @@ export function PageAdminUsers() {
             <div className="modal glass" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
               <div className="h2" style={{ marginBottom: 12 }}>{t("roleChangeTitle")}</div>
               <p className="p" style={{ marginBottom: 16 }}>
-                <b>{crUser?.displayName || crUser?.email || confirmRole.uid}</b><br />
+                <b>{crUser?.displayName || crUser?.email || confirmRole.uid}<VerifiedBadge user={crUser} size={12} /></b><br />
                 <span style={{ fontSize: 13 }}>{t("roleChangeConfirm")} <b style={{ color: newRole === "admin" ? "#6366f1" : "var(--accent)" }}>{newRole}</b>?</span>
               </p>
               <div style={{ display: "flex", gap: 8 }}>
@@ -2273,18 +2659,18 @@ export function PageAdminUsers() {
 
       {/* Position assignment overlay */}
       {selUser && createPortal(
-        <div className="tp-overlay" onClick={() => setSelectedUid(null)}>
-          <div className="tp-card tp-card--v2" onClick={e => e.stopPropagation()} style={{ maxHeight: "90vh", overflowY: "auto" }}>
+        <div className="modalback" onClick={() => setSelectedUid(null)}>
+          <div className="modal glass" onClick={e => e.stopPropagation()} style={{ width: "min(560px, 95vw)", maxHeight: "90vh", overflowY: "auto", padding: "24px", position: "relative" }}>
             <button className="tp-close" onClick={() => setSelectedUid(null)}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             </button>
 
-            <div style={{ padding: "24px 24px 0" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, paddingRight: 36 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(135,188,46,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Icon name="briefcase" />
                 </div>
-                <div className="tp-name" style={{ margin: 0, flex: 1 }}>{t("assignPosition")}</div>
+                <div className="h2" style={{ margin: 0, flex: 1, fontSize: 18 }}>{t("assignPosition")}</div>
               </div>
 
               {/* Selected user */}
@@ -2297,7 +2683,7 @@ export function PageAdminUsers() {
                   </div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <b style={{ fontSize: 14 }}>{selUser.displayName || selUser.email}</b>
+                  <b style={{ fontSize: 14 }}>{selUser.displayName || selUser.email}<VerifiedBadge user={selUser} size={12} /></b>
                   {selUser.position && <div style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>{selUser.position}</div>}
                 </div>
               </div>
@@ -2490,7 +2876,7 @@ export function PageAdminUsers() {
                           <div style={{ minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                               {x.online && <span className="online-dot" />}
-                              <b style={{ fontSize: 13 }}>{x.displayName || "\u2014"}</b>
+                              <b style={{ fontSize: 13 }}>{x.displayName || "\u2014"}<VerifiedBadge user={x} size={11} /></b>
                             </div>
                           </div>
                         </div>
@@ -2834,7 +3220,7 @@ export function PageAdminTeacher() {
             </div>
           </div>
           <div className="rop-hero__info">
-            <div className="rop-hero__name">{teacherDoc?.displayName || "—"}</div>
+            <div className="rop-hero__name">{teacherDoc?.displayName || "—"}<VerifiedBadge user={teacherDoc} size={18} /></div>
             <div className="rop-hero__tags">
               <span className="prof-tag prof-tag--role">{teacherDoc?.role === "admin" ? "Admin" : "Teacher"}</span>
               <span className="prof-tag prof-tag--level">{tLvl.name}</span>
@@ -2926,7 +3312,7 @@ export function PageAdminTeacher() {
               </div>
               <div>
                 <div className="at-info-label">{t("fullName")}</div>
-                <div className="at-info-value">{teacherDoc?.displayName || "—"}</div>
+                <div className="at-info-value">{teacherDoc?.displayName || "—"}<VerifiedBadge user={teacherDoc} size={13} /></div>
               </div>
             </div>
             <div className="at-info-item">

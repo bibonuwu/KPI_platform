@@ -19,9 +19,9 @@ const { onRequest } = require("firebase-functions/v2/https");
  * Версия мини-AI. Показывается в виджете и возвращается в ответе сервера.
  * Поднимать при каждом значимом обновлении интентов / логики.
  */
-const AI_VERSION = "2.7.0";
-const AI_VERSION_DATE = "2026-05-18";
-const AI_VERSION_NAME = "FAQ & Edge Cases"; // короткое имя релиза
+const AI_VERSION = "3.0.0";
+const AI_VERSION_DATE = "2026-05-19";
+const AI_VERSION_NAME = "Concept Boosts & Sharper Understanding"; // короткое имя релиза
 
 /* --------------------------- База знаний --------------------------- */
 
@@ -31,21 +31,38 @@ const INTENTS = [
     id: "greet",
     kw: ["привет", "здравств", "салам", "сәлем", "hello", "hi ", "hey", "ку ", "доброе утро", "добрый день", "добрый вечер", "qaisi", "қайырлы"],
     answers: [
-      "Привет! Я NIS AI by Bibon — помогу разобраться с KPI-платформой. Спросите что угодно про сайт.",
-      "Сәлем! Я мини-AI по KPI-платформе. Чем помочь?",
-      "Hi! Спросите про функции платформы — рейтинг, заявки, документы, профиль.",
-      "Здравствуйте! Готов отвечать про KPI-платформу. Что интересует?",
+      "Привет! Рад вас видеть. Я NIS AI by Bibon — помогу разобраться с KPI-платформой. Что нужно?",
+      "Сәлем! Я мини-AI по KPI-платформе. Чем могу помочь?",
+      "Hi! Слушаю — расскажите, что не получается или что хотите найти на сайте.",
+      "Здравствуйте! Я тут как раз для вопросов по платформе. С чем подсказать?",
+      "О, привет! Если что — спрашивайте про рейтинг, заявки, баллы, профиль. Всё знаю.",
+      "Сәлеметсіз бе! Готов помочь — пишите вопрос, я постараюсь объяснить простыми словами.",
+      "Привет-привет! Что у вас? Не получается что-то на сайте, или хотите узнать как что работает?",
+      "Добрый день! Спрашивайте — отвечу как смогу. Если запутаюсь, подскажу куда нажать.",
     ],
   },
   {
     id: "bye",
     kw: ["пока", "до свидан", "bye", "сау бол", "досвид"],
-    answers: ["Удачи! Если что — кнопка чата всегда внизу справа.", "Сау болыңыз! Возвращайтесь, если будут вопросы."],
+    answers: [
+      "Удачи! Если что — кнопка чата всегда внизу справа, возвращайтесь.",
+      "Сау болыңыз! Будут вопросы — я тут, никуда не денусь.",
+      "Пока! Хорошего дня — и пусть достижения сами одобряются.",
+      "До связи! Если что-то вспомните — пишите, я всегда на месте.",
+      "Bye! Заходите ещё, тут всегда кто-то ответит — то есть я.",
+    ],
   },
   {
     id: "thanks",
     kw: ["спасибо", "благодар", "рахмет", "thanks", "thank", "спс"],
-    answers: ["Пожалуйста! Если будут ещё вопросы — спрашивайте.", "Всегда рад помочь!", "Рахмет вам — приходите ещё."],
+    answers: [
+      "Да не за что! Если ещё что-то нужно — пишите, я тут.",
+      "Пожалуйста! Рад, что пригодился.",
+      "Всегда рад помочь — спрашивайте ещё, если что.",
+      "Рахмет вам — приходите, если будут вопросы.",
+      "Не стоит благодарности. Главное, чтобы у вас всё получилось.",
+      "Обращайтесь! Я ради этого тут и сижу.",
+    ],
   },
   {
     id: "how-are-you",
@@ -58,38 +75,52 @@ const INTENTS = [
       "қалайсың", "қалайсыз", "қалай жатырсың", "не жаңалық",
     ],
     answers: [
-      "Я бот — у меня всё стабильно. А вы как? Чем помочь по платформе?",
-      "Жив-здоров, готов отвечать. Спросите что-нибудь про сайт.",
+      "Да всё нормально — сижу, жду вопросов. А у вас как? Чем помочь по платформе?",
+      "Жив-здоров, готов отвечать. У вас как день? Спрашивайте, что нужно.",
+      "Спасибо, что спросили — у бота всегда стабильно. А вы как, с чем пришли?",
+      "Помаленьку — отвечаю учителям. Расскажите, что у вас интересного?",
+      "Норм, не жалуюсь. Главное — вы как? Если устали от KPI, могу хотя бы объяснить как что работает.",
     ],
   },
   {
     id: "who",
     kw: ["кто ты", "что ты такое", "ты бот", "ты ai", "ты ии", "who are you", "what are you", "сен кім"],
     answers: [
-      "Я NIS AI by Bibon — мини-помощник по KPI-платформе NIS. Отвечаю по сценариям, без облачных API: быстро, бесплатно и приватно. Все ответы — про сайт.",
+      "Я NIS AI by Bibon — мини-помощник по KPI-платформе NIS. Не облачный AI, а свой простой бот: отвечает быстро, без интернета и приватно. Знаю только про этот сайт, зато хорошо.",
+      "Бот по имени NIS AI by Bibon. Меня сделал Bibon, чтобы я отвечал на вопросы учителей по платформе — про баллы, заявки, профиль и всё такое. Спрашивайте.",
+      "Я не ChatGPT и не Claude — я свой, домашний. Работаю на правилах, без облака. Зато про эту платформу знаю всё, что туда заложили.",
     ],
   },
   {
     id: "capabilities",
     kw: ["что умеешь", "что можешь", "что знаешь", "help", "помощ", "what can you", "не знаю что спросить"],
     answers: [
-      "Спросите про любое: добавление достижений и баллы, рейтинг и уровни, четверти, заявки (отгул/ранний уход/работа в выходной), документы, профиль, темы и языки, админ-кабинет, директор, события, СКУД, классные инструменты, новости и категории, поддержку.",
+      "Много чего. Если коротко: помогу с достижениями и баллами, с рейтингом и уровнями, с четвертями, заявками (отгул, ранний уход, работа в выходной), документами, профилем, темой и языком, админ-кабинетом, директором, событиями, СКУД, инструментами для уроков, новостями. Просто спросите по-человечески — пойму.",
+      "Скажу так: спрашивайте, как друга. «Как добавить достижение?», «сколько баллов за PhD?», «как взять отгул?», «где увидеть свой рейтинг?» — на такие вопросы отвечаю лучше всего.",
+      "Знаю всё про сайт: что куда нажать, как работают баллы, как подаются заявки, как выглядит профиль учителя и кабинет админа. Не знаю только погоду на завтра — это не ко мне.",
+      "Если кратко — я экскурсовод по платформе. Хотите, расскажу про любой раздел: Add, Rating, Stats, Approvals, Documents, Settings. Просто спросите.",
     ],
   },
   {
     id: "joke",
     kw: ["шутк", "анекдот", "joke", "смешн", "пошути"],
     answers: [
-      "Учитель — это человек, который превращает 45 минут в вечность, а потом думает: «когда же я успел отдохнуть?». Спросите что-нибудь по делу — я серьёзнее, чем кажусь.",
-      "KPI как кофе: чем больше пьёшь, тем больше хочется. Лучше зайдите в раздел Add и добавьте достижение — будут вам баллы.",
+      "Учитель — это человек, который превращает 45 минут в вечность, а потом думает: «когда же я успел отдохнуть?». Ладно, спросите что-нибудь по делу — я серьёзнее, чем кажусь.",
+      "KPI как кофе: чем больше пьёшь, тем больше хочется. Лучше зайдите в Add и добавьте достижение — там хоть баллы дают.",
+      "— Сколько ботов нужно, чтобы посчитать KPI? — Один, если знает как нажать «Submit». Кстати, я знаю.",
+      "Помните три вечные вещи: смерть, налоги и дедлайн четверти. С первыми двумя не помогу, а с последним — пожалуйста.",
+      "Учитель приходит к админу: «У меня не считаются баллы». Админ: «А ты их добавлял?». Учитель: «...». Не повторяйте — лучше сразу в Add.",
     ],
   },
   {
     id: "motivate",
     kw: ["мотивир", "устал", "не хочу", "вдохнов", "сил нет"],
     answers: [
-      "Маленькие шаги — главное. Сегодня добавь одно достижение в Add, завтра ещё одно — и через четверть рейтинг сам подтянется.",
-      "Самое сложное — начать. Откройте Dashboard, посмотрите свою динамику в Stats — вы уже сделали больше, чем думаете.",
+      "Понимаю, бывает. Не надо сразу горы — добавьте сегодня одно достижение в Add, и уже легче. Завтра ещё одно. Так через четверть рейтинг сам подтянется.",
+      "Самое тяжёлое — начать. Откройте Dashboard, гляньте свой Stats: уверен, вы уже сделали больше, чем кажется. Просто не всё ещё внесено.",
+      "Усталость — это нормально. Не торопитесь. Главное — не копить достижения «на потом», иначе в конце года будет ад. По чуть-чуть лучше всего.",
+      "Если совсем нет сил — просто откройте сайт и посмотрите свой прогресс. Иногда полезно увидеть, что вы и так молодец.",
+      "Слушайте, никто не делает идеально. Сделайте одно — и уже хорошо. Платформа подождёт, она терпеливая.",
     ],
   },
 
@@ -1378,6 +1409,183 @@ const INTENTS = [
     }],
   },
 
+  /* ===================== Расширение: edge-cases v4 ===================== */
+  {
+    id: "status-badges",
+    kw: [
+      "что значит жёлт", "что значит желт", "что значит зелён", "что значит зелен", "что значит красн",
+      "цвета статусов", "что за цвета", "цвет бейдж", "значение бейдж",
+      "что значит pending", "что значит approved", "что значит rejected",
+      "статус заявки цвет", "иконки статусов",
+      "статус түсі", "сары статус", "жасыл статус", "қызыл статус",
+      "what does pending mean", "what does approved mean", "what does rejected mean",
+      "status colors", "status badges", "what is yellow status", "what is red status",
+    ],
+    answers: [{
+      ru: "Цветовая схема статусов везде одинаковая:\n🟡 **Жёлтый (pending)** — заявка отправлена, ждёт админа. Очки **не идут** в рейтинг.\n🟢 **Зелёный (approved)** — админ подтвердил. Очки уже в рейтинге, видны в Stats / Profile.\n🔴 **Красный (rejected)** — отклонено, рядом обязательный комментарий админа (наведите/кликните).\n⚪ **Серый (cancelled)** — вы сами отменили pending-заявку.\nТо же самое в Approvals у админа и в Requests / Stats у учителя.",
+      kz: "Статус түсі бәрінде бірдей:\n🟡 **Сары (pending)** — өтінім жіберілді, әкімшіні күтуде. Ұпайлар рейтингке **кірмейді**.\n🟢 **Жасыл (approved)** — әкімші бекітті. Ұпайлар рейтингте, Stats / Profile-да көрінеді.\n🔴 **Қызыл (rejected)** — қабылданбады, қасында әкімшінің міндетті пікірі (тінтуірмен әкеліңіз).\n⚪ **Сұр (cancelled)** — pending өтінімді өзіңіз болдырмадыңыз.\nApprovals (әкімші) мен Requests / Stats-та (мұғалім) дәл осы схема.",
+      en: "Status colours are the same everywhere:\n🟡 **Yellow (pending)** — submitted, waiting for the admin. Points **don't** count toward rating.\n🟢 **Green (approved)** — admin confirmed. Points are live in the rating and shown in Stats / Profile.\n🔴 **Red (rejected)** — declined, with a mandatory admin comment next to it (hover / click).\n⚪ **Grey (cancelled)** — you cancelled the pending submission yourself.\nSame scheme in admin's Approvals and the teacher's Requests / Stats.",
+    }],
+  },
+  {
+    id: "bell-notifications",
+    kw: [
+      "колокольчик", "колокольчик уведомлен", "колокольчик в шапке", "иконка уведомлен",
+      "что в колокольчике", "что упадёт в колокольчик", "значок уведомл",
+      "красный кружок счётчик", "бейдж уведомлен", "бейдж в шапке",
+      "қоңырау белгіше", "қоңырау хабарлама", "бастағы қоңырау",
+      "bell icon", "notification bell", "what's in the bell", "header bell",
+      "notification badge", "red dot notification",
+    ],
+    answers: [{
+      ru: "🔔 **Иконка колокольчика** в правой части шапки — лента уведомлений. Туда падает: одобрение/отклонение ваших достижений, новые объявления, лайки и комментарии к вашим постам, события календаря, заявки на отгул (статус), сообщения от админа через Support. Красный кружок — количество **непрочитанных**. Клик по строке → переход на соответствующую страницу + пометка прочитанной. Очистить всё — кнопка «Очистить» вверху панели. Не путать с **настройкой** уведомлений (Settings → Уведомления, см. интент `notifications`).",
+      kz: "🔔 **Қоңырау белгішесі** бастың оң жағында — хабарландырулар таспасы. Онда мыналар түседі: жетістіктеріңіздің бекітілуі/қабылданбауы, жаңа хабарландырулар, посттарыңызға лайктар мен пікірлер, күнтізбе оқиғалары, өтемақы өтінімдерінің статусы, Support арқылы әкімшіден хабарламалар. Қызыл нүкте — **оқылмағандар** саны. Жолға басу → тиісті бетке өту + оқылды деп белгілеу. Бәрін тазалау — панельдің жоғарғы жағындағы «Тазалау» түймесі. Уведомления **баптауларымен** шатастырмаңыз (Settings → Хабарландырулар, `notifications` интенті).",
+      en: "🔔 The **bell icon** in the right of the header is the notifications feed. It receives: approval/rejection of your achievements, new announcements, likes and comments on your posts, calendar events, leave-request statuses, admin messages via Support. The red dot = the count of **unread**. Clicking a row navigates to the relevant page and marks the item read. Clear all — the button at the top of the panel. Don't confuse with notification **settings** (Settings → Notifications, see the `notifications` intent).",
+    }],
+  },
+  {
+    id: "public-profile",
+    kw: [
+      "что видят коллеги", "что видят другие", "видят коллеги профиль", "видят другие профиль",
+      "видно ли другим", "приватность моих данных",
+      "что в моём профиле видно", "что в профиле публично", "что в публичном профиле",
+      "видно ли мои заявки другим", "видят ли мою почту", "видят ли мой телефон",
+      "что в публичном профил", "публичная информация", "что скрыто", "что скрыто от коллег",
+      "видны ли мои данные", "видны ли мои pending", "коллеги видят мои очки",
+      "коллеги видят профиль", "коллеги видят мой профиль", "другие видят мой профиль",
+      "ашық профил не көрінеді", "көпшілікке не көрінеді", "әріптестер не көреді",
+      "others see profile", "others see my profile", "see in my profile",
+      "public profile content", "what others can see", "what others see",
+      "what's visible to colleagues",
+      "what colleagues see in profile", "what is visible publicly", "what fields are public",
+      "is my email visible", "is my phone visible", "privacy on profile", "profile privacy",
+    ],
+    answers: [{
+      ru: "В **публичном профиле** (когда коллега кликает на вас в Rating / Teachers) видны: ФИО, аватар, школа, **предмет**, преподаваемые классы, текущий уровень и очки, **одобренные** достижения (типы и баллы — без приватных описаний/файлов), цели. **Не видны**: email, телефон, документы (Books), pending/rejected заявки, заявки на отгул, комментарии админа, история СКУД, история ролей. Админу и директору доступна расширенная карточка (Admin → Teacher). Скрыть отдельные поля учителя самостоятельно нельзя — это серверная политика.",
+      kz: "**Ашық профильде** (әріптес Rating / Teachers-те сізге басқанда) көрінеді: аты-жөні, аватар, мектеп, **пән**, оқытатын сыныптар, ағымдағы деңгей мен ұпайлар, **бекітілген** жетістіктер (түрлері мен ұпайлары — жеке сипаттамалар/файлдарсыз), мақсаттар. **Көрінбейді**: email, телефон, құжаттар (Books), pending/rejected өтінімдер, өтемақы өтінімдері, әкімші пікірлері, СКУД тарихы, рөл тарихы. Әкімші мен директорда кеңейтілген карта бар (Admin → Teacher). Жеке өрістерді мұғалімнің өзі жасыра алмайды — бұл сервер саясаты.",
+      en: "Your **public profile** (when a colleague clicks you in Rating / Teachers) shows: full name, avatar, school, **subject**, classes taught, current level and points, **approved** achievements (type + points — no private descriptions/files), goals. **Hidden**: email, phone, documents (Books), pending/rejected submissions, leave requests, admin comments, SKUD history, role history. Admin and director see an extended card (Admin → Teacher). Individual fields can't be hidden by the teacher — this is enforced server-side.",
+    }],
+  },
+  {
+    id: "transfer-school",
+    kw: [
+      "перевод в другую школу", "перейти в другую школу", "сменить школу нис", "перевод нис",
+      "переезд в другой кампус", "перевестись в другую нис",
+      "басқа мектепке көшу", "басқа nis мектебіне көшу",
+      "transfer to another nis", "move to another school", "switch nis branch",
+      "change nis school", "relocate to another nis",
+    ],
+    answers: [{
+      ru: "При переводе из одной школы NIS в другую: создаётся **новый аккаунт** в новой школе (DB у каждой школы своя), старые KPI-баллы **не переезжают** автоматически. Что делать: 1) попросить админа старой школы выгрузить ваши одобренные достижения в CSV (`exportSubmissionsCsv`), 2) согласовать с админом новой школы перенос — обычно за счёт ручного создания типов «Перенесённые баллы» в Personal Development. История заявок на отгул и СКУД остаётся в старой школе — там их сохраняет HR. Документы (договор, должностная) переоформляются заново.",
+      kz: "Бір NIS мектебінен екіншісіне ауысқанда: жаңа мектепте **жаңа аккаунт** жасалады (әр мектептің өз ДБ-ы бар), ескі KPI-ұпайлар автоматты түрде **ауыспайды**. Не істеу: 1) ескі мектептің әкімшісінен бекітілген жетістіктерді CSV-ге шығаруды сұраңыз (`exportSubmissionsCsv`), 2) жаңа мектеп әкімшісімен ауысуды келісіңіз — әдетте Жеке даму бөлімінде «Ауыстырылған ұпайлар» түрлерін қолмен жасау арқылы. Өтемақы мен СКУД тарихы ескі мектепте қалады. Құжаттар (келісім-шарт, лауазым) қайта рәсімделеді.",
+      en: "When transferring between NIS schools: a **new account** is created at the new school (each school has its own DB), your old KPI points **don't migrate** automatically. Do this: 1) ask the old admin to export your approved achievements as CSV (`exportSubmissionsCsv`), 2) coordinate with the new school's admin to bring them over — usually by manually creating «Transferred points» entries under Personal Development. Leave-request and SKUD history stay at the old school. Contract documents are re-issued from scratch.",
+    }],
+  },
+  {
+    id: "leaving-job",
+    kw: [
+      "ушёл с работы", "уволилась", "уволили", "увольнение", "увольняюсь",
+      "что с аккаунтом если ушёл", "что с аккаунтом если уйти", "что с аккаунтом если уволили",
+      "что будет с аккаунтом если", "что с баллами если уйду", "что с баллами если уволили",
+      "что с данными после увольнен", "после увольнения аккаунт",
+      "если я уйду с работы", "если я уволюсь", "после ухода с работы",
+      "жұмыстан кеткен соң", "жұмыстан босату", "босату",
+      "left the job", "fired", "quit job", "after leaving job",
+      "what happens to account after leaving", "what happens to account when leaving",
+      "data after leaving", "deactivation after leaving", "account after termination",
+    ],
+    answers: [{
+      ru: "При увольнении: админ ставит `active=false` (Admin → Users). Аккаунт **не удаляется** — это нужно для отчётности и истории. Ваши одобренные достижения остаются в **архиве** (видны в Director-кабинете, но не идут в текущий рейтинг). Доступ к платформе блокируется (логин не пройдёт). Восстановление возможно при повторном найме — админ ставит `active=true` обратно. Если вы хотите получить выгрузку всех своих данных перед уходом — запрос через Support («Экспорт моих данных»), админ выгрузит CSV.",
+      kz: "Жұмыстан босатылғанда: әкімші `active=false` қояды (Admin → Users). Аккаунт **жойылмайды** — есеп пен тарих үшін қажет. Бекітілген жетістіктер **архивте** қалады (Director-кабинетінде көрінеді, бірақ ағымдағы рейтингке кірмейді). Платформаға кіру бұғатталады. Қайта қабылданса — әкімші `active=true` қояды. Кетер алдында өз деректеріңіздің көшірмесін алғыңыз келсе — Support арқылы сұрау («Деректерімді экспорттау»), әкімші CSV шығарады.",
+      en: "On leaving the job: the admin sets `active=false` (Admin → Users). The account is **not deleted** — kept for reporting and history. Your approved achievements stay in the **archive** (visible in the Director panel but not in the current rating). Platform access is blocked. If you're re-hired, the admin sets `active=true` back. Want a dump of your data before leaving? Ask via Support («Export my data») — the admin will provide a CSV.",
+    }],
+  },
+  {
+    id: "director-cannot",
+    kw: [
+      "что директор не может", "ограничения директор", "права директор",
+      "директор не одобряет", "директор не меняет", "директор read only",
+      "может ли директор одобр", "может ли директор подавать", "может ли директор удалять",
+      "может директор одобрять", "может директор изменять", "может директор",
+      "директор vs админ", "директор отличие от админ", "директор разница с админ",
+      "директор не істей алады", "директор шектеулері",
+      "director approve", "director edit", "director can approve", "director cannot",
+      "can director", "what director cannot", "director permissions", "director vs admin",
+      "director limits", "director restrictions", "director cannot approve",
+      "can director approve achievements", "can the director approve", "can director edit types",
+      "is director read only", "director read only", "director role limits",
+    ],
+    answers: [{
+      ru: "Кабинет директора — **только просмотр** (read-only). Директор НЕ может: одобрять/отклонять KPI-заявки (это делает админ в Approvals), создавать/менять/удалять типы достижений, рассматривать заявки на отгул, импортировать СКУД, создавать пользователей / менять роли, публиковать объявления и события, отправлять документы. Что директор МОЖЕТ: смотреть общий рейтинг и статистику школы по периодам (30d / 90d / Year / All), сравнивать активность учителей, экспортировать CSV-отчёты. Если директору нужны админ-права — это разные роли, нужно явно назначить вторую (`role=admin`).",
+      kz: "Директор кабинеті — **тек көру** (read-only). Директор істей АЛМАЙДЫ: KPI өтінімдерін бекіту/қабылдамау (бұл әкімші Approvals-та), жетістік түрлерін жасау/өзгерту/жою, өтемақы өтінімдерін қарау, СКУД импорттау, пайдаланушы жасау / рөл өзгерту, хабарландыру мен оқиға жариялау, құжат жіберу. Директор НЕ ІСТЕЙ алады: мектептің жалпы рейтингі мен статистикасын кезеңдер бойынша көру, мұғалім белсенділігін салыстыру, CSV есептерді шығару. Әкімші құқықтары қажет болса — бұл екі бөлек рөл, қосымша `role=admin` беру керек.",
+      en: "The director panel is **read-only**. The director CANNOT: approve/reject KPI submissions (the admin does that in Approvals), create/edit/delete achievement types, handle leave requests, import SKUD, create users / change roles, publish announcements or events, send documents. The director CAN: view school-wide rating and statistics by period (30d / 90d / Year / All), compare teacher activity, export CSV reports. If the director also needs admin rights — these are separate roles; assign `role=admin` explicitly as a second role.",
+    }],
+  },
+  {
+    id: "kpi-strategy",
+    kw: [
+      "как набрать максимум", "стратегия рейтинга", "стратегия kpi",
+      "лайфхак рейтинг", "лайфхак баллов", "лайфхак kpi",
+      "как быстро поднять рейтинг", "как поднять рейтинг", "как быстро балл",
+      "что выгоднее подавать", "что больше очков дает", "топ типов по балл",
+      "kpi стратегия", "ұпай жинау стратегия", "рейтингті қалай көтеру",
+      "kpi strategy", "leaderboard strategy", "how to maximize points",
+      "rating boost", "how to climb leaderboard",
+    ],
+    answers: [{
+      ru: "Прагматичный план набора KPI (не лайфхак, а здравый подход):\n1. **Регулярность важнее эпизодики** — раз в 2 недели заходить в Add и подавать хотя бы одно: открытый урок, наблюдение, СОР-разработку. Их `maxPerYear` — 5+, можно растягивать.\n2. **Ученики дают больше всего** — олимпиады/проекты учеников: международная — 40–60 очков за раз. Ведите 1–2 сильных учеников системно.\n3. **Внешнее оценивание собственных компетенций** — IELTS 7.0+ даёт 18 очков **раз в год**, его легко обновить.\n4. **Соавторство** (teammates-share) — каждый получает полный балл, а не делит. Договаривайтесь с коллегами на совместные открытые уроки/проекты.\n5. **Не игнорировать Личное развитие** — Book Quiz даёт +20 за прочитанную книгу с тестом, классное руководство — отдельная категория. Часто забывают.\n6. **Поставьте цели** (Goals) — даже сам факт постановки дисциплинирует. Цель 500–700 за год = уровень Мастер/Гроссмейстер.",
+      kz: "KPI жинаудың прагматикалық жоспары:\n1. **Жүйелілік эпизодтан маңызды** — 2 аптада бір рет Add-қа кіріп, кем дегенде бірін тапсыру: ашық сабақ, бақылау, БЖБ әзірлеу. Олардың `maxPerYear` — 5+, созуға болады.\n2. **Оқушылар ең көп береді** — олимпиада/жобалар: халықаралық — бір реттің өзінде 40–60 ұпай. 1–2 күшті оқушыны жүйелі дайындаңыз.\n3. **Өз құзыреттеріңізді сыртқы бағалау** — IELTS 7.0+ жылына 18 ұпай береді, оны жаңарту оңай.\n4. **Серіктестік** (teammates-share) — әркім толық ұпай алады, бөлінбейді. Бірлескен ашық сабақтарға келісіңіз.\n5. **Жеке дамуды елемеңіз** — Book Quiz тестпен оқылған кітап үшін +20, сынып жетекшілік — бөлек санат. Көбі ұмытады.\n6. **Мақсаттар қойыңыз** (Goals) — қою фактінің өзі тәртіптейді. Жылына 500–700 = Шебер/Гроссмейстер деңгейі.",
+      en: "A pragmatic plan to build KPI (not a hack, just discipline):\n1. **Cadence beats bursts** — every 2 weeks open Add and submit at least one item: open lesson, observation, SAU design. Their `maxPerYear` is 5+, plenty of room.\n2. **Students give the most** — student olympiads/projects: international = 40–60 points each. Coach 1–2 strong students systematically.\n3. **Your own external assessments** — IELTS 7.0+ gives 18 points once a year, easy to refresh.\n4. **Co-authorship** (teammates-share) — each participant gets the full amount, not a split. Pair up with colleagues on shared open lessons / projects.\n5. **Don't skip Personal Development** — Book Quiz = +20 per book with a test; class supervision is a separate category. Easy wins.\n6. **Set goals** (Goals) — the act of setting one disciplines you. Aim 500–700 / year = Master/Grandmaster.",
+    }],
+  },
+  {
+    id: "submission-deadline",
+    kw: [
+      "до какого числа подать", "до какого числа подача", "дедлайн подачи",
+      "дедлайн за четверть", "крайний срок подачи", "когда последн день подачи",
+      "сроки подачи заявок", "до какого числа kpi",
+      "өтінім беру мерзімі", "тоқсан соңы дейін",
+      "submission deadline", "kpi deadline per quarter", "last day to submit",
+      "deadline for achievements", "cutoff date",
+    ],
+    answers: [{
+      ru: "Жёсткого централизованного дедлайна на платформе нет — заявку можно подать **в любой момент учебного года**. Но есть две практические границы:\n• **Конец четверти** — для «четвертного» среза рейтинга админу нужно одобрить заявку до конца квартала. Подавайте за 3–5 рабочих дней до конца (Q1 — до 22 окт, Q2 — до 22 дек, Q3 — до 18 мар, Q4 — до 22 мая), чтобы у админа было время на approve.\n• **31 августа** — это последний день учебного года. Всё, что не одобрено к этому моменту, переходит в архив следующим годом — баллы за прошлый год не идут в новый рейтинг (`data-archive`). Поэтому **до 25 августа** — крайний срок для летних подач.",
+      kz: "Платформада қатаң орталықтандырылған мерзім жоқ — өтінімді **оқу жылы бойы кез келген уақытта** беруге болады. Бірақ екі практикалық шектеу бар:\n• **Тоқсан соңы** — рейтингтің тоқсандық қимасы үшін әкімші өтінімді тоқсан аяқталғанға дейін бекітуі керек. Тоқсан соңына 3–5 жұмыс күн қалғанда тапсырыңыз (Q1 — 22 қаз дейін, Q2 — 22 жел, Q3 — 18 нау, Q4 — 22 мам).\n• **31 тамыз** — оқу жылының соңғы күні. Осы кезге дейін бекітілмегеннің бәрі келесі жылы архивке өтеді — өткен жылдың ұпайлары жаңа рейтингке кірмейді (`data-archive`). Сондықтан **25 тамызға дейін** — жазғы өтінімдер мерзімі.",
+      en: "There's no hard centralised deadline — you can submit **any time during the academic year**. But two practical cut-offs:\n• **End of quarter** — for the quarterly rating snapshot the admin must approve before the quarter ends. Submit 3–5 working days before (Q1 — by Oct 22, Q2 — by Dec 22, Q3 — by Mar 18, Q4 — by May 22) so the admin has time to approve.\n• **August 31** — last day of the academic year. Anything not approved by then archives with the previous year — old points don't carry into the new rating (`data-archive`). So **August 25** is the practical cap for summer submissions.",
+    }],
+  },
+  {
+    id: "bot-feedback",
+    kw: [
+      "пожаловаться на бота", "плохой ответ бота", "бот не понял", "ошибка бота",
+      "предложить ответ боту", "научить бота", "добавить интент",
+      "бот не знает", "бот тупит", "глупый ответ",
+      "bot feedback", "bot wrong answer", "report bot", "teach bot",
+      "suggest new intent", "improve bot",
+      "ботқа шағым", "бот білмейді", "ботқа ұсыныс",
+    ],
+    answers: [{
+      ru: "Я — rule-based мини-AI, без обучения по диалогам. Если я не понял или ответил мимо: 1) кликните 👎 под ответом — это сигнал автору, 2) опишите проблему через **Support** или меню → **«Поделиться идеей»** (feedback): дайте свой вопрос буквально и какой ответ ожидали, 3) код базы знаний лежит в `AI/NIS AI by bibon/functions/index.js` — если у вас есть доступ к репозиторию, можно дописать интент самостоятельно (там массив `INTENTS`, формат простой). Каждое обновление бота — отдельный релиз; текущая версия видна в виджете.",
+      kz: "Мен — rule-based мини-AI, диалогтардан үйренбеймін. Түсінбесем не қате жауап берсем: 1) жауаптың астында 👎 басыңыз — бұл авторға сигнал, 2) проблеманы **Support** немесе мәзір → **«Идея ұсыну»** (feedback) арқылы сипаттаңыз: сұрағыңызды нақты жазыңыз және қандай жауап күткеніңізді көрсетіңіз, 3) білім қоры коды — `AI/NIS AI by bibon/functions/index.js` файлында; репозиторийге қолжетімділік болса, интентті өзіңіз қоса аласыз (`INTENTS` массиві). Бот жаңаруы — бөлек релиз; ағымдағы нұсқа виджетте көрінеді.",
+      en: "I'm a rule-based mini-AI — I don't learn from conversations. If I missed or answered off: 1) click 👎 under the reply — it pings the author, 2) describe via **Support** or menu → **«Share an idea»** (feedback): paste your exact question and what you expected, 3) the knowledge base lives in `AI/NIS AI by bibon/functions/index.js` — if you have repo access, add an intent yourself (the `INTENTS` array, simple shape). Each bot update is a separate release; the current version is shown in the widget.",
+    }],
+  },
+  {
+    id: "multi-school",
+    kw: [
+      "работаю в нескольких школах", "работаю в двух школах нис", "две школы нис",
+      "несколько nis сразу", "несколько школ одновременно",
+      "бірнеше мектепте", "екі мектепте", "екі nis-та",
+      "work at multiple nis", "two nis schools", "multiple schools at once",
+      "teaching at several schools",
+    ],
+    answers: [{
+      ru: "Каждая школа NIS — **отдельная инсталляция** платформы с собственной БД. Если вы работаете в двух школах сразу: у вас будет **два независимых аккаунта** (разные URL, разные логины, разные KPI-счётчики). Объединить их в один рейтинг нельзя — каждый филиал ведёт свой. На практике учитель **полная ставка обычно в одной школе** + почасовая в другой; KPI считается там, где основная ставка. Для подтверждений работы в обоих местах в evidence можно приложить копию трудового / служебной записки.",
+      kz: "Әр NIS мектебі — өз ДБ-сы бар **бөлек инсталляция**. Бір мезетте екі мектепте жұмыс істесеңіз: сізде **екі тәуелсіз аккаунт** болады (әртүрлі URL, логин, KPI-есептегіш). Оларды бір рейтингке біріктіруге болмайды. Іс жүзінде мұғалім **толық ставкада әдетте бір мектепте** + екіншісінде сағаттық; KPI негізгі ставка болған жерде есептеледі. Екі жерде жұмыс істегеніңізді растау үшін evidence-ке еңбек шартының/қызметтік жазбаның көшірмесін тіркеуге болады.",
+      en: "Each NIS school is a **separate installation** with its own DB. If you teach at two at once: you'll have **two independent accounts** (different URLs, logins, KPI counters). They can't be merged into one rating — each branch runs its own. In practice teachers have a **full-time rate at one school** + part-time at another; KPI counts at the main one. To prove dual employment, attach a copy of the employment contract / memo in evidence.",
+    }],
+  },
+
   /* ===================== Расширение: типичные вопросы v3 ===================== */
   {
     id: "kpi-sections",
@@ -2396,8 +2604,11 @@ const INTENTS = [
     id: "translate",
     topic: "default",
     kw: [
-      "перевед", "translate", "audar", "аудар",
-      "translator", "translation",
+      // Используем конкретные фразы, чтобы "перевод" не ловил "перевод в школу"
+      "переведи это", "переведи текст", "переведи фраз", "переведи слово", "переведи на",
+      "translate this", "translate that", "translate to", "translate it",
+      "audar", "translator", "translation tool",
+      "аудармашы", "аудар осыны",
     ],
     answers: [{
       ru: "Я не переводчик. Но я понимаю русский, казахский и английский — пишите на любом из них, я постараюсь ответить. Команда `/lang kz` сменит язык интерфейса.",
@@ -2596,6 +2807,17 @@ const META = {
   "nis-global-perspectives": { topic: "default", followups: ["nis-programs", "nis-cambridge-partner", "nis-streams"] },
   "nis-daryn":          { topic: "default",    followups: ["nis-history", "nis-about", "nis-mission"] },
   "nis-bolashak":       { topic: "default",    followups: ["nis-nu-link", "points-prof-dev", "promotion"] },
+
+  "status-badges":      { topic: "achievement", followups: ["achievement-status", "achievement-rejected", "request-where-status"] },
+  "bell-notifications": { topic: "settings",   followups: ["notifications", "notif-types", "post-comments"] },
+  "public-profile":     { topic: "profile",    followups: ["profile", "find-teacher", "privacy"] },
+  "transfer-school":    { topic: "default",    followups: ["leaving-job", "data-archive", "export"] },
+  "leaving-job":        { topic: "profile",    followups: ["transfer-school", "delete-account", "data-archive"] },
+  "director-cannot":    { topic: "admin",      followups: ["director", "approvals", "roles"] },
+  "kpi-strategy":       { topic: "points",     followups: ["kpi-sections", "teammates-share", "goals"] },
+  "submission-deadline":{ topic: "achievement", followups: ["deadlines", "quarter", "year-end"] },
+  "bot-feedback":       { topic: "default",    followups: ["feedback", "support", "ai-version"] },
+  "multi-school":       { topic: "default",    followups: ["transfer-school", "nis-network", "profile"] },
 
   profile:             { topic: "profile",     followups: ["avatar", "password", "email-change"] },
   avatar:              { topic: "profile",     followups: ["profile", "password"] },
@@ -2926,6 +3148,16 @@ const FOLLOWUP_LABELS = {
     "nis-global-perspectives": "Что за Global Perspectives?",
     "nis-daryn": "Что за «Дарын»?",
     "nis-bolashak": "Что за «Болашак»?",
+    "status-badges": "Что значат цвета статусов?",
+    "bell-notifications": "Что в колокольчике?",
+    "public-profile": "Что видят коллеги в моём профиле?",
+    "transfer-school": "Перевод в другую школу NIS",
+    "leaving-job": "Что будет с аккаунтом если уйти?",
+    "director-cannot": "Что директор НЕ может?",
+    "kpi-strategy": "Как набрать максимум баллов?",
+    "submission-deadline": "До какого числа подавать?",
+    "bot-feedback": "Как пожаловаться на бота?",
+    "multi-school": "Я работаю в нескольких школах NIS",
     support: "Поддержка",
     "like-post": "Как лайкнуть?",
     "comment-post": "Можно комментировать?",
@@ -3143,6 +3375,16 @@ FOLLOWUP_LABELS.kz = {
   "nis-global-perspectives": "Global Perspectives дегеніміз не?",
   "nis-daryn": "«Дарын» дегеніміз не?",
   "nis-bolashak": "«Болашақ» дегеніміз не?",
+  "status-badges": "Статус түстері нені білдіреді?",
+  "bell-notifications": "Қоңырауда не бар?",
+  "public-profile": "Әріптестер не көреді?",
+  "transfer-school": "Басқа NIS мектебіне көшу",
+  "leaving-job": "Жұмыстан кетсе аккаунт?",
+  "director-cannot": "Директор НЕ істей алмайды?",
+  "kpi-strategy": "Максимум ұпай қалай жинау?",
+  "submission-deadline": "Қашанға дейін тапсыру?",
+  "bot-feedback": "Ботқа шағым/ұсыныс",
+  "multi-school": "Бірнеше NIS мектебінде",
   support: "Қолдау",
   "like-post": "Қалай лайк басу?",
   "comment-post": "Пікір қалдыра аламын ба?",
@@ -3358,6 +3600,16 @@ FOLLOWUP_LABELS.en = {
   "nis-global-perspectives": "What's Global Perspectives?",
   "nis-daryn": "What is «Daryn»?",
   "nis-bolashak": "What is «Bolashak»?",
+  "status-badges": "What do status colours mean?",
+  "bell-notifications": "What's in the bell?",
+  "public-profile": "What do colleagues see in my profile?",
+  "transfer-school": "Transfer between NIS schools",
+  "leaving-job": "What happens after I leave?",
+  "director-cannot": "What can't the director do?",
+  "kpi-strategy": "How to maximize KPI?",
+  "submission-deadline": "Submission deadline",
+  "bot-feedback": "How to report a bot issue?",
+  "multi-school": "Working at multiple NIS schools",
   support: "Support",
   "like-post": "How to like?",
   "comment-post": "Can I comment?",
@@ -3553,6 +3805,163 @@ const ALIASES = {
   // EN глагольные синонимы
   "lookup": "search find see",
   "checkout": "open see view",
+
+  // ===== RU — частые синонимы предметной области =====
+  "балы": "баллы",
+  "балла": "балл",
+  "баллах": "балл",
+  "очки": "балл очк",
+  "очков": "балл очк",
+  "оценк": "балл оценка",
+  "рейт": "рейтинг рейтинге",
+  "рейтинге": "рейтинг",
+  "лидерб": "рейтинг лидерборд",
+  "достиж": "достижение достижений достижения",
+  "ачив": "достижение achievement",
+  "ачивк": "достижение achievement",
+  "заявка": "заявка request",
+  "заявку": "заявка request",
+  "заявки": "заявка request",
+  "отгуле": "отгул",
+  "отгулом": "отгул",
+  "отгула": "отгул",
+  "пэхэдэ": "phd доктор",
+  "докторская": "phd доктор кандидат наук",
+  "кандидатская": "phd кандидат наук",
+  "магистратура": "магистр master degree",
+  "магистра": "магистр",
+  "магистры": "магистр",
+  "школа": "школа nis school",
+  "ниш": "nis школа",
+  "ес": "esa нис",
+  "esa": "esa нис",
+  "цок": "csi center",
+  "сертификация": "сертификат категория аттестация",
+  "аттестация": "категория сертификация attest",
+  "категория": "категория аттестация",
+  "категории": "категория аттестация",
+  "разряд": "категория повышение",
+  "повышение": "карьер promotion разряд",
+  "карьера": "карьер promotion",
+  "зарплат": "зарплата зп salary",
+  "пенсия": "пенсия retirement",
+  "командировк": "командировка trip",
+  "отпуск": "отпуск vacation отгул",
+  "отпуска": "отпуск отгул",
+  "больничный": "больничный sick отгул",
+  "лекции": "урок lesson лекция",
+  "урокa": "урок",
+  "пары": "урок lesson",
+  "родителями": "родители parents",
+  "родителями1": "родители",
+  "директорат": "директор завуч",
+  "куратор": "куратор классный руководитель",
+  "методист": "методист",
+  "психолог": "психолог",
+  "ученики": "ученик класс students",
+  "ученик": "ученик класс student",
+  "класса": "класс",
+  "классы": "класс",
+  "классам": "класс",
+  "предмета": "предмет",
+  "предметы": "предмет",
+
+  // ===== RU — Web/Auth =====
+  "впн": "vpn",
+  "впнка": "vpn",
+  "куки": "cookies",
+  "сесс": "сессия session",
+  "сесию": "сессия session",
+  "сессия": "сессия выход session",
+  "пасс": "пароль password",
+  "пасва": "пароль password",
+  "паса": "пароль password",
+  "пароля": "пароль",
+  "пароли": "пароль",
+  "почта": "email",
+  "почту": "email",
+  "почты": "email",
+  "имэйл": "email",
+  "имейл": "email",
+  "ссо": "sso microsoft",
+  "майкрик": "microsoft",
+  "мсофт": "microsoft",
+
+  // ===== RU — UI / интерфейс =====
+  "нчк": "новичок",
+  "новичок": "новичок уровень",
+  "мастер": "мастер уровень",
+  "ачивмент": "достижение achievement",
+  "ачивментов": "достижение",
+  "юай": "интерфейс ui",
+  "интерфейс": "интерфейс ui дизайн",
+  "темнотем": "тёмная тема dark",
+  "ночнойтем": "тёмная тема dark night",
+  "ночная": "тёмная тема dark night",
+  "тёмная": "тёмная тема dark",
+  "темная": "тёмная тема dark",
+  "светлая": "светлая тема light",
+  "светлый": "светлая тема light",
+  "локализац": "язык language",
+  "переключить": "сменить изменить switch",
+  "переключи": "сменить change switch",
+
+  // ===== RU — частые проблемы =====
+  "виснет": "тормозит slow зависает",
+  "лагает": "тормозит slow",
+  "глючит": "тормозит slow ошибка",
+  "ошибка": "ошибка error",
+  "ошибки": "ошибка error",
+  "падает": "падает ошибка crash",
+  "крашится": "crash падает",
+  "не работает": "ошибка не работает broken",
+  "сломал": "сломал поломк broken",
+  "сломалось": "сломал broken",
+
+  // ===== KZ — расширения =====
+  "ұпайлар": "ұпай балл",
+  "ұпайдың": "ұпай балл",
+  "жетістік": "жетістік достижение",
+  "жетістіктер": "жетістік",
+  "жетістіктің": "жетістік",
+  "өтінім": "өтінім заявка",
+  "өтініш": "өтінім заявка",
+  "өтінімдер": "өтінім заявка",
+  "тоқсан": "тоқсан четверть quarter",
+  "тоқсанда": "тоқсан четверть",
+  "оқушы": "ученик класс student",
+  "сыныптас": "класс students",
+  "сабақ": "урок lesson",
+  "сабақтан": "урок lesson",
+  "пәні": "предмет subject",
+  "пән": "предмет subject",
+  "сүйкім": "thanks рахмет",
+  "ылғи": "всегда always",
+  "қашан": "когда when",
+  "қайда": "где where",
+  "не": "что what",
+  "мұғалім": "учитель teacher",
+  "мұғалімдер": "учитель teacher",
+  "директор": "директор director",
+  "директорым": "директор",
+
+  // ===== EN — расширения =====
+  "smbody": "somebody",
+  "tho": "though",
+  "abt": "about",
+  "rly": "really",
+  "rlly": "really",
+  "prolly": "probably",
+  "tmrw": "tomorrow",
+  "tdy": "today",
+  "msg": "message",
+  "msgs": "messages",
+  "info": "information",
+  "doc": "document file",
+  "docs": "documents files",
+  "pic": "photo picture",
+  "pics": "photos pictures",
+  "phd's": "phd doctor",
 };
 
 /** Применяет ALIASES к нормализованному тексту, расширяя его. */
@@ -3620,14 +4029,19 @@ function levenshteinLE(a, b, max) {
   return dp[lb];
 }
 
-/** Нечёткое вхождение: слово из текста почти совпадает с ключом. */
+/**
+ * Нечёткое вхождение: слово из текста почти совпадает с ключом.
+ *  - key ≥5 символов → допускаем 1 опечатку
+ *  - key ≥8 символов → допускаем 2 опечатки (учителя часто пишут с ошибками
+ *    в длинных терминах: «достожения», «олимпияда», «конференциа», «attestaция»).
+ */
 function fuzzyMatch(textTokens, key) {
-  // ключ длиной ≥5 → допускаем 1 опечатку; иначе — только точное вхождение
   if (key.length < 5) return false;
+  const maxEdits = key.length >= 8 ? 2 : 1;
   for (const tok of textTokens) {
     if (tok.length < 4) continue;
-    if (Math.abs(tok.length - key.length) > 1) continue;
-    if (levenshteinLE(tok, key, 1) <= 1) return true;
+    if (Math.abs(tok.length - key.length) > maxEdits) continue;
+    if (levenshteinLE(tok, key, maxEdits) <= maxEdits) return true;
   }
   return false;
 }
@@ -3709,6 +4123,58 @@ function pickAnswer(intent, lang) {
   return pickLang(item, lang || "ru");
 }
 
+/**
+ * Социальные интенты — у них ответ уже разговорный, не оборачиваем.
+ * Также не трогаем тех, у кого ответ начинается с маркдаун-заголовка или эмодзи.
+ */
+const SOCIAL_INTENTS = new Set([
+  "greet", "bye", "thanks", "how-are-you", "who", "capabilities",
+  "joke", "motivate", "bibon", "ai-limits", "bot-feedback", "ai-version",
+]);
+
+/**
+ * Разговорные «открывалки» — иногда (≈30%) ставим перед сухим ответом,
+ * чтобы бот не звучал как справочник. Тон — дружелюбный коллега, а не саппорт.
+ * Никогда не вешаем на социальные интенты — у них и так уже живые ответы.
+ */
+const HUMAN_OPENERS = {
+  ru: [
+    "Смотрите,", "Окей,", "Так,", "Давайте по порядку.", "Кратко.",
+    "Сейчас расскажу.", "Тут всё просто.", "Если коротко —",
+    "Ага, знаю этот вопрос.", "Хороший вопрос.",
+  ],
+  kz: [
+    "Қараңыз,", "Жарайды,", "Қысқаша.", "Қазір айтып берейін.",
+    "Бұл оңай.", "Жақсы сұрақ.",
+  ],
+  en: [
+    "Okay,", "So,", "Quick answer.", "Sure thing.",
+    "Here's the deal.", "Short version —", "Good question.",
+  ],
+};
+
+/**
+ * Иногда добавляет разговорный пролог к ответу. Возвращает строку.
+ * Параметр chance — вероятность срабатывания (0..1). По умолчанию 0.30.
+ */
+function humanize(text, lang, intentId, chance = 0.30) {
+  if (!text || typeof text !== "string") return text;
+  if (intentId && SOCIAL_INTENTS.has(intentId)) return text;
+  // Не добавляем, если ответ уже начинается с маркдаун-заголовка/эмодзи/«—».
+  const trimmed = text.trimStart();
+  if (/^(\*\*|#|—|–|-|\d+\.|•|\p{Extended_Pictographic})/u.test(trimmed)) {
+    return text;
+  }
+  if (Math.random() > chance) return text;
+  const list = HUMAN_OPENERS[lang] || HUMAN_OPENERS.ru;
+  const opener = list[Math.floor(Math.random() * list.length)];
+  // Делаем первую букву исходного ответа строчной, чтобы стык читался естественно.
+  const first = trimmed.charAt(0);
+  const rest = trimmed.slice(1);
+  const lowered = first.toLowerCase() === first ? trimmed : first.toLowerCase() + rest;
+  return `${opener} ${lowered}`;
+}
+
 /** Возвращает массив строк-followup для клиента: лейблы из FOLLOWUP_LABELS. */
 function followupsFor(intentId, lang) {
   const meta = getMeta(intentId);
@@ -3776,6 +4242,145 @@ function scoreAll(t) {
   return out;
 }
 
+/**
+ * Концепт-бусты: конкретный термин → точный интент с гарантированной добавкой
+ * к score. Это страховка против ситуации, когда keyword-матчинг даёт ничью,
+ * но в тексте есть однозначное слово («PhD», «отгул», «зарплата»).
+ *
+ * Регулярки матчатся по НОРМАЛИЗОВАННОМУ тексту (нижний регистр, без ё,
+ * с разворотом алиасов). Бусты складываются: если несколько правил
+ * указывают на один интент, общий бонус суммируется.
+ */
+// Текст матчинга — это уже нормализованная строка (lower, без пунктуации,
+// токены через пробел). Поэтому word-boundaries делаем через (?:^|\s) / (?:\s|$),
+// а НЕ через \b — в JS \b не работает с кириллическими буквами.
+const CONCEPT_BOOSTS = [
+  // ===== Короткие социальные триггеры =====
+  // (одиночные "hi", "hey", "ку", "ало" — отдельная боль, в kw greet они с пробелом,
+  // на коротком сообщении не матчатся; страхуемся отдельным бустом.)
+  { re: /(?:^|\s)(hi|hey|hello|hola|алло|ало|ку|sup|yo)(?:\s|$)/, intent: "greet", boost: 6 },
+  // ===== Научные степени / звания / достижения =====
+  // PhD/докторская — boost большой, иначе перебивает points-prof-dev.
+  { re: /(?:^|\s)(phd|пхд|пиэйчди)(?:\s|$)/, intent: "points-research", boost: 10 },
+  { re: /(доктор[а-я]*\s*наук|кандидат\s*наук|докторант|докторск|кандидатск)/, intent: "points-research", boost: 8 },
+  { re: /(магистр[а-я]*|магистратур|master'?s?\s*degree)/, intent: "points-research", boost: 5 },
+  { re: /(олимпиад[а-я]*|olympiad|олимп\.|оқушы.*жеңіс)/, intent: "points-olympiad", boost: 7 },
+  { re: /(стать[яиюей]|публикац|publication[s]?|scopus|web\s*of\s*science|мақала)/, intent: "points-publications", boost: 7 },
+  { re: /(?:^|\s)wos(?:\s|$)/, intent: "points-publications", boost: 7 },
+  { re: /(конференц[а-я]*|conference|симпозиум|форум[а-я]*|congress)/, intent: "points-conference", boost: 6 },
+  { re: /(грант[а-я]*|финансир[а-я]+\s*проект)/, intent: "points-grants", boost: 7 },
+  { re: /(?:^|\s)grants?(?:\s|$)/, intent: "points-grants", boost: 6 },
+  { re: /(ментор[а-я]*|наставн[а-я]*|менторств[а-я]*)/, intent: "points-mentor", boost: 6 },
+  { re: /(?:^|\s)tutor(?:\s|$)/, intent: "points-mentor", boost: 5 },
+  { re: /(волонт[а-я]*|volunte[a-z]*|благотворит[а-я]*)/, intent: "points-volunteer", boost: 6 },
+  { re: /(открыт[а-я]+\s*урок|open\s*lesson[s]?|ашық\s*сабақ)/, intent: "points-open-lessons", boost: 7 },
+  { re: /(класс\s*рук|классн[а-я]+\s*руковод|кл\s*рук|class\s*teacher|сынып\s*жетекш)/, intent: "points-class-leader", boost: 6 },
+
+  // ===== Заявки =====
+  { re: /(отгул[а-я]*|day[\s-]*off|free\s*day|демалыс\s*күні|еркін\s*күн)/, intent: "leave", boost: 8 },
+  { re: /(ранн[а-я]+\s*уход|ушел\s*ран|ушла\s*ран|ушел\s*поран|ушла\s*поран|уйти\s*раньше|уйти\s*поран|уйти\s*ран|пораньше\s*с\s*работ|leave\s*early|early\s*leave|ертерек\s*кет)/, intent: "early-leave", boost: 9 },
+  { re: /(работ[а-я]+\s*в\s*выходн|работ[а-я]+\s*выходн|выходн[а-я]+\s*работ|weekend\s*work|субботн[а-я]+\s*работ|жұмыс\s*демалыс)/, intent: "weekend-work", boost: 8 },
+  { re: /(баланс\s*отгул|остаток\s*отгул|остатк[а-я]*\s*отгул|отгул[а-я]*\s*остатк|сколько\s*отгул|balance\s*off|сколько\s*осталось\s*отгул)/, intent: "balance", boost: 14 },
+  { re: /(где\s*моя\s*заявк|где\s*заявк|статус\s*заявк|статус\s*мое[йи]\s*заявк|заявк[а-я]*\s*одобрен|заявк[а-я]*\s*отклонен|request\s*status|когда\s*одобрят\s*заявк|заявк[а-я]*\s*где|заявк[а-я]*\s*стату|моя\s*заявк[а-я]*)/, intent: "request-where-status", boost: 10 },
+  { re: /(отменить\s*заявк|удалить\s*заявк|cancel\s*request|отозва[а-я]*\s*заявк)/, intent: "request-cancel", boost: 7 },
+
+  // ===== Технические проблемы =====
+  { re: /(не\s*пускает|не\s*входит|не\s*могу\s*войти|не\s*заходит|cannot\s*log|can'?t\s*login|невозможно\s*войти)/, intent: "cant-login", boost: 8 },
+  { re: /(не\s*загружа|не\s*грузит|upload\s*fail|файл.*не\s*грузит|зависает\s*загруз|не\s*прикрепля)/, intent: "cant-upload", boost: 8 },
+  { re: /(пуст[а-я]+\s*экран|бел[а-я]+\s*экран|blank\s*screen|ничего\s*не\s*видн|экран\s*пуст)/, intent: "screen-blank", boost: 7 },
+  { re: /(сесси[а-я]+\s*истек|выкидывает\s*из|выкинуло|session\s*expired|разлогин\s*сам|сам\s*разлогин)/, intent: "session-expired", boost: 7 },
+  { re: /(тормозит|медленн[а-я]+\s*сайт|медленно\s*работа|сайт\s*лагает|сайт\s*виснет|slow\s*site)/, intent: "slow", boost: 6 },
+  { re: /(на\s*телефон|с\s*телефон|на\s*айфон|на\s*андроид|on\s*iphone|on\s*android|mobile\s*phone)/, intent: "mobile", boost: 5 },
+  { re: /(мобильн[а-я]+\s*приложен|mobile\s*app|приложение\s*на\s*телефон|есть\s*ли\s*приложение|app\s*для)/, intent: "mobile-app", boost: 6 },
+  { re: /(оффлайн|offline|без\s*интернет|работа\s*без\s*сети)/, intent: "offline", boost: 6 },
+
+  // ===== Аккаунт / профиль =====
+  { re: /(сменить\s*пароль|поменять\s*пароль|изменить\s*пароль|change\s*password|новый\s*пароль)/, intent: "password", boost: 7 },
+  { re: /(сменить\s*email|поменять\s*email|изменить\s*email|change\s*email|новый\s*email|email\s*изменить|поменять\s*почт)/, intent: "email-change", boost: 7 },
+  { re: /(добавить\s*телефон|номер\s*телефон|phone\s*number|поменять\s*телефон|сменить\s*номер)/, intent: "phone-add", boost: 6 },
+  { re: /(аватар|фот[а-я]*\s*профил|сменить\s*фото|поставить\s*фото|avatar|profile\s*picture)/, intent: "avatar", boost: 7 },
+  { re: /(удалить\s*аккаунт|delete\s*account|снести\s*акк|закрыть\s*аккаунт)/, intent: "delete-account", boost: 8 },
+  { re: /(забыл\s*пароль|забыла\s*пароль|reset\s*password|сброс\s*пароля)/, intent: "forgot-password", boost: 7 },
+  { re: /(выйти\s*из\s*аккаунт|sign\s*out|log\s*out|выход\s*из\s*систем|разлогин|выйти\s*с\s*сайт)/, intent: "logout", boost: 7 },
+  { re: /(двухфакторн|2fa|two\s*factor|two-factor|двойн[а-я]*\s*аутентиф)/, intent: "two-factor", boost: 8 },
+
+  // ===== Рейтинг / уровни / статистика =====
+  { re: /(где\s*мой\s*рейтинг|показать\s*рейтинг|свой\s*рейтинг|мест[ао]\s*в\s*рейтинг|общий\s*рейтинг)/, intent: "rating", boost: 6 },
+  { re: /(уровень\s*учител|что\s*такое\s*уровень|уровни\s*учител|level\s*system|уровень\s*мастер|новичок|эксперт)/, intent: "level", boost: 6 },
+  { re: /(моя\s*статистик|показать\s*статистик|графики\s*баллов|динамика\s*баллов)/, intent: "stats", boost: 6 },
+  { re: /(?:^|\s)stats(?:\s|$)/, intent: "stats", boost: 5 },
+  { re: /(сколько\s*четверт|четверть\s*когда|конец\s*четверт|четверти\s*сроки|quarter[\s-]*end)/, intent: "quarter", boost: 6 },
+  { re: /(до\s*какого\s*числ|до\s*когда\s*подат|дедлайн|deadline|срок\s*подачи)/, intent: "deadlines", boost: 6 },
+  { re: /(не\s*в\s*рейтинг|почему\s*нет\s*в\s*рейтинг|нет\s*меня\s*в\s*рейтинг|not\s*in\s*rating)/, intent: "not-in-rating", boost: 7 },
+  { re: /(ноль\s*баллов|0\s*баллов|нет\s*баллов|zero\s*points|почему\s*ноль)/, intent: "zero-points", boost: 7 },
+
+  // ===== Интерфейс / настройки =====
+  { re: /(тёмн[а-я]+\s*тем|темн[а-я]+\s*тем|dark\s*mode|night\s*mode|ночн[а-я]+\s*режим|dark\s*theme)/, intent: "theme", boost: 7 },
+  { re: /(сменить\s*язык|изменить\s*язык|поменять\s*язык|change\s*language|switch\s*language|тіл\s*ауыстыр|выбор\s*языка)/, intent: "language", boost: 7 },
+  { re: /(крупн[а-я]+\s*шрифт|увеличить\s*шрифт|маленьк[а-я]+\s*шрифт|font\s*size|размер\s*шрифт)/, intent: "font", boost: 6 },
+  { re: /(шторк[а-я]*\s*уведомлен|колокольчик|notification\s*bell|уведомления\s*бел)/, intent: "bell-notifications", boost: 6 },
+
+  // ===== СКУД / Кундылык / внешние =====
+  { re: /(скуд|пропуск\s*шк|карта\s*для\s*шк|вход\s*в\s*школу)/, intent: "skud", boost: 7 },
+  { re: /(?:^|\s)skud(?:\s|$)/, intent: "skud", boost: 7 },
+  { re: /(күнделік|кунделик|kundelik|электронн[а-я]+\s*журнал)/, intent: "kundelik", boost: 7 },
+
+  // ===== Деньги =====
+  { re: /(зарплат[а-я]*|жалақы|айлық)/, intent: "salary", boost: 7 },
+  { re: /(?:^|\s)(зп|salary|wages)(?:\s|$)/, intent: "salary", boost: 7 },
+  { re: /(прем[ияей]+|надбавк[а-я]*|сыйақы)/, intent: "bonus", boost: 7 },
+  { re: /(?:^|\s)bonus(?:es|s)?(?:\s|$)/, intent: "bonus", boost: 7 },
+  { re: /(повышен[а-я]+\s*зарплат|карьерн[а-я]+\s*рост|promotion|разряд[а-я]*\s*выше)/, intent: "promotion", boost: 6 },
+  { re: /(категор[а-я]+\s*аттестац|тест\s*на\s*категор|category\s*test|аттестация)/, intent: "category-test", boost: 7 },
+
+  // ===== Поиск / навигация =====
+  { re: /(найти\s*учител|поиск\s*учител|find\s*teacher|где\s*учитель|искать\s*коллег)/, intent: "find-teacher", boost: 7 },
+  { re: /(поиск\s*по\s*сайт|где\s*найт|how\s*to\s*find|строка\s*поиска)/, intent: "search-site", boost: 6 },
+  { re: /(фильтр|сортировк|sort\s*by|filter\s*by|упорядоч)/, intent: "filter-sort", boost: 5 },
+
+  // ===== Админка / директор =====
+  { re: /(одобрить\s*заявк|approve\s*request|подтвердить\s*достижен)/, intent: "approvals", boost: 6 },
+  { re: /(?:^|\s)approvals?(?:\s|$)/, intent: "approvals", boost: 5 },
+  { re: /(массов[а-я]+\s*одобр|bulk\s*approve|пакетн[а-я]+\s*одобр)/, intent: "admin-bulk", boost: 7 },
+  { re: /(директор[а-я]*|director|завуч|head\s*teacher)/, intent: "director", boost: 5 },
+  { re: /(импорт\s*excel|excel\s*импорт|excel\s*upload|загрузить\s*excel)/, intent: "excel-import", boost: 7 },
+  { re: /(экспорт\s*pdf|pdf\s*экспорт|pdf\s*профиль|export\s*pdf)/, intent: "pdf-export-profile", boost: 7 },
+
+  // ===== События / календарь =====
+  { re: /(календар[а-я]*|calendar|расписание\s*событ|школьн[а-я]+\s*календар)/, intent: "calendar", boost: 4 },
+  { re: /(событие|events?|мероприят[а-я]+|шара)/, intent: "events", boost: 4 },
+  { re: /(rsvp|подтвердить\s*участ|зарегистр[а-я]+\s*на\s*событ)/, intent: "event-rsvp", boost: 6 },
+
+  // ===== Поддержка / обратная связь =====
+  { re: /(служб[а-я]+\s*поддержк|support|help\s*desk|обратиться\s*в\s*поддержк|техподдержк)/, intent: "support", boost: 5 },
+  { re: /(обратн[а-я]+\s*связь|feedback|оставить\s*отзыв|написать\s*разработчик)/, intent: "feedback", boost: 5 },
+  { re: /(связаться\s*с\s*админ|написать\s*админ|contact\s*admin|связь\s*с\s*админ)/, intent: "contact-admin", boost: 6 },
+];
+
+/** Поднимает score конкретного интента, если в тексте однозначный термин. */
+function applyConceptBoosts(text, scored) {
+  if (!text) return scored;
+  const idx = new Map();
+  scored.forEach((x, i) => idx.set(x.intent.id, i));
+  let changed = false;
+  for (const { re, intent: intentId, boost } of CONCEPT_BOOSTS) {
+    if (!re.test(text)) continue;
+    if (idx.has(intentId)) {
+      scored[idx.get(intentId)].s += boost;
+      changed = true;
+    } else {
+      const entry = INTENTS.find(i => i.id === intentId);
+      if (entry) {
+        scored.push({ intent: entry, s: boost });
+        idx.set(intentId, scored.length - 1);
+        changed = true;
+      }
+    }
+  }
+  if (changed) scored.sort((a, b) => b.s - a.s);
+  return scored;
+}
+
 /** Подсказки для fallback: top-K интентов по score (даже слабых), как followup-лейблы. */
 function fallbackSuggestions(scored, lang, max = 4) {
   const seen = new Set();
@@ -3810,12 +4415,22 @@ function answerFor(userText, lang, ctx) {
   const L = lang || "ru";
 
   if (!t) {
+    const emptyRu = [
+      "Хм, я ничего не получил. Напишите вопрос — например, «как добавить достижение?» или «сколько баллов за PhD?».",
+      "Так, пустое сообщение. Спросите что-нибудь — про баллы, рейтинг, заявки, профиль.",
+      "Слушаю, но пока не вижу вопроса. Напишите парой слов — пойму.",
+    ];
+    const emptyKz = [
+      "Сұрағыңыз бос сияқты. Жазып жіберіңіз — мысалы, «жетістікті қалай қосуға болады?» немесе «PhD-ге қанша ұпай?».",
+      "Бір нәрсе сұраңыз — ұпай, рейтинг, өтінімдер, профиль туралы.",
+    ];
+    const emptyEn = [
+      "Hmm, looks empty. Ask me something — e.g. \"How do I submit an achievement?\" or \"Points for PhD?\".",
+      "I'm listening, but I don't see a question yet. Drop a few words.",
+    ];
+    const pool = L === "kz" ? emptyKz : L === "en" ? emptyEn : emptyRu;
     return {
-      reply: L === "kz"
-        ? "Сұрақ жазыңыз — мысалы, «жетістікті қалай қосуға болады?» немесе «PhD-ге қанша ұпай?»."
-        : L === "en"
-          ? "Ask me anything about the platform — e.g. \"How do I submit an achievement?\" or \"Points for PhD?\"."
-          : "Напишите вопрос — например, «как добавить достижение?» или «сколько баллов за PhD?».",
+      reply: pool[Math.floor(Math.random() * pool.length)],
       suggestions: ["capabilities", "add-achievement", "rating", "request"].map(id => followupLabel(id, L)),
       topic: "default",
       intent: null,
@@ -3830,22 +4445,46 @@ function answerFor(userText, lang, ctx) {
   if (rawTokens.length <= 2) {
     const phrase = rawTokens.join(" ");
     if (ACK_TOKENS.has(phrase)) {
-      const head = L === "kz" ? "Жақсы! Тағы не қызықтырады?"
-        : L === "en" ? "Got it! What else?"
-        : "Принято! Что ещё интересует?";
+      const ackRu = [
+        "Принято! Что ещё интересует?",
+        "Ага, понял. Спрашивайте дальше — я тут.",
+        "Окей. Если что-то ещё нужно — пишите.",
+        "Хорошо. Если будут вопросы — спрашивайте, не стесняйтесь.",
+      ];
+      const ackKz = [
+        "Жақсы! Тағы не қызықтырады?",
+        "Түсіндім. Тағы сұрағыңыз болса — жазыңыз.",
+      ];
+      const ackEn = [
+        "Got it! What else?",
+        "Cool. Anything else on your mind?",
+        "Alright. Ask me more if you need.",
+      ];
+      const pool = L === "kz" ? ackKz : L === "en" ? ackEn : ackRu;
       return {
-        reply: head,
+        reply: pool[Math.floor(Math.random() * pool.length)],
         suggestions: ["capabilities", "add-achievement", "rating", "request"].map(id => followupLabel(id, L)),
         topic: "default",
         intent: null,
       };
     }
     if (NEG_ACK_TOKENS.has(phrase)) {
-      const head = L === "kz" ? "Жарайды. Басқа сұрағыңыз болса — жазыңыз."
-        : L === "en" ? "All right. Ask any other question."
-        : "Ок. Спросите что-нибудь другое — я постараюсь помочь.";
+      const negRu = [
+        "Ок, не вопрос. Спросите что-нибудь другое — я постараюсь помочь.",
+        "Понял, проехали. Если будет нужно — пишите.",
+        "Ладно. Передумаете — я никуда не денусь.",
+      ];
+      const negKz = [
+        "Жарайды. Басқа сұрағыңыз болса — жазыңыз.",
+        "Түсіндім, өттік. Қажет болса — қайта келіңіз.",
+      ];
+      const negEn = [
+        "All right. Ask any other question.",
+        "No worries. I'm here if you change your mind.",
+      ];
+      const pool = L === "kz" ? negKz : L === "en" ? negEn : negRu;
       return {
-        reply: head,
+        reply: pool[Math.floor(Math.random() * pool.length)],
         suggestions: ["capabilities", "support"].map(id => followupLabel(id, L)),
         topic: "default",
         intent: null,
@@ -3855,6 +4494,10 @@ function answerFor(userText, lang, ctx) {
 
   // Считаем score по всем интентам на текущем тексте.
   let scored = scoreAll(t);
+
+  // Концепт-бусты: однозначные термины («PhD», «отгул», «зарплата», «тёмная тема»)
+  // гарантированно поднимают свой интент, даже если keyword-матч был слабым.
+  scored = applyConceptBoosts(t, scored);
 
   // Подстраховка: «add-achievement» ловим по парам глагол+объект, даже если
   // ни один многословный ключ не сработал. Это покрывает короткие формы вида
@@ -3889,9 +4532,16 @@ function answerFor(userText, lang, ctx) {
   if (best && second && best.s >= 3 && best.s - second.s <= 1 && best.s <= 5) {
     const a = followupLabel(best.intent.id, L);
     const b = followupLabel(second.intent.id, L);
-    const head = L === "kz"
-      ? "Сұрағыңыз нені білдіреді?"
-      : L === "en" ? "Did you mean one of these?" : "Уточните — вы про что?";
+    const headPool = L === "kz"
+      ? ["Сұрағыңыз нені білдіреді?", "Қайсысы туралы — нақтырақ айтасыз ба?"]
+      : L === "en"
+        ? ["Did you mean one of these?", "Hmm, which one — could you clarify?"]
+        : [
+            "Хм, не до конца понял. Вы про что — про это или это?",
+            "Уточните, пожалуйста — что именно вас интересует?",
+            "Чтобы не угадывать — выберите, что ближе:",
+          ];
+    const head = headPool[Math.floor(Math.random() * headPool.length)];
     return {
       reply: `${head}\n- ${a}\n- ${b}`,
       suggestions: [a, b],
@@ -3903,17 +4553,38 @@ function answerFor(userText, lang, ctx) {
   if (!best || best.s < 2) {
     // Умный fallback: если есть слабые матчи (score 1) — показываем их кнопками.
     const hasWeakHints = scored.length > 0;
-    const head = L === "kz"
-      ? (hasWeakHints
-          ? "Сұрағыңызды нақты түсінбедім. Мүмкін, осының бірі?"
-          : "Сұрақты түсінбедім. Мен білемін: жетістіктер мен ұпайлар, рейтинг, тоқсандар, өтінімдер, құжаттар, профиль, NIS туралы, әкімші панелі, қолдау. Нақтырақ сұраңыз.")
+    const ruWeak = [
+      "Хм, не уверен, что понял. Может, вы про что-то из этого?",
+      "Так, кажется, я не совсем уловил. Возможно, имели в виду:",
+      "Сейчас не до конца понял вас. Похоже на одно из этого?",
+    ];
+    const ruWide = [
+      "Честно говоря, не понял вопрос. Я разбираюсь в достижениях и баллах, рейтинге, четвертях, заявках, документах, профиле, NIS, админ-кабинете, поддержке. Спросите конкретнее — например: «сколько баллов за PhD?», «как взять отгул?», «что такое уровень мастер?»",
+      "Не уловил, о чём вы. Попробуйте проще — «как добавить достижение», «где мой рейтинг», «как взять отгул». Так я точно отвечу.",
+      "Запутался немного. Спросите по-другому или нажмите одну из подсказок ниже — я знаю про баллы, рейтинг, заявки, профиль, админку и многое другое.",
+    ];
+    const kzWeak = [
+      "Сұрағыңызды нақты түсінбедім. Мүмкін, осының бірі?",
+      "Толық түсінбедім. Осылардың бірі ме?",
+    ];
+    const kzWide = [
+      "Сұрақты түсінбедім. Мен білемін: жетістіктер мен ұпайлар, рейтинг, тоқсандар, өтінімдер, құжаттар, профиль, NIS туралы, әкімші панелі, қолдау. Нақтырақ сұраңыз.",
+      "Сізді түсіне алмадым. Қарапайым тілмен сұрап көріңіз — «жетістікті қалай қосамын», «рейтингім қайда».",
+    ];
+    const enWeak = [
+      "Hmm, not sure I got it. Maybe one of these?",
+      "I might be misreading it — could it be one of these?",
+    ];
+    const enWide = [
+      "Honestly, I didn't catch that. I know about achievements & points, rating, quarters, requests, documents, profile, NIS, admin panel, support. Try a specific question — like \"points for PhD?\" or \"how do I take time off?\".",
+      "Lost me there. Try simpler — \"how to add achievement\", \"where is my rating\". I'll answer.",
+    ];
+    const pool = L === "kz"
+      ? (hasWeakHints ? kzWeak : kzWide)
       : L === "en"
-        ? (hasWeakHints
-            ? "I'm not sure I got it. Maybe one of these?"
-            : "I didn't get the question. I know about: achievements & points, rating, quarters, requests, documents, profile, NIS itself, admin panel, support. Please be more specific.")
-        : (hasWeakHints
-            ? "Я не уверен, что понял. Возможно, вы про что-то из этого?"
-            : "Я не понял вопрос. Я знаю про: достижения и баллы, рейтинг, четверти, заявки, документы, профиль, NIS, админ-кабинет, поддержку. Спросите конкретно — например: «сколько баллов за PhD?», «как взять отгул?», «что такое уровень мастер?»");
+        ? (hasWeakHints ? enWeak : enWide)
+        : (hasWeakHints ? ruWeak : ruWide);
+    const head = pool[Math.floor(Math.random() * pool.length)];
     const suggestions = hasWeakHints
       ? fallbackSuggestions(scored, L)
       : ["capabilities", "add-achievement", "rating", "request"].map(id => followupLabel(id, L));
@@ -3926,7 +4597,7 @@ function answerFor(userText, lang, ctx) {
   }
 
   return {
-    reply: pickAnswer(best.intent, L),
+    reply: humanize(pickAnswer(best.intent, L), L, best.intent.id),
     suggestions: followupsFor(best.intent.id, L),
     topic: getMeta(best.intent.id).topic,
     intent: best.intent.id,

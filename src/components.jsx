@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { createRoot } from "react-dom/client";
 import { t, getLang, setLang } from "./i18n.js";
 import {
   auth, db, storage, doc, updateDoc, signOut, OAuthProvider, signInWithPopup,
@@ -58,6 +59,24 @@ export function Icon({ name }) {
     default: return null;
   }
 }
+/* Verified badge: rendered next to a user's name once they've changed
+   the default onboarding password (users.passwordChanged === true). */
+export function VerifiedBadge({ user, size = 13, style }) {
+  if (!user?.passwordChanged) return null;
+  return (
+    <img
+      src="/activ.svg"
+      width={size}
+      height={size}
+      className="verified-badge"
+      alt=""
+      aria-label={t("verifiedAccount")}
+      title={t("verifiedAccount")}
+      style={style}
+    />
+  );
+}
+
 export const Btn = ({ kind = "", children, ...props }) => <button className={["btn", kind].join(" ").trim()} {...props}>{children}</button>;
 export const Input = (p) => <input className="input" {...p} />;
 export const Select = (p) => <select className="select" {...p} />;
@@ -242,7 +261,7 @@ export function TeammatesPicker({ value = [], onChange, excludeUid, label }) {
                 style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", fontSize: 12, borderRadius: 999, background: "rgba(135,188,46,.15)", border: "1px solid rgba(135,188,46,.35)" }}
                 onClick={e => e.stopPropagation()}
               >
-                {u.displayName || u.email}
+                {u.displayName || u.email}<VerifiedBadge user={u} size={11} />
                 <button
                   type="button"
                   onClick={() => removeOne(u.uid)}
@@ -295,7 +314,7 @@ export function TeammatesPicker({ value = [], onChange, excludeUid, label }) {
                 <div className="tm-modal__chips">
                   {chosen.map(u => (
                     <span key={u.uid} className="tm-modal__chip">
-                      {u.displayName || u.email}
+                      {u.displayName || u.email}<VerifiedBadge user={u} size={11} />
                       <button type="button" className="tm-modal__chip-x" onClick={() => removeOne(u.uid)}>×</button>
                     </span>
                   ))}
@@ -331,7 +350,7 @@ export function TeammatesPicker({ value = [], onChange, excludeUid, label }) {
                         <div className={`tm-modal__avatar tm-modal__avatar--initials${on ? " is-on" : ""}`}>{initials}</div>
                       )}
                       <div className="tm-modal__row-body">
-                        <div className="tm-modal__row-name">{u.displayName || u.email}</div>
+                        <div className="tm-modal__row-name">{u.displayName || u.email}<VerifiedBadge user={u} size={12} /></div>
                         {(u.position || u.subject) && (
                           <div className="tm-modal__row-meta muted">{[u.position, u.subject].filter(Boolean).join(" · ")}</div>
                         )}
@@ -1017,22 +1036,6 @@ export class ErrorBoundary extends React.Component {
 
 
 export function NavFlyout({ icon, label, children, badge, open, onToggle }) {
-  const bodyRef = useRef(null);
-  const [height, setHeight] = useState(open ? "auto" : 0);
-
-  useEffect(() => {
-    if (!bodyRef.current) return;
-    if (open) {
-      const h = bodyRef.current.scrollHeight;
-      setHeight(h + "px");
-      const t = setTimeout(() => setHeight("auto"), 320);
-      return () => clearTimeout(t);
-    } else {
-      setHeight(bodyRef.current.scrollHeight + "px");
-      requestAnimationFrame(() => requestAnimationFrame(() => setHeight("0px")));
-    }
-  }, [open]);
-
   return (
     <div className={`nav-flyout${open ? " nav-flyout--open" : ""}`}>
       <div className="nav-flyout__head" role="button" tabIndex={0} onClick={onToggle}>
@@ -1041,7 +1044,7 @@ export function NavFlyout({ icon, label, children, badge, open, onToggle }) {
         {badge > 0 && <span className="nav-badge nav-badge--flyout">{badge > 99 ? "99+" : badge}</span>}
         <span className="nav-flyout__chevron"><Icon name="chevron" /></span>
       </div>
-      <div className="nav-flyout__body" ref={bodyRef} style={{ height, overflow: "hidden" }}>
+      <div className="nav-flyout__body">
         <div className="nav-flyout__items">{children}</div>
       </div>
     </div>
@@ -1054,8 +1057,15 @@ export function SidebarNav() {
   const path = st.route.path;
 
   const badgeFor = (p) => {
-    if (p === "admin/approvals") return (st.pendingSubmissions || []).length || 0;
+    if (p === "admin/approvals") {
+      // Include pending-certificate signs in the approvals count so admins
+      // see the work-to-do count even when not looking at the documents tab.
+      const subs = (st.pendingSubmissions || []).length || 0;
+      const certs = (st.allCertificates || []).filter(c => c.status === "pending").length || 0;
+      return subs + certs;
+    }
     if (p === "admin/requests") return (st.pendingRequests || []).length || 0;
+    if (p === "admin/documents") return (st.allCertificates || []).filter(c => c.status === "pending").length || 0;
     if (p === "documents") return (st.myDocuments || []).filter(d => d.status === "sent").length || 0;
     if (p === "admin/support") return (st.allTickets || []).filter(tk => tk.status === "new").length || 0;
     return 0;
@@ -1105,6 +1115,7 @@ export function SidebarNav() {
   // Flyout group badges (sum of children)
   const workBadge = badgeFor("documents");
   const adminModerationBadge = badgeFor("admin/approvals") + badgeFor("admin/requests");
+  const adminContentBadge = badgeFor("admin/documents");
   const adminPeopleBadge = badgeFor("admin/support");
 
   if (!u) {
@@ -1180,6 +1191,7 @@ export function SidebarNav() {
           <NavFlyout
             icon="file"
             label={t("navGroupContent")}
+            badge={adminContentBadge}
             open={openGroup === "adminContent"}
             onToggle={() => toggle("adminContent")}
           >
@@ -1328,7 +1340,7 @@ const ROUTE_META = {
   rating:              { icon: "rank",      tKey: "navRating",         desc: "ratingDesc" },
   stats:               { icon: "chart",     tKey: "navStats",          desc: "statsDesc" },
   add:                 { icon: "plus",      tKey: "navAddKpi",         desc: "addDesc" },
-  books:               { icon: "file",      tKey: "navBooks",          desc: "booksDesc" },
+  books:               { icon: "check",     tKey: "navBooks",          desc: "booksDesc" },
   requests:            { icon: "file",      tKey: "navRequests",       desc: "requestsDesc" },
   documents:           { icon: "shield",    tKey: "navDocuments",      desc: "documentsDesc" },
   news:                { icon: "news",      tKey: "navNews",           desc: "newsDesc" },
@@ -1399,7 +1411,7 @@ export function TopbarRight() {
         <>
           <Pill kind={u.role === "admin" ? "pending" : "approved"}>{u.role}</Pill>
           <div className="tiny" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            <b>{u.displayName || t("unnamed")}</b>
+            <b>{u.displayName || t("unnamed")}</b><VerifiedBadge user={u} size={12} />
           </div>
           <Btn kind="ghost" onClick={async () => { const cu = auth.currentUser; if (cu) await setUserOnline(cu.uid, false); await signOut(auth); toast(t("loggedOut")); navigate("login"); }}>
             <Icon name="logout" /> {t("navLogout")}
@@ -1427,7 +1439,7 @@ function OnlineRow({ user, isMe }) {
       </div>
       <div className="online-row__info">
         <div className="online-row__name">
-          <span className="online-row__name-text">{name}</span>
+          <span className="online-row__name-text">{name}</span><VerifiedBadge user={user} size={12} />
           {isMe && <span className="online-row__me-badge">{t("onlineYou")}</span>}
         </div>
         {meta && <div className="online-row__meta">{meta}</div>}
@@ -1733,7 +1745,7 @@ export function TeacherProfileModal() {
             </div>
             <div className="tp-rank-badge">#{rank}</div>
           </div>
-          <div className="tp-name">{tc.displayName || t("unnamed")}</div>
+          <div className="tp-name">{tc.displayName || t("unnamed")}<VerifiedBadge user={tc} size={16} /></div>
           <div className="tp-role-tags">
             <span className="tp-tag tp-tag--role">{tc.role === "admin" ? "Admin" : "Teacher"}</span>
             <span className="tp-tag tp-tag--level">{lvl.name}</span>
@@ -4262,6 +4274,282 @@ export function DocumentPreview({ request, user, signatureUrl, adminSignatureUrl
       )}
     </div>
   );
+}
+
+/* ============================================================== */
+/* ═══════════════ CERTIFICATE (16:9, CEFR pass) ═══════════════ */
+/* ============================================================== */
+
+const CEFR_COLOR = {
+  A1: "#6ee7b7", A2: "#34d399", B1: "#38bdf8", B2: "#2563eb", C1: "#a855f7", C2: "#c026d3"
+};
+
+function fmtCertDate(ts) {
+  let d;
+  if (!ts) d = new Date();
+  else if (ts.seconds) d = new Date(ts.seconds * 1000);
+  else if (ts instanceof Date) d = ts;
+  else d = new Date(ts);
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+}
+
+function certNumber(cert) {
+  return (cert?.id || "").slice(-8).toUpperCase().padStart(8, "0");
+}
+
+/** Beautiful 16:9 certificate. Renders the same DOM both on-screen and via
+ *  hidden full-size clone (1600×900) used by the PNG/PDF exporters below. */
+export function CertificatePreview({ cert, refEl, fullSize = false }) {
+  if (!cert) return null;
+  const color = CEFR_COLOR[cert.level] || "#a855f7";
+  const issued = fmtCertDate(cert.signedAt || cert.createdAt);
+  const num = certNumber(cert);
+  const langUpper = (cert.lang || "").toUpperCase();
+  const signed = cert.status === "signed";
+
+  const scale = fullSize ? 1 : null;
+  const wrapStyle = fullSize
+    ? { width: 1600, height: 900, "--cert-color": color }
+    : { "--cert-color": color };
+
+  return (
+    <div
+      ref={refEl}
+      className={`cert ${fullSize ? "cert--full" : ""} ${signed ? "cert--signed" : "cert--pending"}`}
+      style={wrapStyle}
+    >
+      {/* decorative borders + corners */}
+      <div className="cert__bg" />
+      <div className="cert__frame" />
+      <div className="cert__corner cert__corner--tl" />
+      <div className="cert__corner cert__corner--tr" />
+      <div className="cert__corner cert__corner--bl" />
+      <div className="cert__corner cert__corner--br" />
+
+      <div className="cert__inner">
+        <div className="cert__header">
+          <img src="/logo-nis.png" alt="NIS" className="cert__logo" />
+          <div className="cert__org-block">
+            <div className="cert__org">{t("nisOrg")}</div>
+            <div className="cert__org-sub">KPI · CEFR Assessment</div>
+          </div>
+          <div className="cert__num-block">
+            <div className="cert__num-label">{t("certNumber")}</div>
+            <div className="cert__num">{num}</div>
+          </div>
+        </div>
+
+        <div className="cert__title">{t("certificateOfAchievement")}</div>
+        <div className="cert__rule"><span /><span /><span /></div>
+
+        <div className="cert__body">
+          <div className="cert__hint">{t("certBodyAwarded")}</div>
+          <div className="cert__name">{cert.userName || cert.userEmail || "—"}</div>
+          <div className="cert__desc">
+            {t("certBodyPassed")} <b>{cert.langLabel || langUpper}</b> {t("certBodyLevel")}
+          </div>
+
+          <div className="cert__level-block">
+            <div className="cert__lang">{langUpper}</div>
+            <div className="cert__level">{cert.level}</div>
+            <div className="cert__score">
+              {t("certScoreLabel")}: <b>{cert.score}/{cert.total}</b> · {cert.percent}%
+            </div>
+          </div>
+        </div>
+
+        <div className="cert__footer">
+          <div className="cert__sig">
+            <div className="cert__sig-img-wrap">
+              {cert.adminSignatureUrl
+                ? <img src={cert.adminSignatureUrl} alt="" className="cert__sig-img" crossOrigin="anonymous" />
+                : <div className="cert__sig-line" />}
+            </div>
+            <div className="cert__sig-label">{t("certAdminSign")}</div>
+            <div className="cert__sig-name">{cert.adminName || (signed ? "" : "—")}</div>
+          </div>
+
+          <div className="cert__seal">
+            <img src="/logo-nis.png" alt="" className="cert__seal-img" />
+            <div className="cert__seal-text">{t("certVerified")}</div>
+          </div>
+
+          <div className="cert__date-block">
+            <div className="cert__date-label">{t("certIssued")}</div>
+            <div className="cert__date">{issued}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Lazy-load html2canvas from CDN (one-shot, cached on window). */
+async function loadHtml2Canvas() {
+  if (typeof window === "undefined") return null;
+  if (window.html2canvas) return window.html2canvas;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("html2canvas CDN load failed"));
+    document.head.appendChild(s);
+  });
+  return window.html2canvas;
+}
+
+/** Render a hidden 1600×900 certificate node to PNG blob. */
+async function renderCertToPngBlob(cert) {
+  const html2canvas = await loadHtml2Canvas();
+  if (!html2canvas) throw new Error("html2canvas unavailable");
+
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-99999px;top:-99999px;width:1600px;height:900px;pointer-events:none;z-index:-1;";
+  document.body.appendChild(host);
+
+  const root = createRoot(host);
+  root.render(<CertificatePreview cert={cert} fullSize />);
+  // give React a tick to commit
+  await new Promise(r => setTimeout(r, 80));
+  // wait for any <img> in the certificate
+  const imgs = Array.from(host.querySelectorAll("img"));
+  await Promise.all(imgs.map(im => im.complete ? Promise.resolve() : new Promise(r => { im.onload = r; im.onerror = r; })));
+
+  try {
+    const target = host.firstChild;
+    const canvas = await html2canvas(target, {
+      backgroundColor: "#ffffff",
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      width: 1600,
+      height: 900
+    });
+    const blob = await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(new Error("toBlob failed")), "image/png", 0.95));
+    return blob;
+  } finally {
+    try { root.unmount(); host.remove(); } catch { /* noop */ }
+  }
+}
+
+export async function downloadCertificateAsPng(cert) {
+  try {
+    const blob = await renderCertToPngBlob(cert);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Certificate_${(cert.lang || "").toUpperCase()}_${cert.level}_${certNumber(cert)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error("PNG export failed, falling back to print:", e);
+    downloadCertificateAsPdf(cert);
+  }
+}
+
+/** PDF export uses a printable window with a 16:9 landscape page. */
+export function downloadCertificateAsPdf(cert) {
+  const color = CEFR_COLOR[cert.level] || "#a855f7";
+  const issued = fmtCertDate(cert.signedAt || cert.createdAt);
+  const num = certNumber(cert);
+  const langUpper = (cert.lang || "").toUpperCase();
+  const sig = cert.adminSignatureUrl ? `<img src="${cert.adminSignatureUrl}" crossorigin="anonymous" style="max-width:240px;max-height:90px;object-fit:contain;" />` : `<div style="width:240px;border-bottom:2px solid #1a1d2e;height:60px;"></div>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Certificate</title>
+<style>
+  @page { size: 297mm 167mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:#fff; font-family: 'Georgia', 'Times New Roman', serif; color:#1a1d2e; }
+  .cert { position: relative; width: 297mm; height: 167mm; background:
+    radial-gradient(120% 80% at 50% -10%, ${color}22 0%, transparent 60%),
+    radial-gradient(120% 80% at 50% 110%, ${color}1a 0%, transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%); overflow:hidden; }
+  .frame { position:absolute; inset: 14mm; border: 1.5mm solid ${color}; border-radius: 6mm; }
+  .frame2 { position:absolute; inset: 18mm; border: 0.4mm solid ${color}aa; border-radius: 4mm; }
+  .corner { position:absolute; width:18mm; height:18mm; border:1mm solid ${color}; border-radius:2mm; }
+  .c-tl{top:10mm;left:10mm;border-right:none;border-bottom:none;}
+  .c-tr{top:10mm;right:10mm;border-left:none;border-bottom:none;}
+  .c-bl{bottom:10mm;left:10mm;border-right:none;border-top:none;}
+  .c-br{bottom:10mm;right:10mm;border-left:none;border-top:none;}
+  .inner { position:absolute; inset: 24mm 28mm; display:flex; flex-direction:column; align-items:center; }
+  .header { display:flex; align-items:center; justify-content:space-between; width:100%; }
+  .logo { width: 22mm; height: 22mm; object-fit: contain; }
+  .org { font-size: 14pt; font-weight: 700; }
+  .org-sub { font-size: 9pt; color:#666; letter-spacing:2px; }
+  .num { text-align:right; font-size:9pt; color:#666; }
+  .num b { display:block; font-family:'Courier New',monospace; color:${color}; font-size:11pt; letter-spacing:2px; }
+  .title { margin-top: 6mm; font-size: 32pt; font-weight: 800; letter-spacing: 6px; color: ${color}; text-align:center; }
+  .rule { width: 60mm; height: 1mm; margin: 3mm auto; background: linear-gradient(90deg, transparent, ${color}, transparent); border-radius:2mm; }
+  .hint { font-size: 12pt; color:#555; text-align:center; }
+  .name { margin-top: 5mm; font-size: 30pt; font-style: italic; font-weight: 700; color:#1a1d2e; text-align:center; border-bottom: 0.5mm solid ${color}55; padding-bottom: 2mm; min-width: 180mm; }
+  .desc { margin-top: 4mm; font-size: 13pt; color:#333; text-align:center; max-width: 200mm; }
+  .desc b { color:${color}; }
+  .lvl-row { margin-top: 6mm; display:flex; align-items:center; justify-content:center; gap: 6mm; }
+  .lang-box { font-size:18pt; font-weight:800; background:${color}1a; color:${color}; padding: 2mm 6mm; border-radius:3mm; }
+  .lvl-box { font-size: 36pt; font-weight: 900; color: #fff; background: ${color}; padding: 1mm 8mm; border-radius:3mm; box-shadow: 0 4mm 8mm ${color}55; }
+  .score { font-size: 11pt; color:#444; }
+  .footer { margin-top: auto; display:flex; justify-content: space-between; align-items: flex-end; width: 100%; }
+  .sig { text-align:center; min-width: 70mm; }
+  .sig-label { margin-top:2mm; font-size: 9pt; color:#666; letter-spacing:1px; text-transform: uppercase; border-top: 0.4mm solid #999; padding-top: 1.5mm; }
+  .sig-name { font-size: 11pt; font-weight:600; margin-top: 1mm; }
+  .seal { text-align:center; }
+  .seal img { width: 26mm; height: 26mm; object-fit: contain; opacity:.85; }
+  .seal-text { font-size:8pt; letter-spacing:2px; color:${color}; font-weight:700; }
+  .date-block { text-align:center; min-width: 70mm; }
+  .date-label { font-size:9pt; color:#666; letter-spacing:1px; text-transform: uppercase; }
+  .date { font-size: 13pt; font-weight:700; margin-top: 1mm; }
+</style></head>
+<body>
+  <div class="cert">
+    <div class="frame"></div>
+    <div class="frame2"></div>
+    <div class="corner c-tl"></div><div class="corner c-tr"></div>
+    <div class="corner c-bl"></div><div class="corner c-br"></div>
+    <div class="inner">
+      <div class="header">
+        <img class="logo" src="${location.origin}/logo-nis.png" />
+        <div style="text-align:center;">
+          <div class="org">${t("nisOrg")}</div>
+          <div class="org-sub">KPI · CEFR ASSESSMENT</div>
+        </div>
+        <div class="num">${t("certNumber")}<b>${num}</b></div>
+      </div>
+      <div class="title">${t("certificateOfAchievement")}</div>
+      <div class="rule"></div>
+      <div class="hint">${t("certBodyAwarded")}</div>
+      <div class="name">${(cert.userName || cert.userEmail || "—").replace(/</g, "&lt;")}</div>
+      <div class="desc">${t("certBodyPassed")} <b>${(cert.langLabel || langUpper).replace(/</g, "&lt;")}</b> ${t("certBodyLevel")}</div>
+      <div class="lvl-row">
+        <div class="lang-box">${langUpper}</div>
+        <div class="lvl-box">${cert.level}</div>
+      </div>
+      <div class="score" style="margin-top:3mm;">${t("certScoreLabel")}: <b>${cert.score}/${cert.total}</b> · ${cert.percent}%</div>
+      <div class="footer">
+        <div class="sig">
+          ${sig}
+          <div class="sig-label">${t("certAdminSign")}</div>
+          <div class="sig-name">${(cert.adminName || "").replace(/</g, "&lt;")}</div>
+        </div>
+        <div class="seal">
+          <img src="${location.origin}/logo-nis.png" />
+          <div class="seal-text">${t("certVerified")}</div>
+        </div>
+        <div class="date-block">
+          <div class="date-label">${t("certIssued")}</div>
+          <div class="date">${issued}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>setTimeout(function(){window.print();},500);<\/script>
+</body></html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) { try { toast(t("error"), "error"); } catch { } return; }
+  win.document.write(html);
+  win.document.close();
 }
 
 /** ---------- announcement banner (shown to all users) ---------- */

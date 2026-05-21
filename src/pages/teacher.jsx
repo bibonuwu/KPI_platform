@@ -25,7 +25,8 @@ import {
   fetchMyTeacherDocs, createMyTeacherDoc, uploadTeacherDocFile,
   fetchGoals, createGoal, updateGoal, deleteGoalDoc,
   fetchMyBookQuizAttempts, createBookQuizAttempt, createBookQuizRewardSubmission,
-  renderRichDesc, ensureUserDoc
+  renderRichDesc, ensureUserDoc,
+  createCertificate, fetchMyCertificates, findCertificate
 } from "../data.js";
 import {
   Icon, Btn, Input, Select, Textarea, Pill, DataCards, QuarterFilter,
@@ -34,8 +35,13 @@ import {
   LevelChart, VerticalBarChart, IntensityChart, StackedColumnChart,
   UserDataChart, MonthlyAverageChart, WorldwidePopulationChart,
   DocumentPreview, generateDocHTML, downloadDocAsWord, downloadDocAsPdf,
-  FileDrop, ErrorBoundary, Guard, TeammatesPicker
+  CertificatePreview, downloadCertificateAsPng, downloadCertificateAsPdf,
+  FileDrop, ErrorBoundary, Guard, TeammatesPicker, VerifiedBadge
 } from "../components.jsx";
+import {
+  LANGUAGE_TESTS, CEFR_LEVELS, CEFR_LEVEL_META, LANGUAGE_META,
+  getLanguageTest, cefrPassThreshold, compareCefr, highestCefr
+} from "../data/languageTests.js";
 
 function useWowTilt(maxTilt = 8) {
   const ref = useRef(null);
@@ -57,6 +63,57 @@ function useWowTilt(maxTilt = 8) {
     el.style.setProperty("--ry", "0deg");
   };
   return { ref, onMouseMove, onMouseLeave };
+}
+
+// Inline SVG flags — emoji flags don't render on Windows (show as "KZ", "RU", "GB" letters).
+// Sized via CSS font-size (width 1.4em × height 1em ≈ 3:2 aspect).
+function LangFlag({ code, className = "" }) {
+  const cls = `lang-flag lang-flag--${code}${className ? ` ${className}` : ""}`;
+  if (code === "kz") {
+    return (
+      <svg className={cls} viewBox="0 0 30 20" aria-hidden="true" focusable="false">
+        <rect width="30" height="20" rx="2" fill="#00a8c2" />
+        <circle cx="15" cy="10" r="3" fill="#fec50c" />
+        <g stroke="#fec50c" strokeWidth="0.7" strokeLinecap="round">
+          <line x1="15" y1="4.2" x2="15" y2="5.6" />
+          <line x1="15" y1="14.4" x2="15" y2="15.8" />
+          <line x1="9.2" y1="10" x2="10.6" y2="10" />
+          <line x1="19.4" y1="10" x2="20.8" y2="10" />
+          <line x1="11.2" y1="6.2" x2="12.2" y2="7.2" />
+          <line x1="17.8" y1="12.8" x2="18.8" y2="13.8" />
+          <line x1="18.8" y1="6.2" x2="17.8" y2="7.2" />
+          <line x1="12.2" y1="12.8" x2="11.2" y2="13.8" />
+        </g>
+      </svg>
+    );
+  }
+  if (code === "ru") {
+    return (
+      <svg className={cls} viewBox="0 0 30 20" aria-hidden="true" focusable="false">
+        <mask id={`lf-ru-${code}`}><rect width="30" height="20" rx="2" fill="#fff" /></mask>
+        <g mask={`url(#lf-ru-${code})`}>
+          <rect width="30" height="6.67" fill="#fff" />
+          <rect y="6.67" width="30" height="6.67" fill="#0039A6" />
+          <rect y="13.33" width="30" height="6.67" fill="#D52B1E" />
+        </g>
+      </svg>
+    );
+  }
+  if (code === "en") {
+    return (
+      <svg className={cls} viewBox="0 0 60 40" aria-hidden="true" focusable="false">
+        <mask id={`lf-en-${code}`}><rect width="60" height="40" rx="4" fill="#fff" /></mask>
+        <g mask={`url(#lf-en-${code})`}>
+          <rect width="60" height="40" fill="#012169" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#fff" strokeWidth="6" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" strokeWidth="3" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#fff" strokeWidth="10" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" strokeWidth="5" />
+        </g>
+      </svg>
+    );
+  }
+  return null;
 }
 
 function TreqStat({ kind, icon, num, label, di }) {
@@ -197,7 +254,7 @@ export function PageDashboard() {
       <div className="dash-wow__greet">
         <div className="dash-wow__hello">{greet},</div>
         <div className="dash-wow__name">
-          <span className="dash-wow__name-text" data-text={displayName}>{displayName}</span>
+          <span className="dash-wow__name-text" data-text={displayName}>{displayName}</span><VerifiedBadge user={u} size={22} />
         </div>
       </div>
 
@@ -214,6 +271,18 @@ export function PageDashboard() {
 /** ---------- Read-only teacher profile (viewed by others) ---------- */
 export function ReadOnlyProfile({ teacher: tc, subs, goals }) {
   const st = useStore();
+  const [tcCerts, setTcCerts] = useState([]);
+  useEffect(() => {
+    if (!tc?.uid) { setTcCerts([]); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const list = await fetchMyCertificates(tc.uid);
+        if (alive) setTcCerts(list);
+      } catch (e) { console.error(e); }
+    })();
+    return () => { alive = false; };
+  }, [tc?.uid]);
   const allTeachers = (st.users || []).filter(x => (x.role || "teacher") !== "admin");
   const sorted = [...allTeachers].sort((a, b) => (Number(b.totalPoints) || 0) - (Number(a.totalPoints) || 0));
   const rankIdx = sorted.findIndex(x => x.uid === tc.uid);
@@ -285,12 +354,13 @@ export function ReadOnlyProfile({ teacher: tc, subs, goals }) {
             <div className="rop-hero__rank">#{rank}</div>
           </div>
           <div className="rop-hero__info">
-            <div className="rop-hero__name">{tc.displayName || t("unnamed")}</div>
+            <div className="rop-hero__name">{tc.displayName || t("unnamed")}<VerifiedBadge user={tc} size={18} /></div>
             <div className="rop-hero__tags">
               <span className="prof-tag prof-tag--role">Teacher</span>
               <span className="prof-tag prof-tag--level">{lvl.name}</span>
               {tc.position && <span className="prof-tag">{tc.position}</span>}
             </div>
+            <CefrBadgesRow badges={tc.cefrBadges} certificates={tcCerts} />
             <div className="rop-hero__meta">
               {tc.school && <span className="rop-hero__meta-item"><Icon name="home" /> {tc.school}</span>}
               {tc.subject && <span className="rop-hero__meta-item"><Icon name="file" /> {tc.subject}</span>}
@@ -432,6 +502,61 @@ export function ReadOnlyProfile({ teacher: tc, subs, goals }) {
   );
 }
 
+export function CefrBadgesRow({ badges, interactive = false, certificates = [] }) {
+  const order = ["en", "ru", "kz"];
+  const earned = order.filter(k => badges && typeof badges[k] === "string" && badges[k]);
+  // Map of signed certs keyed by `${lang}_${level}`
+  const signedKeys = new Set(
+    (certificates || []).filter(c => c?.status === "signed").map(c => `${c.lang}_${c.level}`)
+  );
+  if (!earned.length) {
+    if (!interactive) return null;
+    return (
+      <div className="cefr-row cefr-row--empty">
+        <span className="cefr-row__hint muted tiny">{t("noCefrYet")}</span>
+        <button className="cefr-row__cta" type="button" onClick={() => navigate("books")}>
+          {t("takeATest")} →
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="cefr-row">
+      {earned.map(k => {
+        const lvl = badges[k];
+        const m = CEFR_LEVEL_META[lvl];
+        const lm = LANGUAGE_META[k];
+        const isVerified = signedKeys.has(`${k}_${lvl}`);
+        return (
+          <span
+            key={k}
+            className={`cefr-chip cefr-chip--lg${isVerified ? " cefr-chip--verified" : ""}`}
+            style={m ? { "--cefr-color": m.color } : null}
+            title={`${lm?.labelEn} · ${m?.name} (${lvl})${isVerified ? " · " + t("certVerified") : ""}`}
+          >
+            <LangFlag code={k} className="cefr-chip__flag" />
+            <span className="cefr-chip__lng">{k.toUpperCase()}</span>
+            <span className="cefr-chip__lvl">{lvl}</span>
+            {isVerified && (
+              <span className="cefr-chip__verified" aria-label={t("certVerified")}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 1l2.5 3.5L19 5l-1 4.5 3 3-3 3 1 4.5-4.5.5L12 23l-2.5-3.5L5 19l1-4.5-3-3 3-3L5 5l4.5-.5L12 1z" fill="currentColor" />
+                  <path d="M8.5 12.5l2.5 2.5 4.5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </svg>
+              </span>
+            )}
+          </span>
+        );
+      })}
+      {interactive && (
+        <button className="cefr-row__cta cefr-row__cta--inline" type="button" onClick={() => navigate("books")}>
+          + {t("moreCefr")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function PageProfile() {
   const st = useStore();
   const u = st.userDoc; // read early, guard comes AFTER all hooks
@@ -535,6 +660,13 @@ export function PageProfile() {
       }
 
       await updatePassword(user, next);
+      if (!u.passwordChanged) {
+        try {
+          await updateProfile(u.uid, { passwordChanged: true });
+          const fresh = await ensureUserDoc(u.uid, u.email);
+          setState({ userDoc: fresh });
+        } catch (e) { console.error(e); }
+      }
       toast(t("pwdChanged"), "ok");
       setPw({ current: "", next: "", next2: "" });
     } catch (e) {
@@ -633,12 +765,13 @@ export function PageProfile() {
             <input id="prof-avatar-input" hidden type="file" accept="image/*" onChange={(e) => pickAvatar(e.target.files?.[0])} />
           </div>
           <div className="rop-hero__info">
-            <div className="rop-hero__name">{u.displayName || t("unnamed")}</div>
+            <div className="rop-hero__name">{u.displayName || t("unnamed")}<VerifiedBadge user={u} size={18} /></div>
             <div className="rop-hero__tags">
               <span className="prof-tag prof-tag--role">{u.role === "admin" ? "Admin" : "Teacher"}</span>
               <span className="prof-tag prof-tag--level">{lvl.name}</span>
               {u.position && <span className="prof-tag">{u.position}</span>}
             </div>
+            <CefrBadgesRow badges={u.cefrBadges} interactive certificates={st.myCertificates || []} />
             <div className="rop-hero__meta">
               <span className="rop-hero__meta-item"><Icon name="shield" /> {u.email}</span>
               {u.school && <span className="rop-hero__meta-item"><Icon name="home" /> {u.school}</span>}
@@ -1498,26 +1631,28 @@ export function PageAdd() {
         <div className="add-form__aside-card">
           <GoalsWidget compact />
         </div>
-        <button type="button" className="add-form__books" onClick={() => navigate("books")}>
-          <div className="add-form__books-head">
-            <span className="add-form__books-icon">📚</span>
-            <div className="add-form__books-titles">
-              <div className="add-form__books-title">{t("navBooks")}</div>
-              <div className="add-form__books-sub">
-                +{BOOK_QUIZ_LIBRARY.reduce((s, b) => s + (b.points || 0), 0)} {t("ptsShort") || "балл"} · {BOOK_QUIZ_LIBRARY.length} {t("monthShort") || "ай"}
-              </div>
+        <button type="button" className="tests-banner" onClick={() => navigate("books")}>
+          <div className="tests-banner__glow" aria-hidden="true" />
+          <div className="tests-banner__row">
+            <span className="tests-banner__icon">🎓</span>
+            <div className="tests-banner__titles">
+              <div className="tests-banner__title">{t("navBooks")}</div>
+              <div className="tests-banner__sub">{t("testHubMini")}</div>
             </div>
-            <span className="add-form__books-arrow">→</span>
+            <span className="tests-banner__arrow">→</span>
           </div>
-          {BOOK_QUIZ_LIBRARY[0] && (
-            <div className="add-form__books-feat">
-              <span className="add-form__books-feat-lbl">★ {BOOK_QUIZ_LIBRARY[0].month}</span>
-              <span className="add-form__books-feat-title" title={BOOK_QUIZ_LIBRARY[0].shortTitle}>
-                {BOOK_QUIZ_LIBRARY[0].shortTitle}
+          <div className="tests-banner__chips">
+            {TEST_CATEGORIES.map((cat) => (
+              <span
+                key={cat.key}
+                className={`tests-banner__chip${cat.ready ? "" : " is-soon"}`}
+                style={{ "--cat-color": cat.accent, "--cat-color2": cat.accent2 }}
+                title={t(cat.tKey)}
+              >
+                {cat.icon}
               </span>
-              <span className="add-form__books-feat-author">{BOOK_QUIZ_LIBRARY[0].author}</span>
-            </div>
-          )}
+            ))}
+          </div>
         </button>
       </aside>
     </div>
@@ -1525,107 +1660,365 @@ export function PageAdd() {
 }
 
 /* ════════════════════════════════════════════════════════════════ */
-/* ═══ PAGE: BOOKS OF THE MONTH (dedicated) ═════════════════════ */
+/* ═══ PAGE: LANGUAGE TESTS (CEFR — Kazakh / Russian / English) ═══ */
 /* ════════════════════════════════════════════════════════════════ */
+
+const LANG_COOLDOWN_KEY = (uid, lang, lvl) => `langTestCooldown:${uid}:${lang}:${lvl}`;
+
+function getLangCooldownUntil(uid, lang, lvl) {
+  try {
+    const raw = localStorage.getItem(LANG_COOLDOWN_KEY(uid, lang, lvl));
+    if (!raw) return 0;
+    const t = parseInt(raw, 10);
+    return Number.isFinite(t) ? t : 0;
+  } catch { return 0; }
+}
+
+function setLangCooldown(uid, lang, lvl, untilMs) {
+  try { localStorage.setItem(LANG_COOLDOWN_KEY(uid, lang, lvl), String(untilMs)); } catch { /* noop */ }
+}
+
+function clearLangCooldown(uid, lang, lvl) {
+  try { localStorage.removeItem(LANG_COOLDOWN_KEY(uid, lang, lvl)); } catch { /* noop */ }
+}
+
+function fmtCooldownTime(untilMs) {
+  if (!untilMs) return "";
+  try { return new Date(untilMs).toLocaleString(); } catch { return ""; }
+}
+
+function calcLangQuizResult(questions, answers) {
+  let correct = 0;
+  for (const q of questions || []) {
+    if (!q?.correct) continue;
+    if ((answers?.[q.id] || "") === q.correct) correct += 1;
+  }
+  const total = (questions || []).length;
+  const percent = total ? Math.round((correct / total) * 100) : 0;
+  return { correct, total, percent };
+}
+
+// Fisher–Yates: re-key options A/B/C/D in a random order and update `correct`.
+function shuffleQuestionOptions(question) {
+  const OPT_KEYS = ["A", "B", "C", "D", "E", "F"];
+  const correctText = question.options.find(o => o.key === question.correct)?.text;
+  const arr = [...question.options];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  const reKeyed = arr.map((o, i) => ({ key: OPT_KEYS[i] || String(i + 1), text: o.text }));
+  const newCorrect = reKeyed.find(o => o.text === correctText)?.key || reKeyed[0]?.key || "A";
+  return { ...question, options: reKeyed, correct: newCorrect };
+}
+
+const TEST_CATEGORIES = [
+  { key: "books5",   icon: "📚", tKey: "testCatBooks5",  descKey: "testCatBooks5Desc",  accent: "#f59e0b", accent2: "#fbbf24", ready: true  },
+  { key: "languages", icon: "🌐", tKey: "testCatLangs",  descKey: "testCatLangsDesc",   accent: "#38bdf8", accent2: "#7dd3fc", ready: true  },
+  { key: "iq",       icon: "🧠", tKey: "testCatIq",     descKey: "testCatIqDesc",      accent: "#a78bfa", accent2: "#c4b5fd", ready: false },
+  { key: "specialty",icon: "💼", tKey: "testCatSpec",   descKey: "testCatSpecDesc",    accent: "#22c55e", accent2: "#86efac", ready: false },
+];
+
+function blockCopy(e) {
+  e.preventDefault();
+  return false;
+}
+
+const QUIZ_MAX_STRIKES = 5;
+const QUIZ_DURATION_MS = 5 * 60 * 1000;
+
+function QuizAntiCheatChips({ deadline, strikes }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!deadline) return;
+    const id = setInterval(() => tick(x => x + 1), 500);
+    return () => clearInterval(id);
+  }, [deadline]);
+  const remaining = Math.max(0, deadline - Date.now());
+  const mm = Math.floor(remaining / 60000);
+  const ss = Math.floor((remaining % 60000) / 1000);
+  const danger = remaining > 0 && remaining < 60000;
+  return (
+    <div className="quiz-anticheat-chips">
+      <span className={`quiz-anticheat-chip quiz-anticheat-chip--time${danger ? " is-danger" : ""}`}>
+        ⏱ {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
+      </span>
+      <span className={`quiz-anticheat-chip quiz-anticheat-chip--strikes${strikes > 0 ? " is-warn" : ""}`}>
+        🛡 {strikes}/{QUIZ_MAX_STRIKES}
+      </span>
+    </div>
+  );
+}
+
+function useQuizScreenshotShield(active, onStrikeRef) {
+  useEffect(() => {
+    if (!active) return;
+    const overlay = document.createElement("div");
+    overlay.className = "quiz-shield-overlay";
+    overlay.textContent = "🔒  Screenshot blocked";
+    document.body.appendChild(overlay);
+
+    const clearClip = () => { try { navigator.clipboard?.writeText(" "); } catch {} };
+    let visible = false;
+    const hide = () => {
+      if (!visible) {
+        visible = true;
+        onStrikeRef?.current?.();
+      }
+      document.body.classList.add("quiz-hide-content");
+    };
+    const show = () => {
+      visible = false;
+      document.body.classList.remove("quiz-hide-content");
+    };
+    let unhideTimer = null;
+    const hideFor = (ms) => {
+      hide();
+      if (unhideTimer) clearTimeout(unhideTimer);
+      unhideTimer = setTimeout(() => { if (document.hasFocus()) show(); }, ms);
+    };
+    const onKey = (e) => {
+      if (e.key === "PrintScreen" || e.keyCode === 44) {
+        clearClip();
+        hideFor(1500);
+        e.preventDefault();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && /^[psPS]$/.test(e.key)) {
+        e.preventDefault();
+        return;
+      }
+      if (e.metaKey && e.shiftKey && /^[3-5]$/.test(e.key)) {
+        hideFor(2000);
+        e.preventDefault();
+      }
+    };
+    const onKeyUp = (e) => {
+      if (e.key === "PrintScreen" || e.keyCode === 44) clearClip();
+    };
+    const onVis = () => { document.hidden ? hide() : show(); };
+    const onCopy = (e) => { e.preventDefault(); clearClip(); };
+    const onMouseOut = (e) => { if (!e.relatedTarget) hide(); };
+    const onMouseOver = () => { if (document.hasFocus()) show(); };
+
+    window.addEventListener("blur", hide);
+    window.addEventListener("focus", show);
+    document.addEventListener("visibilitychange", onVis);
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("keyup", onKeyUp, true);
+    document.addEventListener("copy", onCopy, true);
+    document.addEventListener("cut", onCopy, true);
+    document.addEventListener("mouseout", onMouseOut);
+    document.addEventListener("mouseover", onMouseOver);
+    return () => {
+      if (unhideTimer) clearTimeout(unhideTimer);
+      window.removeEventListener("blur", hide);
+      window.removeEventListener("focus", show);
+      document.removeEventListener("visibilitychange", onVis);
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("keyup", onKeyUp, true);
+      document.removeEventListener("copy", onCopy, true);
+      document.removeEventListener("cut", onCopy, true);
+      document.removeEventListener("mouseout", onMouseOut);
+      document.removeEventListener("mouseover", onMouseOver);
+      overlay.remove();
+      show();
+    };
+  }, [active]);
+}
+
 export function PageBooks() {
   const st = useStore();
   const u = st.userDoc;
 
-  const [quizAttempts, setQuizAttempts] = useState([]);
-  const [quizLoading, setQuizLoading] = useState(false);
-  const [selectedBookId, setSelectedBookId] = useState(BOOK_QUIZ_LIBRARY[0]?.id || "");
-  const [quizOpen, setQuizOpen] = useState(false);
-  const [quizAnswers, setQuizAnswers] = useState({});
-  const [quizResult, setQuizResult] = useState(null);
-  const [quizSubmitting, setQuizSubmitting] = useState(false);
+  const [testCategory, setTestCategory] = useState(null); // null => hub view
+  const [selectedLang, setSelectedLang] = useState("en");
+  const [selectedLevel, setSelectedLevel] = useState(null); // null => grid view
+  const [shuffledQuestions, setShuffledQuestions] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [result, setResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [cooldownTick, setCooldownTick] = useState(0); // re-render on cooldown changes
 
-  const selectedBook = BOOK_QUIZ_LIBRARY.find(b => b.id === selectedBookId) || BOOK_QUIZ_LIBRARY[0] || null;
-  const selectedStatus = useMemo(
-    () => selectedBook ? getBookQuizStatus(selectedBook, quizAttempts, st.mySubmissions || []) : null,
-    [selectedBookId, quizAttempts, (st.mySubmissions || []).length]
+  // ── «5 Books» project state ──────────────────────────────────────
+  const [bookQuizAttempts, setBookQuizAttempts] = useState([]);
+  const [bookQuizLoading, setBookQuizLoading] = useState(false);
+  const [selectedBookId, setSelectedBookId] = useState(null);
+  const [bookAnswers, setBookAnswers] = useState({});
+  const [bookResult, setBookResult] = useState(null);
+  const [bookSubmitting, setBookSubmitting] = useState(false);
+  const selectedBook = selectedBookId ? BOOK_QUIZ_LIBRARY.find(b => b.id === selectedBookId) : null;
+
+  // Anti-cheat: 3-strike screenshot shield + 5-minute hard timer.
+  const [shieldStrikes, setShieldStrikes] = useState(0);
+  const [quizDeadline, setQuizDeadline] = useState(0);
+  const [, setTimerTick] = useState(0);
+  const markStrikeRef = useRef(null);
+  const failNowRef = useRef(null);
+  const failedRef = useRef(false);
+  markStrikeRef.current = () => setShieldStrikes(s => s + 1);
+  useQuizScreenshotShield((!!selectedLevel && !result) || (!!selectedBookId && !bookResult), markStrikeRef);
+
+  // Fail handler dispatched by ref so timer/strike effects don't need stale closures.
+  failNowRef.current = (reason) => {
+    if (selectedLevel && !result) failLangTestNow(reason);
+    else if (selectedBookId && !bookResult) failBookQuizNow(reason);
+  };
+
+  // Strike watcher: warn at 1 and 2, hard-fail at QUIZ_MAX_STRIKES.
+  useEffect(() => {
+    if (shieldStrikes === 0) return;
+    if (shieldStrikes >= QUIZ_MAX_STRIKES) {
+      failNowRef.current?.("screenshot");
+    } else {
+      toast(`⚠ Штраф ${shieldStrikes}/${QUIZ_MAX_STRIKES}`, "error");
+    }
+  }, [shieldStrikes]);
+
+  // 5-minute hard timer.
+  useEffect(() => {
+    if (!quizDeadline) return;
+    const id = setInterval(() => {
+      setTimerTick(x => x + 1);
+      if (Date.now() >= quizDeadline) {
+        clearInterval(id);
+        failNowRef.current?.("timeup");
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [quizDeadline]);
+  const selectedBookStatus = useMemo(
+    () => selectedBook ? getBookQuizStatus(selectedBook, bookQuizAttempts, st.mySubmissions || []) : null,
+    [selectedBookId, bookQuizAttempts, (st.mySubmissions || []).length]
   );
 
   useEffect(() => {
+    if (testCategory !== "books5" || !u?.uid) return;
     let cancelled = false;
     (async () => {
-      if (!u?.uid) return;
       try {
-        setQuizLoading(true);
+        setBookQuizLoading(true);
         const items = await fetchMyBookQuizAttempts(u.uid);
-        if (!cancelled) setQuizAttempts(items);
+        if (!cancelled) setBookQuizAttempts(items);
       } catch (e) {
         console.error(e);
-        toast("Не удалось загрузить историю тестов", "error");
+        toast(t("bookQuizLoadError"), "error");
       } finally {
-        if (!cancelled) setQuizLoading(false);
+        if (!cancelled) setBookQuizLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [u?.uid]);
+  }, [testCategory, u?.uid]);
+
+  // Map of badges currently saved on user doc — { kz: "C1", ru: "B2", en: "A2" }
+  const badges = useMemo(() => {
+    const b = u?.cefrBadges || {};
+    return {
+      kz: typeof b.kz === "string" ? b.kz : "",
+      ru: typeof b.ru === "string" ? b.ru : "",
+      en: typeof b.en === "string" ? b.en : ""
+    };
+  }, [u?.cefrBadges]);
 
   if (!u) return <Guard />;
   if (!canAccess("books", u)) return <Guard />;
 
-  async function refreshQuizAttempts() {
+  async function refreshBookQuizAttempts() {
     if (!u?.uid) return;
     const items = await fetchMyBookQuizAttempts(u.uid);
-    setQuizAttempts(items);
+    setBookQuizAttempts(items);
   }
 
-  function openQuiz(book) {
+  function openBookQuiz(book) {
     setSelectedBookId(book.id);
-    setQuizOpen(true);
-    setQuizAnswers({});
-    setQuizResult(null);
+    setBookAnswers({});
+    setBookResult(null);
+    setShieldStrikes(0);
+    setQuizDeadline(Date.now() + QUIZ_DURATION_MS);
+    failedRef.current = false;
   }
 
-  function closeQuiz() {
-    setQuizOpen(false);
-    setQuizAnswers({});
-    setQuizResult(null);
+  async function closeBookQuiz() {
+    // Exiting an active quiz (no result yet) counts as a failed attempt.
+    if (selectedBook && !bookResult && !failedRef.current) {
+      await failBookQuizNow("aborted");
+      return;
+    }
+    setSelectedBookId(null);
+    setBookAnswers({});
+    setBookResult(null);
+    setShieldStrikes(0);
+    setQuizDeadline(0);
+    failedRef.current = false;
   }
 
-  function readOnline(book) {
-    if (!book?.readUrl) { toast(t("comingSoonShort") || "Скоро", "info"); return; }
-    try { window.open(book.readUrl, "_blank", "noopener,noreferrer"); } catch { /* noop */ }
-  }
-
-  async function submitBookQuiz(e) {
-    e?.preventDefault?.();
-    if (!selectedBook) return;
-    const status = getBookQuizStatus(selectedBook, quizAttempts, st.mySubmissions || []);
-    if (!status.hasQuestions) { toast("Тест по этой книге пока не добавлен", "error"); return; }
-    if (status.state === "cooldown") {
-      toast(`Повторная попытка доступна после ${fmtDateTimeSafe(status.latest?.cooldownUntil)}`, "error");
-      return;
-    }
-    if (status.hasRewardSubmission) {
-      toast("Баллы по этой книге уже отправлены на проверку", "ok");
-      return;
-    }
-
-    const unanswered = (selectedBook.questions || []).filter(q => !quizAnswers[q.id]);
-    if (unanswered.length) {
-      toast(`Ответьте на все вопросы (${unanswered.length} осталось)`, "error");
-      return;
-    }
-
-    const result = calcQuizResult(selectedBook, quizAnswers);
-    const passed = result.percent >= (selectedBook.thresholdPercent || 70);
-    setQuizResult({ ...result, passed });
-
+  async function failBookQuizNow(reason) {
+    if (failedRef.current) return;
+    if (!selectedBook || bookResult) return;
+    failedRef.current = true;
+    const total = (selectedBook.questions || []).length;
+    const r = { correct: 0, total, percent: 0, passed: false, failReason: reason };
+    setBookResult(r);
     try {
-      setQuizSubmitting(true);
-      const cooldownUntil = passed ? "" : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
+      const cooldownUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       await createBookQuizAttempt({
         uid: u.uid,
         bookKey: selectedBook.id,
         bookTitle: selectedBook.title,
         month: selectedBook.month,
-        correctCount: result.correct,
-        totalCount: result.total,
-        scorePercent: result.percent,
+        correctCount: 0,
+        totalCount: total,
+        scorePercent: 0,
+        passed: false,
+        cooldownUntil,
+        thresholdPercent: selectedBook.thresholdPercent || 70,
+        pointsCandidate: 0
+      });
+      await refreshBookQuizAttempts();
+    } catch (err) {
+      console.error(err);
+    }
+    const msg = reason === "timeup"  ? "⏱ Время вышло"
+              : reason === "aborted" ? "🚪 Тест прерван"
+              :                        "🚫 Превышен лимит скриншотов";
+    toast(`${msg} — ${t("retryIn24h")}`, "error");
+  }
+
+  async function submitBookQuiz(e) {
+    e?.preventDefault?.();
+    if (!selectedBook) return;
+    const status = getBookQuizStatus(selectedBook, bookQuizAttempts, st.mySubmissions || []);
+    if (!status.hasQuestions) { toast(t("bookQuizNotReady"), "error"); return; }
+    if (status.state === "cooldown") {
+      toast(`${t("retryAfter")} ${fmtDateTimeSafe(status.latest?.cooldownUntil)}`, "error");
+      return;
+    }
+    if (status.hasRewardSubmission) {
+      toast(t("bookQuizAlreadySent"), "ok");
+      return;
+    }
+
+    const unanswered = (selectedBook.questions || []).filter(q => !bookAnswers[q.id]);
+    if (unanswered.length) {
+      toast(`${t("answerAllQuestions")} (${unanswered.length})`, "error");
+      return;
+    }
+
+    const r = calcQuizResult(selectedBook, bookAnswers);
+    const passed = r.percent >= (selectedBook.thresholdPercent || 70);
+    setBookResult({ ...r, passed });
+
+    try {
+      setBookSubmitting(true);
+      const cooldownUntil = passed ? "" : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await createBookQuizAttempt({
+        uid: u.uid,
+        bookKey: selectedBook.id,
+        bookTitle: selectedBook.title,
+        month: selectedBook.month,
+        correctCount: r.correct,
+        totalCount: r.total,
+        scorePercent: r.percent,
         passed,
         cooldownUntil,
         thresholdPercent: selectedBook.thresholdPercent || 70,
@@ -1633,73 +2026,352 @@ export function PageBooks() {
       });
 
       if (passed) {
-        await createBookQuizRewardSubmission({ uid: u.uid, book: selectedBook, result });
+        await createBookQuizRewardSubmission({ uid: u.uid, book: selectedBook, result: r });
         const my = await fetchMySubmissions(u.uid);
         setState({ mySubmissions: my });
-        toast(`Тест пройден (${result.percent}%). +${selectedBook.points || 20} баллов отправлены на проверку`, "ok");
+        toast(`${t("testPassed")} (${r.percent}%) · +${selectedBook.points || 20} ${t("ptsShort")}`, "ok");
       } else {
-        toast(`Набрано ${result.percent}%. Повтор через 24 часа`, "error");
+        toast(`${r.percent}% — ${t("retryIn24h")}`, "error");
       }
-
-      await refreshQuizAttempts();
+      await refreshBookQuizAttempts();
     } catch (err) {
       console.error(err);
-      toast(err?.message || "Ошибка при сохранении результата теста", "error");
+      toast(err?.message || t("saveError"), "error");
     } finally {
-      setQuizSubmitting(false);
+      setBookSubmitting(false);
     }
   }
 
-  if (selectedBook && quizOpen) {
+  function openTest(lang, lvl) {
+    const cd = getLangCooldownUntil(u.uid, lang, lvl);
+    if (cd && cd > Date.now()) {
+      toast(`${t("retryAfter")} ${fmtCooldownTime(cd)}`, "error");
+      return;
+    }
+    const base = getLanguageTest(lang, lvl);
+    setShuffledQuestions(base.map(shuffleQuestionOptions));
+    setSelectedLang(lang);
+    setSelectedLevel(lvl);
+    setAnswers({});
+    setResult(null);
+    setShieldStrikes(0);
+    setQuizDeadline(Date.now() + QUIZ_DURATION_MS);
+    failedRef.current = false;
+  }
+
+  function closeTest() {
+    // Exiting an active quiz (no result yet) counts as a failed attempt.
+    if (selectedLevel && !result && shuffledQuestions.length && !failedRef.current) {
+      failLangTestNow("aborted");
+      return;
+    }
+    setSelectedLevel(null);
+    setShuffledQuestions([]);
+    setAnswers({});
+    setResult(null);
+    setShieldStrikes(0);
+    setQuizDeadline(0);
+    failedRef.current = false;
+  }
+
+  function failLangTestNow(reason) {
+    if (failedRef.current) return;
+    if (!selectedLevel || result) return;
+    failedRef.current = true;
+    const total = shuffledQuestions.length;
+    setResult({ correct: 0, total, percent: 0, passed: false, failReason: reason });
+    const until = Date.now() + 24 * 60 * 60 * 1000;
+    setLangCooldown(u.uid, selectedLang, selectedLevel, until);
+    setCooldownTick(x => x + 1);
+    const msg = reason === "timeup"  ? "⏱ Время вышло"
+              : reason === "aborted" ? "🚪 Тест прерван"
+              :                        "🚫 Превышен лимит скриншотов";
+    toast(`${msg} — ${t("retryIn24h")}`, "error");
+  }
+
+  async function submitTest(e) {
+    e?.preventDefault?.();
+    if (submitting) return;
+    const questions = shuffledQuestions;
+    if (!questions.length) { toast(t("testNotAdded"), "error"); return; }
+
+    const cd = getLangCooldownUntil(u.uid, selectedLang, selectedLevel);
+    if (cd && cd > Date.now()) {
+      toast(`${t("retryAfter")} ${fmtCooldownTime(cd)}`, "error");
+      return;
+    }
+
+    const unanswered = questions.filter(q => !answers[q.id]);
+    if (unanswered.length) {
+      toast(`${t("answerAllQuestions")} (${unanswered.length})`, "error");
+      return;
+    }
+
+    const r = calcLangQuizResult(questions, answers);
+    const passed = r.percent >= cefrPassThreshold();
+    setResult({ ...r, passed });
+
+    setSubmitting(true);
+    try {
+      if (passed) {
+        clearLangCooldown(u.uid, selectedLang, selectedLevel);
+        toast(`${t("testPassed")} — ${r.percent}%`, "ok");
+
+        // Issue a pending certificate for this (lang, level) — only once per pair.
+        // The CEFR badge is NOT granted yet — it appears only after admin signs.
+        try {
+          const existing = await findCertificate(u.uid, selectedLang, selectedLevel);
+          if (!existing) {
+            const meta = LANGUAGE_META[selectedLang];
+            const langLabel = meta ? (getLang() === "en" ? meta.labelEn : getLang() === "kz" ? meta.labelKz : meta.labelRu) : selectedLang.toUpperCase();
+            await createCertificate({
+              uid: u.uid,
+              userName: u.displayName || u.email || "",
+              userEmail: u.email || "",
+              lang: selectedLang,
+              langLabel,
+              level: selectedLevel,
+              score: r.correct,
+              total: r.total,
+              percent: r.percent
+            });
+            try {
+              const myCerts = await fetchMyCertificates(u.uid);
+              setState({ myCertificates: myCerts });
+            } catch (eC) { console.error(eC); }
+            toast(t("certSentForSign"), "ok");
+          }
+        } catch (eCert) {
+          console.error("createCertificate error:", eCert);
+        }
+      } else {
+        const until = Date.now() + 24 * 60 * 60 * 1000;
+        setLangCooldown(u.uid, selectedLang, selectedLevel, until);
+        setCooldownTick(x => x + 1);
+        toast(`${r.percent}% — ${t("retryIn24h")}`, "error");
+      }
+    } catch (err) {
+      console.error(err);
+      toast(err?.message || t("saveError"), "error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── Test (quiz) view ─────────────────────────────────────────────
+  if (selectedLevel) {
+    const questions = shuffledQuestions;
+    const meta = LANGUAGE_META[selectedLang];
+    const lvlMeta = CEFR_LEVEL_META[selectedLevel];
+
     return (
-      <div className="quiz-fullpage route-section">
-        <div className="quiz-fullpage__header">
-          <button className="quiz-back-btn" type="button" onClick={closeQuiz}>
-            ← {t("backToBooks")}
-          </button>
-          <div className="quiz-fullpage__book-info">
-            <span className="quiz-fullpage__month">{selectedBook.month}</span>
-            <span className="quiz-fullpage__title">{selectedBook.author} · «{selectedBook.shortTitle}»</span>
-            <span className="tiny muted">{t("passThreshold")}: {selectedBook.thresholdPercent || 70}% · +{selectedBook.points || 20} {t("ptsShort") || "балл"}</span>
+      <div className="lang-test-fullpage route-section">
+        <div className="lang-test-fullpage__header glass">
+          <button className="quiz-back-btn" type="button" onClick={closeTest}>← {t("backToTests")}</button>
+          <div className="lang-test-fullpage__title-block">
+            <LangFlag code={selectedLang} className="lang-test-fullpage__flag" />
+            <div>
+              <div className="lang-test-fullpage__title">
+                {meta && (getLang() === "en" ? meta.labelEn : getLang() === "kz" ? meta.labelKz : meta.labelRu)}
+              </div>
+              <div className="lang-test-fullpage__sub">
+                <span className="cefr-chip" style={{ "--cefr-color": lvlMeta?.color }}>{selectedLevel}</span>
+                <span className="muted tiny">{lvlMeta?.name} · {questions.length} {t("questionsShort")} · {t("passThreshold")}: {cefrPassThreshold()}%</span>
+              </div>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {selectedStatus?.state === "sent" ? <Pill kind="pending">{t("ptsSubmitted")}</Pill> : null}
-            {selectedStatus?.state === "cooldown" ? <Pill kind="rejected">{t("retryLater")}</Pill> : null}
+          {!result && (
+            <QuizAntiCheatChips deadline={quizDeadline} strikes={shieldStrikes} />
+          )}
+        </div>
+
+        {result ? (
+          <div className="quiz-result-screen lang-test-result">
+            <div className="quiz-result-screen__icon">{result.passed ? "🎉" : "😔"}</div>
+            <div className="quiz-result-screen__score">
+              {result.correct}<span className="quiz-result-screen__score-total">/{result.total}</span>
+            </div>
+            <div className="quiz-result-screen__percent">{result.percent}%</div>
+            {result.passed ? (
+              <>
+                <div className="quiz-result-screen__title ok">{t("congrats")}</div>
+                <div className="quiz-result-screen__desc">
+                  {t("testPassed")}<br />
+                  {t("badgeAwarded")}: <b className="cefr-chip cefr-chip--lg" style={{ "--cefr-color": lvlMeta?.color }}>{selectedLang.toUpperCase()} {selectedLevel}</b>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="quiz-result-screen__title fail">{t("unfortunately")}</div>
+                <div className="quiz-result-screen__desc">
+                  {t("passThreshold")} {cefrPassThreshold()}%<br />
+                  {t("retryIn24h")}
+                </div>
+              </>
+            )}
+            <Btn type="button" onClick={closeTest} kind="primary" style={{ marginTop: 28 }}>← {t("backToTests")}</Btn>
+          </div>
+        ) : (
+          <form
+            onSubmit={submitTest}
+            className="quiz-fullpage__form quiz-no-copy"
+            onCopy={blockCopy}
+            onCut={blockCopy}
+            onContextMenu={blockCopy}
+            onDragStart={blockCopy}
+          >
+            <div className="quiz-questions">
+              {questions.map((q, idx) => {
+                const picked = answers[q.id] || "";
+                return (
+                  <div key={q.id} className="quiz-question-card">
+                    <div className="quiz-question-card__title">{idx + 1}. {q.text}</div>
+                    <div className="quiz-options">
+                      {q.options.map(opt => {
+                        const checked = picked === opt.key;
+                        return (
+                          <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""}`}>
+                            <input
+                              type="radio"
+                              name={`q_${q.id}`}
+                              value={opt.key}
+                              checked={checked}
+                              onChange={() => setAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
+                              disabled={submitting}
+                            />
+                            <span className="quiz-option__key">{opt.key}</span>
+                            <span>{opt.text}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="quiz-fullpage__actions">
+              <Btn kind="primary" type="submit" disabled={submitting}>
+                {submitting ? "..." : t("submit") || "Завершить"}
+              </Btn>
+              <Btn type="button" onClick={() => setAnswers({})} disabled={submitting}>{t("resetAnswers")}</Btn>
+              <Btn type="button" onClick={closeTest}>← {t("back") || "Назад"}</Btn>
+            </div>
+          </form>
+        )}
+      </div>
+    );
+  }
+
+  // ── Hub view: 4 category cards ───────────────────────────────────
+  if (!testCategory) {
+    return (
+      <div className="tests-hub">
+        <div className="tests-hub__head glass">
+          <div className="tests-hub__head-text">
+            <div className="tests-hub__title">{t("testsHubTitle")}</div>
+            <div className="tests-hub__sub muted">{t("testsHubSub")}</div>
           </div>
         </div>
 
-        {selectedBook.questions?.length ? (
-          quizResult ? (
-            <div className="quiz-result-screen">
-              <div className="quiz-result-screen__icon">{quizResult.passed ? "🎉" : "😔"}</div>
-              <div className="quiz-result-screen__score">
-                {quizResult.correct}<span className="quiz-result-screen__score-total">/{quizResult.total}</span>
+        <div className="tests-hub__grid">
+          {TEST_CATEGORIES.map((cat, idx) => (
+            <article
+              key={cat.key}
+              className={`tests-hub-card${cat.ready ? "" : " tests-hub-card--soon"}`}
+              style={{ "--di": idx, "--cat-color": cat.accent, "--cat-color2": cat.accent2 }}
+            >
+              <div className="tests-hub-card__glow" aria-hidden="true" />
+              <div className="tests-hub-card__icon" aria-hidden="true">{cat.icon}</div>
+              <div className="tests-hub-card__title">{t(cat.tKey)}</div>
+              <div className="tests-hub-card__desc">{t(cat.descKey)}</div>
+              <div className="tests-hub-card__spacer" />
+              <button
+                type="button"
+                className={`tests-hub-card__btn${cat.ready ? "" : " tests-hub-card__btn--soon"}`}
+                onClick={() => cat.ready && setTestCategory(cat.key)}
+                disabled={!cat.ready}
+              >
+                {cat.ready ? t("testCatStart") : t("testCatSoon")}
+                {cat.ready && <span className="tests-hub-card__btn-arrow" aria-hidden="true">→</span>}
+              </button>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── «5 Books» project: list of books, then per-book quiz ─────────
+  if (testCategory === "books5") {
+    const catMeta = TEST_CATEGORIES.find(c => c.key === "books5");
+
+    // Per-book quiz view
+    if (selectedBook) {
+      const status = selectedBookStatus;
+      const lang = getLang();
+      const thr = selectedBook.thresholdPercent || 70;
+      return (
+        <div className="lang-test-fullpage route-section" style={{ "--cat-color": catMeta?.accent, "--cat-color2": catMeta?.accent2 }}>
+          <div className="lang-test-fullpage__header glass">
+            <button className="quiz-back-btn" type="button" onClick={closeBookQuiz}>← {t("backToBooks")}</button>
+            <div className="lang-test-fullpage__title-block">
+              <span className="lang-test-fullpage__flag">📖</span>
+              <div>
+                <div className="lang-test-fullpage__title">{selectedBook.title}</div>
+                <div className="lang-test-fullpage__sub">
+                  <span className="cefr-chip" style={{ "--cefr-color": catMeta?.accent }}>{selectedBook.month}</span>
+                  <span className="muted tiny">
+                    {(selectedBook.questions || []).length} {t("questionsShort")} · {t("threshold")}: {thr}% · {t("reward")}: +{selectedBook.points || 20} {t("ptsShort")}
+                  </span>
+                </div>
               </div>
-              <div className="quiz-result-screen__percent">{quizResult.percent}%</div>
-              {quizResult.passed ? (
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {!bookResult && <QuizAntiCheatChips deadline={quizDeadline} strikes={shieldStrikes} />}
+              {status?.state === "sent"     ? <Pill kind="pending">{t("bookQuizSent")}</Pill>     : null}
+              {status?.state === "cooldown" ? <Pill kind="rejected">{t("bookQuizPaused")}</Pill>  : null}
+              {status?.state === "passed"   ? <Pill kind="approved">{t("bookQuizPassed")}</Pill>  : null}
+            </div>
+          </div>
+
+          {bookResult ? (
+            <div className="quiz-result-screen lang-test-result">
+              <div className="quiz-result-screen__icon">{bookResult.passed ? "🎉" : "😔"}</div>
+              <div className="quiz-result-screen__score">
+                {bookResult.correct}<span className="quiz-result-screen__score-total">/{bookResult.total}</span>
+              </div>
+              <div className="quiz-result-screen__percent">{bookResult.percent}%</div>
+              {bookResult.passed ? (
                 <>
                   <div className="quiz-result-screen__title ok">{t("congrats")}</div>
                   <div className="quiz-result-screen__desc">
                     {t("testPassed")}<br />
-                    +{selectedBook.points || 20} {t("ptsShort") || "балл"}
+                    +{selectedBook.points || 20} {t("ptsShort")} — {t("onReview")}
                   </div>
                 </>
               ) : (
                 <>
                   <div className="quiz-result-screen__title fail">{t("unfortunately")}</div>
                   <div className="quiz-result-screen__desc">
-                    {t("passThreshold")} {selectedBook.thresholdPercent || 70}%<br />
+                    {t("threshold")} {thr}%<br />
                     {t("retryIn24h")}
                   </div>
                 </>
               )}
-              <Btn type="button" onClick={closeQuiz} kind="primary" style={{ marginTop: 28 }}>← {t("returnToBooks")}</Btn>
+              <Btn type="button" onClick={closeBookQuiz} kind="primary" style={{ marginTop: 28 }}>← {t("backToBooks")}</Btn>
             </div>
-          ) : (
-            <form onSubmit={submitBookQuiz} className="quiz-fullpage__form">
+          ) : selectedBook.questions?.length ? (
+            <form
+              onSubmit={submitBookQuiz}
+              className="quiz-fullpage__form quiz-no-copy"
+              onCopy={blockCopy}
+              onCut={blockCopy}
+              onContextMenu={blockCopy}
+              onDragStart={blockCopy}
+            >
               <div className="quiz-questions">
                 {selectedBook.questions.map((q, idx) => {
-                  const picked = quizAnswers[q.id] || "";
+                  const picked = bookAnswers[q.id] || "";
                   return (
                     <div key={q.id} className="quiz-question-card">
                       <div className="quiz-question-card__title">{idx + 1}. {q.text}</div>
@@ -1710,11 +2382,11 @@ export function PageBooks() {
                             <label key={opt.key} className={`quiz-option ${checked ? "selected" : ""}`}>
                               <input
                                 type="radio"
-                                name={`quiz_${selectedBook.id}_${q.id}`}
+                                name={`book_${selectedBook.id}_${q.id}`}
                                 value={opt.key}
                                 checked={checked}
-                                onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
-                                disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}
+                                onChange={() => setBookAnswers(prev => ({ ...prev, [q.id]: opt.key }))}
+                                disabled={bookSubmitting || status?.state === "cooldown" || status?.hasRewardSubmission}
                               />
                               <span className="quiz-option__key">{opt.key}</span>
                               <span>{opt.text}</span>
@@ -1727,73 +2399,226 @@ export function PageBooks() {
                 })}
               </div>
               <div className="quiz-fullpage__actions">
-                <Btn kind="primary" type="submit" disabled={quizSubmitting || selectedStatus?.state === "cooldown" || selectedStatus?.hasRewardSubmission}>
-                  {quizSubmitting ? "..." : t("submit") || "Завершить"}
+                <Btn kind="primary" type="submit" disabled={bookSubmitting || status?.state === "cooldown" || status?.hasRewardSubmission}>
+                  {bookSubmitting ? "..." : t("submit") || "Завершить"}
                 </Btn>
-                <Btn type="button" onClick={() => setQuizAnswers({})} disabled={quizSubmitting}>{t("resetAnswers")}</Btn>
-                <Btn type="button" onClick={closeQuiz}>← {t("back") || "Назад"}</Btn>
+                <Btn type="button" onClick={() => setBookAnswers({})} disabled={bookSubmitting}>{t("resetAnswers")}</Btn>
+                <Btn type="button" onClick={closeBookQuiz}>← {t("back")}</Btn>
               </div>
             </form>
-          )
-        ) : (
-          <div className="glass card" style={{ maxWidth: 560, margin: "0 auto" }}>
-            <p className="p">{t("testNotAdded")}</p>
-            <Btn type="button" onClick={closeQuiz} style={{ marginTop: 12 }}>← {t("back") || "Назад"}</Btn>
+          ) : (
+            <div className="glass card" style={{ maxWidth: 560, margin: "0 auto", padding: 22 }}>
+              <p className="p">{t("bookQuizNotReady")}</p>
+              <Btn type="button" onClick={closeBookQuiz} style={{ marginTop: 12 }}>← {t("back")}</Btn>
+            </div>
+          )}
+          {void lang}
+        </div>
+      );
+    }
+
+    // List of books
+    return (
+      <div className="tests-hub" style={{ "--cat-color": catMeta?.accent, "--cat-color2": catMeta?.accent2 }}>
+        <div className="tests-hub__head glass">
+          <button type="button" className="quiz-back-btn" onClick={() => setTestCategory(null)} style={{ alignSelf: "flex-start", marginBottom: 8 }}>
+            ← {t("backToHub")}
+          </button>
+          <div className="tests-hub__head-text">
+            <div className="tests-hub__title">{t("testCatBooks5")}</div>
+            <div className="tests-hub__sub muted">{t("testCatBooks5Desc")}</div>
           </div>
-        )}
+        </div>
+
+        <div className="books5-grid">
+          {BOOK_QUIZ_LIBRARY.map((book, idx) => {
+            const status = getBookQuizStatus(book, bookQuizAttempts, st.mySubmissions || []);
+            const qs = book.questions || [];
+            const thr = book.thresholdPercent || 70;
+            const stateLabel =
+              status.state === "sent"     ? t("bookQuizSent")     :
+              status.state === "cooldown" ? t("bookQuizPaused")   :
+              status.state === "passed"   ? t("bookQuizPassed")   :
+              status.state === "soon"     ? t("comingSoonShort")  :
+                                            t("bookQuizAvailable");
+            const stateKind =
+              status.state === "sent"     ? "pending"  :
+              status.state === "cooldown" ? "rejected" :
+              status.state === "passed"   ? "approved" :
+              status.state === "ready"    ? "approved" :
+                                            "";
+            const disabled = !qs.length || status.state === "cooldown" || status.hasRewardSubmission;
+            return (
+              <article key={book.id} className={`book5-card${qs.length ? "" : " book5-card--soon"}`} style={{ "--di": idx }}>
+                <div className="book5-card__top">
+                  <div className="book5-card__month">{book.month}</div>
+                  <Pill kind={stateKind} style={{ fontSize: 11 }}>{stateLabel}</Pill>
+                </div>
+                <div className="book5-card__title">{book.shortTitle}</div>
+                <div className="book5-card__author">{book.author}</div>
+                <div className="book5-card__meta muted">
+                  {qs.length
+                    ? `${qs.length} ${t("questionsShort")} · ${t("threshold")} ${thr}% · +${book.points || 20} ${t("ptsShort")}`
+                    : (book.note || t("comingSoonShort"))}
+                </div>
+                {status.state === "cooldown" && (
+                  <div className="tiny muted">
+                    {t("retryAfter")} {fmtDateTimeSafe(status.latest?.cooldownUntil)}
+                  </div>
+                )}
+                <div className="book5-card__spacer" />
+                <div className="book5-card__actions">
+                  {book.readUrl && (
+                    <a className="btn" href={book.readUrl} target="_blank" rel="noreferrer noopener">{t("readOnline")}</a>
+                  )}
+                  <Btn
+                    kind="primary"
+                    type="button"
+                    onClick={() => qs.length && openBookQuiz(book)}
+                    disabled={disabled}
+                  >
+                    {qs.length ? t("startQuiz") : t("comingSoonShort")}
+                  </Btn>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        {bookQuizLoading && <div className="muted tiny" style={{ textAlign: "center" }}>…</div>}
       </div>
     );
   }
 
-  return (
-    <div className="books-page">
-      <div className="books-page__head glass">
-        <div>
-          <div className="books-page__title">{t("navBooks")}</div>
-          <div className="books-page__sub muted">{t("booksDesc")}</div>
+  // ── Coming soon placeholder for non-language categories ──────────
+  if (testCategory !== "languages") {
+    const cat = TEST_CATEGORIES.find(c => c.key === testCategory);
+    return (
+      <div className="tests-hub">
+        <button
+          type="button"
+          className="quiz-back-btn"
+          onClick={() => setTestCategory(null)}
+          style={{ alignSelf: "flex-start" }}
+        >
+          ← {t("backToHub")}
+        </button>
+        <div
+          className="tests-hub-soon glass"
+          style={{ "--cat-color": cat?.accent, "--cat-color2": cat?.accent2 }}
+        >
+          <div className="tests-hub-soon__icon" aria-hidden="true">{cat?.icon}</div>
+          <div className="tests-hub-soon__title">{t(cat?.tKey)}</div>
+          <div className="tests-hub-soon__desc muted">{t(cat?.descKey)}</div>
+          <div className="tests-hub-soon__badge">{t("testCatSoon")}</div>
         </div>
-        <div className="books-page__counter">
-          <span className="books-page__counter-num">{BOOK_QUIZ_LIBRARY.length}</span>
-          <span className="books-page__counter-lbl">{t("monthShort") || "ай"}</span>
+      </div>
+    );
+  }
+
+  // ── Landing view: language picker + level grid ───────────────────
+  return (
+    <div className="lang-tests-page">
+      <div className="lang-tests-page__head glass">
+        <div>
+          <button
+            type="button"
+            className="quiz-back-btn"
+            onClick={() => setTestCategory(null)}
+            style={{ marginBottom: 10 }}
+          >
+            ← {t("backToHub")}
+          </button>
+          <div className="lang-tests-page__title">{t("testCatLangs")}</div>
+          <div className="lang-tests-page__sub muted">{t("booksDesc")}</div>
+        </div>
+        <div className="lang-tests-page__badges-summary">
+          {["en", "ru", "kz"].map(lng => {
+            const b = badges[lng];
+            const m = b ? CEFR_LEVEL_META[b] : null;
+            return (
+              <div key={lng} className={`cefr-summary-pill ${b ? "earned" : ""}`} style={m ? { "--cefr-color": m.color } : null}>
+                <LangFlag code={lng} className="cefr-summary-pill__flag" />
+                <span className="cefr-summary-pill__lng">{lng.toUpperCase()}</span>
+                <span className="cefr-summary-pill__lvl">{b || "—"}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      <div className="books-list">
-        {BOOK_QUIZ_LIBRARY.map((book, idx) => {
-          const qs = book.questions || [];
-          const status = getBookQuizStatus(book, quizAttempts, st.mySubmissions || []);
-          const stateLabel = status.state === "sent" ? t("onReview") : status.state === "cooldown" ? t("cooldownShort") : status.state === "soon" ? t("comingSoonShort") : t("available");
-          const stateKind = status.state === "sent" ? "pending" : status.state === "cooldown" ? "rejected" : status.state === "soon" ? "" : "approved";
-          const disabledTest = !qs.length || status.state === "sent" || status.state === "cooldown";
+      <div className="lang-tests-page__tabs">
+        {Object.keys(LANGUAGE_META).map(lng => {
+          const m = LANGUAGE_META[lng];
+          const active = lng === selectedLang;
+          const label = getLang() === "en" ? m.labelEn : getLang() === "kz" ? m.labelKz : m.labelRu;
           return (
-            <article key={book.id} className="books-row" style={{ "--di": idx }}>
-              <div className="books-row__index">{String(idx + 1).padStart(2, "0")}</div>
-              <div className="books-row__cover" aria-hidden="true">
-                <span className="books-row__cover-month">{book.month}</span>
-                <span className="books-row__cover-glyph">📖</span>
-              </div>
-              <div className="books-row__main">
-                <div className="books-row__top">
-                  <div className="books-row__month">{book.month}</div>
-                  <Pill kind={stateKind} style={{ fontSize: 11 }}>{stateLabel}</Pill>
-                  <span className="tiny muted">+{book.points || 20} {t("ptsShort") || "балл"} · {book.thresholdPercent || 70}%</span>
+            <button
+              key={lng}
+              type="button"
+              className={`lang-tab${active ? " lang-tab--active" : ""}`}
+              onClick={() => setSelectedLang(lng)}
+            >
+              <LangFlag code={lng} className="lang-tab__flag" />
+              <span className="lang-tab__name">{label}</span>
+              {badges[lng] && (
+                <span className="lang-tab__badge" style={{ "--cefr-color": CEFR_LEVEL_META[badges[lng]]?.color }}>{badges[lng]}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="lang-levels-grid">
+        {CEFR_LEVELS.map((lvl, idx) => {
+          const lvlMeta = CEFR_LEVEL_META[lvl];
+          const questions = getLanguageTest(selectedLang, lvl);
+          const cd = getLangCooldownUntil(u.uid, selectedLang, lvl);
+          const onCooldown = cd && cd > Date.now();
+          const earned = badges[selectedLang] && compareCefr(lvl, badges[selectedLang]) <= 0;
+          const isCurrent = badges[selectedLang] === lvl;
+          // refresh ticker to update cooldown banners
+          void cooldownTick;
+          return (
+            <article
+              key={lvl}
+              className={`lang-level-card${earned ? " lang-level-card--earned" : ""}${isCurrent ? " lang-level-card--current" : ""}`}
+              style={{ "--di": idx, "--cefr-color": lvlMeta.color }}
+            >
+              <div className="lang-level-card__header">
+                <div className="lang-level-card__badge">
+                  <span className="lang-level-card__code">{lvl}</span>
+                  {earned && <span className="lang-level-card__check" aria-hidden="true">✓</span>}
                 </div>
-                <div className="books-row__title">«{book.shortTitle}»</div>
-                <div className="books-row__author">{book.author}</div>
-                {book.note && <div className="tiny muted books-row__note">{book.note}</div>}
+                <div className="lang-level-card__info">
+                  <div className="lang-level-card__name">{lvlMeta.name}</div>
+                  <div className="lang-level-card__meta">
+                    {questions.length} {t("questionsShort")} · {t("passThreshold")} {cefrPassThreshold()}%
+                  </div>
+                </div>
               </div>
-              <div className="books-row__actions">
-                <Btn type="button" onClick={() => readOnline(book)} disabled={!book.readUrl}>
-                  📚 {t("readOnline")}
-                </Btn>
-                <Btn kind="primary" type="button" onClick={() => { if (qs.length) openQuiz(book); else toast(t("testNotAdded"), "info"); }} disabled={disabledTest}>
-                  {qs.length ? t("startTest") : t("comingSoonShort")}
+              <div className="lang-level-card__body">
+                {isCurrent && <Pill kind="approved" style={{ fontSize: 11 }}>{t("currentLevel")}</Pill>}
+                {earned && !isCurrent && <Pill kind="approved" style={{ fontSize: 11 }}>{t("alreadyEarned")}</Pill>}
+                {onCooldown && <Pill kind="rejected" style={{ fontSize: 11 }}>{t("cooldownShort")}</Pill>}
+                {onCooldown && (
+                  <div className="tiny muted lang-level-card__cooldown">
+                    {t("retryAfter")} {fmtCooldownTime(cd)}
+                  </div>
+                )}
+              </div>
+              <div className="lang-level-card__actions">
+                <Btn
+                  kind="primary"
+                  type="button"
+                  onClick={() => openTest(selectedLang, lvl)}
+                  disabled={!questions.length || onCooldown}
+                >
+                  {questions.length ? (isCurrent ? t("retakeTest") : t("startTest")) : t("comingSoonShort")}
                 </Btn>
               </div>
             </article>
           );
         })}
-        {quizLoading && <div className="muted tiny" style={{ textAlign: "center", padding: 12 }}>...</div>}
       </div>
     </div>
   );
@@ -2161,19 +2986,134 @@ export function ratingTrend(usersSorted) {
 }
 
 
+/* ───── Category meta for the rating page ─────
+   Maps a KPI section (or a virtual "reading" group) to an icon + accent color.
+   Order in this array defines order of leader cards on the left rail. */
+const RATING_CATEGORIES = [
+  {
+    key: "reading",
+    icon: "news",
+    color: "#f59e0b",
+    color2: "#fbbf24",
+    labelKey: "bestReaders",
+    match: (s) => /(книг|чита|кітап|оқу|book|read)/i.test(`${s.typeName || ""} ${s.typeSubsection || ""} ${s.title || ""}`),
+  },
+  {
+    key: "core",
+    icon: "clipboard",
+    color: "#38bdf8",
+    color2: "#7dd3fc",
+    labelKey: "bestCoreTeachers",
+    sections: ["Негізгі оқыту жұмысы", "Основная преподавательская работа", "Core teaching work"],
+  },
+  {
+    key: "students",
+    icon: "chart",
+    color: "#22c55e",
+    color2: "#86efac",
+    labelKey: "bestStudentAch",
+    sections: ["Оқушы жетістігі", "Достижения учеников", "Student achievement"],
+  },
+  {
+    key: "prof",
+    icon: "briefcase",
+    color: "#a78bfa",
+    color2: "#c4b5fd",
+    labelKey: "bestProf",
+    sections: ["Кәсіби даму", "Профессиональное развитие", "Professional development"],
+  },
+  {
+    key: "personal",
+    icon: "user",
+    color: "#fb7185",
+    color2: "#fda4af",
+    labelKey: "bestPersonal",
+    sections: ["Жеке даму", "Личностное развитие", "Personal development"],
+  },
+];
+
+const CATEGORY_FALLBACK = { key: "all", icon: "rank", color: "#94a3b8", color2: "#cbd5e1", labelKey: "navRating" };
+
+function categoryMatchesSub(cat, s) {
+  if (cat.match) return cat.match(s);
+  if (!cat.sections) return false;
+  return cat.sections.includes(s.typeSection || "");
+}
+
 export function PageRating() {
   const st = useStore();
   const u = st.userDoc;
 
-  if (!u) return <Guard />;
-  if (!canAccess("rating", u)) return <Guard />;
-
-  const teachers = st.users.filter(x => (x.role || "teacher") !== "admin");
+  // ALL hooks must run before any conditional early return (rules of hooks).
+  const teachers = (st.users || []).filter(x => (x.role || "teacher") !== "admin");
   const sorted = [...teachers].sort((a, b) => (Number(b.totalPoints) || 0) - (Number(a.totalPoints) || 0)).slice(0, 100);
   const trend = ratingTrend(sorted);
 
   const top3 = sorted.slice(0, 3);
   const rest = sorted.slice(3);
+
+  const PAGE_SIZE = 20;
+  const [ratingPage, setRatingPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(rest.length / PAGE_SIZE));
+  const currentPage = Math.min(ratingPage, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageRest = rest.slice(pageStart, pageStart + PAGE_SIZE);
+  const pageNumbers = useMemo(() => {
+    const window = 10;
+    let start = Math.max(1, currentPage - Math.floor(window / 2));
+    let end = Math.min(totalPages, start + window - 1);
+    start = Math.max(1, end - window + 1);
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [currentPage, totalPages]);
+
+  /* Compute per-teacher × per-category points from approved submissions */
+  const { categoryLeaders, dominantCat } = useMemo(() => {
+    const subs = (st.adminRecentSubs || []).filter(s => s.status === "approved");
+
+    const ptsByCat = new Map(); // catKey -> Map<uid, pts>
+    const ptsByUidCat = new Map(); // uid -> Map<catKey, pts>
+
+    for (const cat of RATING_CATEGORIES) ptsByCat.set(cat.key, new Map());
+
+    for (const s of subs) {
+      const pts = Number(s.points) || 0;
+      if (!pts || !s.uid) continue;
+      for (const cat of RATING_CATEGORIES) {
+        if (!categoryMatchesSub(cat, s)) continue;
+        const m = ptsByCat.get(cat.key);
+        m.set(s.uid, (m.get(s.uid) || 0) + pts);
+        if (!ptsByUidCat.has(s.uid)) ptsByUidCat.set(s.uid, new Map());
+        const um = ptsByUidCat.get(s.uid);
+        um.set(cat.key, (um.get(cat.key) || 0) + pts);
+      }
+    }
+
+    const teachersById = new Map(teachers.map(x => [x.uid, x]));
+    const leaders = RATING_CATEGORIES.map(cat => {
+      const m = ptsByCat.get(cat.key);
+      const list = [...m.entries()]
+        .map(([uid, pts]) => ({ teacher: teachersById.get(uid), pts }))
+        .filter(x => x.teacher)
+        .sort((a, b) => b.pts - a.pts)
+        .slice(0, 4);
+      return { cat, list };
+    });
+
+    const dom = new Map();
+    for (const [uid, um] of ptsByUidCat) {
+      let best = null, bestPts = 0;
+      for (const [k, p] of um) {
+        if (p > bestPts) { bestPts = p; best = k; }
+      }
+      if (best) dom.set(uid, best);
+    }
+
+    return { categoryLeaders: leaders, dominantCat: dom };
+  }, [st.adminRecentSubs, teachers]);
+
+  // Auth gates run AFTER all hooks have been registered.
+  if (!u) return <Guard />;
+  if (!canAccess("rating", u)) return <Guard />;
 
   const Avatar = ({ user, size = "sm" }) => (
     <div className={`avatar ${size}`} aria-hidden="true">
@@ -2185,7 +3125,13 @@ export function PageRating() {
 
   const openProfile = (teacher) => setState({ modal: { kind: "teacherProfile", teacher } });
 
+  const catFor = (uid) => {
+    const k = dominantCat.get(uid);
+    return RATING_CATEGORIES.find(c => c.key === k) || CATEGORY_FALLBACK;
+  };
+
   return (
+    <>
     <div className="glass card">
       {/* Quarter filter + Export */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
@@ -2225,7 +3171,7 @@ export function PageRating() {
                     </div>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div className="champ-rank-badge">#1 {t("champion")} · {trend.get(tc.uid)}</div>
-                      <div className="champ-name">{tc.displayName || tc.email}</div>
+                      <div className="champ-name">{tc.displayName || tc.email}<VerifiedBadge user={tc} size={15} /></div>
                       <div className="podium__meta">{tc.school || "—"} · {tc.subject || "—"}</div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -2256,7 +3202,7 @@ export function PageRating() {
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div className={badgeClass}>#{idx + 1} {medal} · {trend.get(tc.uid)}</div>
-                  <div className="podium__name">{tc.displayName || tc.email}</div>
+                  <div className="podium__name">{tc.displayName || tc.email}<VerifiedBadge user={tc} size={14} /></div>
                   <div className="podium__meta">{tc.school || "—"} · {tc.subject || "—"}</div>
                 </div>
                 <div style={{ marginLeft: "auto", textAlign: "right" }}>
@@ -2268,28 +3214,125 @@ export function PageRating() {
           );
         })}
       </div>
-
-      <div className="sep"></div>
-
-      <div className="h2">{t("top100")}</div>
-      <div className="ratinglist" style={{ marginTop: 10 }}>
-        {rest.map((tc, i) => (
-          <div key={tc.uid} className="ratingrow ratingrow--clickable" onClick={() => openProfile(tc)}>
-            <div className="ratingrank">{i + 4}</div>
-            <Avatar user={tc} />
-            <div className="ratingmeta">
-              <div className="ratingname">{tc.displayName || t("unnamed")}</div>
-              <div className="ratingsub">{tc.school || "—"} · {tc.subject || "—"} · {tc.email}</div>
-            </div>
-            <div className="ratingpts">{fmtPoints(tc.totalPoints)}</div>
-            <div className="ratingtrend">{trend.get(tc.uid)}</div>
-          </div>
-        ))}
-        {!sorted.length && (
-          <div className="ratingrow"><div className="muted tiny">{t("noData")}</div></div>
-        )}
-      </div>
     </div>
+
+    <div className="rating-grid">
+      {/* LEFT: Main rating list with category icons */}
+      <section className="glass card rating-main">
+        <div className="rating-box__head">
+          <Icon name="rank" />
+          <span className="rating-box__title">{t("top100")}</span>
+        </div>
+        <div className="rating-box__body">
+          <div className="ratinglist ratinglist--cat">
+              {pageRest.map((tc, i) => {
+                const cat = catFor(tc.uid);
+                const absoluteRank = pageStart + i + 4;
+                return (
+                  <div
+                    key={tc.uid}
+                    className="ratingrow ratingrow--cat ratingrow--clickable"
+                    onClick={() => openProfile(tc)}
+                    style={{ "--cat-c1": cat.color, "--cat-c2": cat.color2 }}
+                  >
+                    <div className="ratingrank">{absoluteRank}</div>
+                    <Avatar user={tc} />
+                    <div className="ratingmeta">
+                      <div className="ratingname">{tc.displayName || t("unnamed")}<VerifiedBadge user={tc} /></div>
+                      <div className="ratingsub">{tc.school || "—"} · {tc.subject || "—"}</div>
+                    </div>
+                    <div className="ratingrow__cat" title={t(cat.labelKey)}>
+                      <Icon name={cat.icon} />
+                    </div>
+                    <div className="ratingpts">{fmtPoints(tc.totalPoints)}</div>
+                    <div className="ratingtrend">{trend.get(tc.uid)}</div>
+                  </div>
+                );
+              })}
+              {!sorted.length && (
+                <div className="ratingrow"><div className="muted tiny">{t("noData")}</div></div>
+              )}
+            </div>
+            {totalPages > 1 && (
+              <nav className="rating-pagination" aria-label="Pagination">
+                {currentPage > 1 && (
+                  <button
+                    type="button"
+                    className="rating-pagination__link rating-pagination__nav"
+                    onClick={() => setRatingPage(currentPage - 1)}
+                  >
+                    {t("paginationPrev")}
+                  </button>
+                )}
+                {pageNumbers.map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`rating-pagination__link${n === currentPage ? " is-active" : ""}`}
+                    onClick={() => setRatingPage(n)}
+                    aria-current={n === currentPage ? "page" : undefined}
+                  >
+                    {n}
+                  </button>
+                ))}
+                {currentPage < totalPages && (
+                  <button
+                    type="button"
+                    className="rating-pagination__link rating-pagination__nav"
+                    onClick={() => setRatingPage(currentPage + 1)}
+                  >
+                    {t("paginationNext")}
+                  </button>
+                )}
+              </nav>
+            )}
+          </div>
+        </section>
+
+      {/* RIGHT: Category leaders */}
+      <aside className="glass card cat-rail">
+        <div className="rating-box__head">
+          <Icon name="rank" />
+          <span className="rating-box__title">{t("categoryLeaders")}</span>
+        </div>
+        <div className="rating-box__body cat-rail__body">
+          {categoryLeaders.map(({ cat, list }) => (
+            <div
+              key={cat.key}
+              className="cat-card"
+              style={{ "--cat-c1": cat.color, "--cat-c2": cat.color2 }}
+            >
+              <div className="cat-card__head">
+                <span className="cat-card__icon"><Icon name={cat.icon} /></span>
+                <span className="cat-card__title">{t(cat.labelKey)}</span>
+              </div>
+              <div className="cat-card__list">
+                {list.length === 0 && (
+                  <div className="cat-card__empty muted tiny">{t("catNoTeachers")}</div>
+                )}
+                {list.map((row, i) => (
+                  <div
+                    key={row.teacher.uid}
+                    className="cat-card__row"
+                    onClick={() => openProfile(row.teacher)}
+                    role="button"
+                  >
+                    <span className={`cat-card__rank cat-card__rank--${i + 1}`}>{i + 1}</span>
+                    <Avatar user={row.teacher} />
+                    <div className="cat-card__meta">
+                      <div className="cat-card__name">{row.teacher.displayName || t("unnamed")}<VerifiedBadge user={row.teacher} size={11} /></div>
+                      <div className="cat-card__sub">{row.teacher.subject || row.teacher.school || "—"}</div>
+                    </div>
+                    <div className="cat-card__pts">{fmtPoints(row.pts)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
+    </div>
+    </>
   );
 }
 
@@ -2573,7 +3616,7 @@ export function PageStats() {
     const shown = insights.slice(0, 6);
 
     return (
-      <div className="stats-wrap stats-wrap--glass">
+      <div className="stats-wrap">
         <Controls />
 
         <div className="stats-hero-grid">
@@ -2583,7 +3626,7 @@ export function PageStats() {
             value={lvl.name}
             title={`${fmtPoints(allTimeTotal)} ${t("pts")}`}
             trail={lvl.next ? `${fmtPoints(ptsToNext)} ${t("toNextLevel")}` : "MAX"}
-            accent={lvl.color}
+            accent="var(--accent)"
           />
           <StatsHero
             icon="🏅"
@@ -2591,7 +3634,7 @@ export function PageStats() {
             value={myRank ? `#${myRank}` : "—"}
             title={teachersN ? `${teachersN} ${t("ofTeachers")}` : ""}
             trail={myRank && teachersN ? `Top ${Math.max(1, Math.round((myRank / teachersN) * 100))}%` : null}
-            accent="#f59e0b"
+            accent="var(--yellow)"
           />
           <StatsHero
             icon="✨"
@@ -2599,7 +3642,7 @@ export function PageStats() {
             value={fmtPoints(totalPts)}
             title={t("thisYear")}
             trail={olderPts > 0 ? `${trendPct365 >= 0 ? "+" : "−"}${Math.abs(trendPct365)}% ${t("vsPrev")}` : null}
-            accent="#22c55e"
+            accent="var(--green)"
           />
         </div>
 
@@ -2618,10 +3661,10 @@ export function PageStats() {
         ) : null}
 
         <div className="stats-mini-grid">
-          <StatMini label={t("apprRatePct")} value={`${approvalPct}%`} hint={`${approved.length}/${subs.length}`} accent="#34d399" />
-          <StatMini label={t("pending")} value={pending.length} accent="#fbbf24" />
-          <StatMini label={t("rejected")} value={rejected.length} accent="#ef4444" />
-          <StatMini label={t("consistency")} value={`${activeMonthsCount}/12`} hint={t("activeMonths")} accent="#a78bfa" />
+          <StatMini label={t("apprRatePct")} value={`${approvalPct}%`} hint={`${approved.length}/${subs.length}`} accent="var(--green)" />
+          <StatMini label={t("pending")} value={pending.length} accent="var(--yellow)" />
+          <StatMini label={t("rejected")} value={rejected.length} accent="var(--red)" />
+          <StatMini label={t("consistency")} value={`${activeMonthsCount}/12`} hint={t("activeMonths")} accent="var(--accent)" />
         </div>
 
         <div className="grid2 stats-grid">
@@ -2949,7 +3992,7 @@ export function PageStats() {
     const shown = insights.slice(0, 6);
 
     return (
-      <div className="stats-wrap stats-wrap--glass">
+      <div className="stats-wrap">
         <Controls />
 
         <div className="stats-hero-grid">
@@ -2958,7 +4001,7 @@ export function PageStats() {
             sub={t("teachers")}
             value={teachers.length}
             title={activeTeachersN ? `${activeTeachersN} active` : ""}
-            accent="#38bdf8"
+            accent="var(--accent)"
           />
           <StatsHero
             icon="✨"
@@ -2966,14 +4009,14 @@ export function PageStats() {
             value={fmtPoints(totalApprovedPts)}
             title={t("thisYear")}
             trail={olderPts > 0 ? `${trendPctP >= 0 ? "+" : "−"}${Math.abs(trendPctP)}% ${t("vsPrev")}` : null}
-            accent="#22c55e"
+            accent="var(--green)"
           />
           <StatsHero
             icon="📊"
             sub={"Avg / teacher"}
             value={fmtPoints(avgPts)}
             title={`${t("totalPoints")}: ${fmtPoints(totalPlatformPts)}`}
-            accent="#a78bfa"
+            accent="var(--yellow)"
           />
         </div>
 
@@ -2992,10 +4035,10 @@ export function PageStats() {
         ) : null}
 
         <div className="stats-mini-grid">
-          <StatMini label={t("subsInRange")} value={subs.length} accent="#38bdf8" />
-          <StatMini label={t("apprRatePct")} value={`${approvalPct}%`} hint={`${approved.length}/${subs.length}`} accent="#34d399" />
-          <StatMini label={t("pending")} value={pending.length} accent="#fbbf24" />
-          <StatMini label={t("consistency")} value={`${activeMonthsCount}/12`} hint={t("activeMonths")} accent="#a78bfa" />
+          <StatMini label={t("subsInRange")} value={subs.length} accent="var(--accent)" />
+          <StatMini label={t("apprRatePct")} value={`${approvalPct}%`} hint={`${approved.length}/${subs.length}`} accent="var(--green)" />
+          <StatMini label={t("pending")} value={pending.length} accent="var(--yellow)" />
+          <StatMini label={t("consistency")} value={`${activeMonthsCount}/12`} hint={t("activeMonths")} accent="var(--accent)" />
         </div>
 
         <div className="grid2 stats-grid">
